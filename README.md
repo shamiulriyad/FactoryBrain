@@ -17,11 +17,10 @@ AI operations platform for Bangladeshi garment (RMG) factories. It shows live li
 
 | Path | Contents |
 |---|---|
-| `frontend/` | Next.js app (`src/app`, components, stores, services, i18n) |
+| `frontend/` | Next.js app (`src/app`, components, stores, services, i18n) and dev scripts in `frontend/scripts/` |
 | `FactoryBrain.Backend/` | .NET solution: `Domain`, `Application`, `Infrastructure`, `Api` |
 | `database/` | Notes on where the schema, migrations and seed data live (EF Core code-first) |
 | `rag/` | Reserved for future standalone RAG work; see its README |
-| `scripts/` | Smoke test, RAG eval, sensor simulator scripts |
 
 ## Prerequisites
 
@@ -98,18 +97,14 @@ Notes:
 
 ## Scripts
 
-Run these from `frontend/` (the API must be running for the RAG eval):
+Dev and test scripts live in `frontend/scripts/`. Run them from `frontend/`:
 
 ```bash
-npm run smoke       # dataset, i18n and service contract checks + RAG eval
-npm run test:rag    # RAG golden-set check against /api/ask
+npm run smoke         # dataset, i18n and service contract checks + RAG eval
+npm run test:rag      # RAG golden-set check against the running API's /api/ask
+npm run probe         # hit every page on a running Next.js server (BASE, default :3000)
+npm run sensor:live -- --entity M-101 --vibration 6.4 --temp 82   # push one sensor reading
 npm run lint
-```
-
-Push one live sensor reading:
-
-```bash
-node scripts/sensor-live.mjs --entity M-101 --vibration 6.4 --temp 82
 ```
 
 ## Docker

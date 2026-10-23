@@ -4,7 +4,7 @@ namespace FactoryBrain.Api.Middleware;
 /// Mirrors the legacy Next.js route handlers: every GET under /api/* sets
 /// <c>Cache-Control: no-store</c> so simulated / live data is never cached by
 /// intermediaries (browsers, CDNs, Next.js data cache). The contract is
-/// enforced by <c>scripts/smoke.mjs</c>'s <c>assertNoStore</c> probe.
+/// enforced by <c>frontend/scripts/smoke.mjs</c>'s <c>assertNoStore</c> probe.
 /// </summary>
 public sealed class NoStoreMiddleware
 {

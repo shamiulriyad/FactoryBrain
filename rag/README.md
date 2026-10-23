@@ -20,7 +20,7 @@ stay where they are:
 | Backend API | `backend/FactoryBrain.Api/Controllers/RagController.cs` | `/api/rag/ingest`, `/api/rag/reindex`, `/api/rag/documents`, `/api/rag/status` |
 | Frontend proxies | `frontend/src/app/api/rag/{ingest,reindex}/route.ts` | Forward to the backend and attach the server-only `ADMIN_API_TOKEN` |
 | Frontend in-process index | `frontend/src/services/rag/` | Chunker and vector store used by `frontend/src/services/ask.service.ts` |
-| Eval script | `scripts/test-rag.mjs` | Golden-set check against the live `/api/ask` |
+| Eval script | `frontend/scripts/test-rag.mjs` | Golden-set check against the live `/api/ask` |
 | Research notes | [`docs/rag-research.md`](../docs/rag-research.md) | Design rationale for chunking and hybrid scoring |
 
 Before adding anything here, decide whether it replaces or extends the code

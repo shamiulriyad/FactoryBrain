@@ -18,7 +18,7 @@ public class SettingsController : ControllerBase
     // Step 48b — GET/POST /api/settings/llm are served by THIS controller.
     // The Next.js rewrite in `next.config.mjs` forwards every /api/:path*
     // request to http://localhost:5000/api/:path* (the ASP.NET Core host),
-    // so this is the actual endpoint the smoke probe (`scripts/smoke.mjs`
+    // so this is the actual endpoint the smoke probe (`frontend/scripts/smoke.mjs`
     // assertNoStore) hits. The matching legacy route handler at
     // `src/_legacy_api/settings/llm/route.ts` is intentionally unreachable
     // (the `_legacy_api` underscore prefix prevents Next.js from mounting

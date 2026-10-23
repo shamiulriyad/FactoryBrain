@@ -7,8 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "smoke": "node ../scripts/smoke.mjs && node ../scripts/test-rag.mjs",
-    "test:rag": "node ../scripts/test-rag.mjs"
+    "smoke": "node scripts/smoke.mjs && node scripts/test-rag.mjs",
+    "test:rag": "node scripts/test-rag.mjs",
+    "probe": "node scripts/probe.mjs",
+    "sensor:live": "node scripts/sensor-live.mjs"
   },
   "allowScripts": {
     "@next/swc-*": true

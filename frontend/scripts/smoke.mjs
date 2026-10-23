@@ -10,8 +10,8 @@ import url from "node:url";
 import { spawn } from "node:child_process";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
-// The Next.js app lives in <repo>/frontend; every path below is relative to it.
-const root = path.resolve(__dirname, "..", "frontend");
+// The Next.js app is the parent folder (frontend/); every path below is relative to it.
+const root = path.resolve(__dirname, "..");
 
 async function read(rel) {
   return fs.readFile(path.join(root, rel), "utf8");

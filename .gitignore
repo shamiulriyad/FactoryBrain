@@ -18,6 +18,7 @@ obj/
 .next/
 .agents/
 .cursor/
+skills-lock.json
 promt/
 docs/
 

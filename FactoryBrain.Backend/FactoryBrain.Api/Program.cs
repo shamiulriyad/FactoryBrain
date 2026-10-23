@@ -698,7 +698,7 @@ app.UseStatusCodePages();
 // Cache-Control: no-store on every /api/* GET and every status-bearing
 // POST/PUT/PATCH/DELETE so simulated / live data is never cached by
 // intermediaries (browsers, CDNs, Next.js data cache). The contract is
-// enforced by scripts/smoke.mjs's assertNoStore probe. Must run BEFORE
+// enforced by frontend/scripts/smoke.mjs's assertNoStore probe. Must run BEFORE
 // UseRouting/UseCors so the header is stamped even when the downstream
 // middleware short-circuits (e.g. on a 401/403).
 app.UseMiddleware<NoStoreMiddleware>();

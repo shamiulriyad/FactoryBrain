@@ -1,8 +1,8 @@
 // Posts one live sewing-machine reading to the API.
 // The overview poll then shows this machine instead of inventing a tick.
 //
-//   node ./scripts/sensor-live.mjs
-//   node ./scripts/sensor-live.mjs --entity M-101 --vibration 6.4 --temp 82
+//   npm run sensor:live
+//   npm run sensor:live -- --entity M-101 --vibration 6.4 --temp 82
 //
 // API base: SENSOR_API_URL or http://localhost:5000
 

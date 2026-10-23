@@ -1,3 +1,14 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import nextEnv from '@next/env';
+
+// One .env for the whole repo: load the repo-root .env* files (one level up
+// from frontend/) instead of frontend/.env*. Next.js has already called
+// loadEnvConfig(frontend/) and cached it by the time this file runs, so
+// forceReload (4th arg) is needed. Values in the real process env still win.
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+nextEnv.loadEnvConfig(repoRoot, process.env.NODE_ENV !== 'production', undefined, true);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,

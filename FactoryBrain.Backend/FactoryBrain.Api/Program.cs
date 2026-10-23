@@ -12,7 +12,8 @@
 // Configuration loading order (later overrides earlier):
 //   1. appsettings.json
 //   2. appsettings.{Environment}.json
-//   3. .env  (DotNetEnv — shared with the Next.js frontend; non-clobbering)
+//   3. .env  (DotNetEnv — the single repo-root file shared with Next.js and
+//      rag/; found by walking up from the working directory; non-clobbering)
 //   4. .env.local (DotNetEnv — overrides .env; non-clobbering)
 //   5. OS environment variables (and anything the host sets before launch)
 //
@@ -72,8 +73,12 @@ using Microsoft.EntityFrameworkCore;
 // Because neither load clobbers, the FIRST file to define a key wins — so
 // .env.local is loaded before .env to make it the override (host > .env.local
 // > .env), as documented in the loading-order list above.
+//
+// .env itself is NOT read from the working directory only: onlyExactPath:
+// false walks up parent folders until it finds one, so `dotnet run` from
+// FactoryBrain.Api/ picks up the single .env at the repo root.
 Env.Load(".env.local",  new LoadOptions(clobberExistingVars: false));
-Env.Load(".env",        new LoadOptions(clobberExistingVars: false));
+Env.Load(".env",        new LoadOptions(clobberExistingVars: false, onlyExactPath: false));
 
 var builder = WebApplication.CreateBuilder(args);
 

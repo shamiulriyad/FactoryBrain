@@ -1,6 +1,6 @@
 """Ingestion pipeline - steps 1 to 6.
 
-    python ingest.py                       # uses PDF_PATH from .env
+    python ingest.py                       # uses PYRAG_PDF_PATH from .env
     python ingest.py --pdf data/book.pdf
     python ingest.py --pdf data/book.pdf --recreate
 """

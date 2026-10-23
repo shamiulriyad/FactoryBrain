@@ -30,12 +30,11 @@ Every step in the pipeline is its own module, in order.
 
 ```
 rag/
-├── config.py            all settings, read from .env
+├── config.py            all settings, read from the repo-root .env (PYRAG_* keys)
 ├── ingest.py            CLI: run steps 1-6 over a PDF
 ├── ask.py               CLI: run steps 7-11 (one-shot or interactive)
 ├── main.py              same pipeline over HTTP (FastAPI), one collection per Knowledge Base
 ├── requirements.txt
-├── .env.example         copy to .env
 ├── data/                put your PDFs here (git-ignored)
 ├── rag/                 one module per pipeline step
 │   ├── step01_load_pdf.py … step11_answer.py
@@ -56,15 +55,15 @@ embedding path) have no wheels for 3.13+ yet.
 ```bash
 python3.11 -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-pip install -r requirements-local.txt                # only for EMBEDDING_PROVIDER=huggingface
-cp .env.example .env                                 # then paste your Gemini API key
+pip install -r requirements-local.txt                # only for PYRAG_EMBEDDING_PROVIDER=huggingface
+# put GOOGLE_API_KEY and the PYRAG_* settings in the repo-root .env (see ../.env.example)
 ```
 
-**CLI only (no Docker):** set `QDRANT_PATH=qdrant_data` for an **embedded
+**CLI only (no Docker):** set `PYRAG_QDRANT_PATH=qdrant_data` for an **embedded
 on-disk** store. Only `ingest.py` / `ask.py` can use it. The HTTP service returns
 501 in this mode, because embedded Qdrant allows only one open handle.
 
-**HTTP service:** run a Qdrant server, leave `QDRANT_PATH` empty and keep `QDRANT_URL`:
+**HTTP service:** run a Qdrant server, leave `PYRAG_QDRANT_PATH` empty and keep `PYRAG_QDRANT_URL`:
 
 ```bash
 docker run -p 6333:6333 -v qdrant_storage:/qdrant/storage qdrant/qdrant
@@ -92,14 +91,14 @@ uvicorn main:app --port 8000
 | DELETE | `/api/kb/{collection}/documents/{document_id}` | 204 |
 | DELETE | `/api/kb/{collection}` | 204 |
 
-When `RAG_API_KEY` is set, every route except `/health` needs the header `X-Rag-Api-Key`.
+When `PYRAG_API_KEY` is set, every route except `/health` needs the header `X-Rag-Api-Key`.
 
 ## Embeddings
 
-Set the provider and model in `.env` only - nothing is hard-coded, and the
+Set the provider and model in the repo-root `.env` only - nothing is hard-coded, and the
 vector size is detected automatically.
 
-| Goal | `EMBEDDING_PROVIDER` | `EMBEDDING_MODEL` | Notes |
+| Goal | `PYRAG_EMBEDDING_PROVIDER` | `PYRAG_EMBEDDING_MODEL` | Notes |
 |------|--------------------|------------------|-------|
 | **Recommended default** | `google` | `gemini-embedding-001` | Needs `GOOGLE_API_KEY`. 3072-dim. Best for large PDFs on a CPU-only machine. |
 | Local, fast, English | `huggingface` | `sentence-transformers/all-MiniLM-L6-v2` | No API key. 384-dim. CPU handles a few-hundred-page PDF in a minute or two. |
@@ -109,7 +108,7 @@ vector size is detected automatically.
 chunk on the CPU, which is slow and memory-hungry for a big document; the Gemini
 API does it remotely in batches, so ingestion stays fast without a GPU.
 
-**After changing `EMBEDDING_PROVIDER` or `EMBEDDING_MODEL` you must re-ingest
+**After changing `PYRAG_EMBEDDING_PROVIDER` or `PYRAG_EMBEDDING_MODEL` you must re-ingest
 with `--recreate`.** Vectors from two models are not comparable and usually have
 different sizes, so the old collection is unusable. The kit records which model
 built the collection (`.rag_index_meta.json`, git-ignored) and stops with a clear
@@ -119,7 +118,7 @@ message if `.env` no longer matches:
 python ingest.py --recreate
 ```
 
-Invalid values are also caught early: an unknown `EMBEDDING_PROVIDER`, an unknown
+Invalid values are also caught early: an unknown `PYRAG_EMBEDDING_PROVIDER`, an unknown
 Gemini embedding model, a missing `GOOGLE_API_KEY`, an embedding-API failure, and
 a Qdrant vector-size mismatch each raise a one-line explanation instead of a
 library traceback.
@@ -137,7 +136,7 @@ library traceback.
 - **Local embeddings are CPU-bound.** `all-MiniLM-L6-v2` handles a few-hundred-page
   PDF in a minute or two; `bge-m3` is far heavier (minutes to tens of minutes) but
   much better for Bangla. For a very large PDF, prefer a small model, a GPU, or
-  `EMBEDDING_PROVIDER=google`.
+  `PYRAG_EMBEDDING_PROVIDER=google`.
 - **Scanned PDFs will not work.** Step 2 warns you if a page yields no text.
   Add OCR (pytesseract / ocrmypdf) before step 3 in that case.
 - **Broken font encodings.** Some PDFs embed subset fonts with no `ToUnicode`
@@ -146,8 +145,8 @@ library traceback.
   then scores every page (`readable / corrupted / blank`). For a normal PDF the
   repair is a no-op. If pages stay `corrupted`, the maps in `pdf_font_repair.py`
   are PDF-specific and OCR is the fallback.
-- **Tuning retrieval.** `CHUNK_SIZE` 800-1200 suits prose; drop to 400-600 for
-  dense tables and specs. Raise `TOP_K` if answers miss context, lower it if
+- **Tuning retrieval.** `PYRAG_CHUNK_SIZE` 800-1200 suits prose; drop to 400-600 for
+  dense tables and specs. Raise `PYRAG_TOP_K` if answers miss context, lower it if
   Gemini starts drifting off-topic.
 - **Grounding.** Step 10 forbids outside knowledge and requires `[S1]` markers,
   so an answer without a marker is a red flag worth checking against the

@@ -2,7 +2,7 @@
 
 Vectors from two different embedding models are not comparable, and a different
 model almost always means a different vector size. So after changing
-EMBEDDING_PROVIDER or EMBEDDING_MODEL in .env, every existing collection must be
+PYRAG_EMBEDDING_PROVIDER or PYRAG_EMBEDDING_MODEL in .env, every existing collection must be
 rebuilt (recreate=True) before it can be appended to or queried again.
 
 One collection per Knowledge Base (multi-tenant) means one meta file per

@@ -14,7 +14,7 @@ python ingest.py --pdf data/your-file.pdf --recreate
   PDF lingers.
 - Drop `--recreate` on later runs if you're intentionally appending more
   documents to the same collection.
-- Or set `PDF_PATH=data/your-file.pdf` in `.env` and just run `python ingest.py`
+- Or set `PYRAG_PDF_PATH=data/your-file.pdf` in `.env` and just run `python ingest.py`
   with no flags.
 
 ## Notes
@@ -22,6 +22,6 @@ python ingest.py --pdf data/your-file.pdf --recreate
 - One file per `ingest.py` run. For multiple documents in one Knowledge Base,
   use the HTTP API (`main.py` → `POST /api/kb/{collection}/ingest`), which
   appends per-document instead.
-- Scanned/image-only PDFs are rejected (`MIN_TEXT_CHARS` in `.env`) — OCR them
+- Scanned/image-only PDFs are rejected (`PYRAG_MIN_TEXT_CHARS` in `.env`) — OCR them
   first if extraction comes back empty.
 - Only `.pdf` files are accepted. JSON or other formats fail at step 1.

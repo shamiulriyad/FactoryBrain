@@ -257,6 +257,6 @@ flowchart LR
 | Login brute force | Per-IP fixed-window rate limiter (`login` policy) |
 | Input validation | FluentValidation filter on every controller |
 | Error leakage | `GlobalExceptionHandler` returns ProblemDetails with a trace id. The exception message is included only in Development |
-| Python RAG service | Optional `RAG_API_KEY`, sent as `X-Rag-Api-Key` |
+| Python RAG service | Optional `PYRAG_API_KEY`, sent as `X-Rag-Api-Key` |
 
 Known open findings are tracked in [docs/SECURITY_ANALYSIS.md](docs/SECURITY_ANALYSIS.md) (local docs folder).

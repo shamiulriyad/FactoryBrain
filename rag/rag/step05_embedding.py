@@ -3,7 +3,7 @@
 One embedding object is shared by ingestion (step 6) and querying (step 8) -
 the same model must be used on both sides or the vectors are not comparable.
 
-Two providers, chosen by EMBEDDING_PROVIDER in .env:
+Two providers, chosen by PYRAG_EMBEDDING_PROVIDER in .env:
   google      : Gemini embeddings (recommended; needs an API key with quota)
   huggingface : a local sentence-transformers model, no API key, no quota
 """
@@ -28,13 +28,13 @@ def get_embeddings():
             raise RuntimeError(
                 "Local embeddings need the optional packages. Install them with:\n"
                 "    pip install -r requirements-local.txt\n"
-                "or switch to EMBEDDING_PROVIDER=google in .env (no extra install)."
+                "or switch to PYRAG_EMBEDDING_PROVIDER=google in .env (no extra install)."
             ) from exc
         except Exception as exc:  # noqa: BLE001 - re-raised with context
             raise RuntimeError(
                 f"Could not load local embedding model '{config.EMBEDDING_MODEL}'. "
                 "Check the name on https://huggingface.co/models, or switch to "
-                f"EMBEDDING_PROVIDER=google in .env.\nOriginal error: {exc}"
+                f"PYRAG_EMBEDDING_PROVIDER=google in .env.\nOriginal error: {exc}"
             ) from exc
         print(f"[5] Embedding  : {config.EMBEDDING_MODEL} (local)")
         return embeddings

@@ -20,7 +20,7 @@ collection is never guessable/reusable across Knowledge Bases by accident.
 
 This file only exposes api/ingest.py, api/chat.py and the step0N_* pipeline
 modules over HTTP - it holds no RAG logic of its own. Needs **Qdrant in server
-mode** (`QDRANT_URL`, no `QDRANT_PATH`): embedded on-disk Qdrant allows only one
+mode** (`PYRAG_QDRANT_URL`, no `PYRAG_QDRANT_PATH`): embedded on-disk Qdrant allows only one
 open handle, so a running service cannot also write to it - in that mode
 ingest/query return 501 and you use the `python ingest.py`/`ask.py` CLIs instead
 (single global collection, for quick local experimentation only).
@@ -74,13 +74,13 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="FactoryBrain - Python PDF RAG service", lifespan=lifespan)
 
 if not config.RAG_API_KEY:
-    print("[startup] WARNING: RAG_API_KEY is not set - this service accepts unauthenticated "
-          "requests. Set RAG_API_KEY in .env and send it as the X-Rag-Api-Key header.")
+    print("[startup] WARNING: PYRAG_API_KEY is not set - this service accepts unauthenticated "
+          "requests. Set PYRAG_API_KEY in .env and send it as the X-Rag-Api-Key header.")
 
 
 @app.middleware("http")
 async def require_api_key(request: Request, call_next):
-    """Only callers holding RAG_API_KEY may use this service. /health stays open for probes."""
+    """Only callers holding PYRAG_API_KEY may use this service. /health stays open for probes."""
     if config.RAG_API_KEY and request.url.path != "/health":
         supplied = request.headers.get("x-rag-api-key", "")
         if not hmac.compare_digest(supplied.encode(), config.RAG_API_KEY.encode()):
@@ -134,8 +134,8 @@ def _require_server_mode() -> None:
         raise HTTPException(
             status_code=501,
             detail=(
-                "This endpoint needs Qdrant in server mode. Clear QDRANT_PATH and set "
-                "QDRANT_URL in .env (`docker run -p 6333:6333 qdrant/qdrant`), or use the single-document "
+                "This endpoint needs Qdrant in server mode. Clear PYRAG_QDRANT_PATH and set "
+                "PYRAG_QDRANT_URL in .env (`docker run -p 6333:6333 qdrant/qdrant`), or use the single-document "
                 "CLI fallback: `python ingest.py --pdf <file> --recreate`."
             ),
         )
@@ -161,7 +161,7 @@ async def _stream_body_to_file(request: Request, dest: Path) -> int:
                 raise HTTPException(
                     status_code=413,
                     detail=f"PDF exceeds the configured upload limit of "
-                           f"{config.MAX_UPLOAD_MB} MB (set MAX_UPLOAD_MB to change it).",
+                           f"{config.MAX_UPLOAD_MB} MB (set PYRAG_MAX_UPLOAD_MB to change it).",
                 )
             out.write(chunk)
     return size

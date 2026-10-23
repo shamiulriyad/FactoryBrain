@@ -95,21 +95,37 @@ flowchart LR
 - PostgreSQL with the pgvector extension (local, Docker or Supabase)
 - Python 3.11 (only for `rag/`)
 
-### 1. Database
+### 1. Environment
+
+One `.env` at the repo root configures everything (frontend, API and `rag/`):
 
 ```bash
-docker run -d --name factorybrain-db -p 5432:5432 \
+cp .env.example .env        # then fill in FACTORYBRAIN_DB, keys, etc.
+```
+
+### 2. Database
+
+Local Docker (matches the default `FACTORYBRAIN_DB`):
+
+```bash
+docker run -d --name fb-pg -p 5432:5432 \
   -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=factorybrain \
   pgvector/pgvector:pg16
 ```
 
-### 2. Backend API
+Or use **Supabase**: take the *Session pooler* string from Dashboard → Connect
+and use the Supabase `FACTORYBRAIN_DB` line in `.env`.
+
+### 3. Backend API
 
 ```bash
 cd FactoryBrain.Backend/FactoryBrain.Api
-cp .env.example .env        # set FACTORYBRAIN_DB and other values
-dotnet run
+dotnet run                  # reads the repo-root .env
 ```
+
+> [!NOTE]
+> Only .NET 8 or 10 installed? Run `$env:DOTNET_ROLL_FORWARD = "Major"`
+> (PowerShell) first. It has to be set in the shell, not in `.env`.
 
 The API listens on `http://localhost:5000`. On startup it creates the `vector`
 extension, applies EF Core migrations and seeds demo data.
@@ -117,25 +133,24 @@ extension, applies EF Core migrations and seeds demo data.
 - Health check: `GET /health`
 - Swagger UI (Development only): `/swagger`
 
-### 3. Frontend
+### 4. Frontend
 
 ```bash
 cd frontend
-cp ../.env.example .env.local
 npm install
-npm run dev
+npm run dev                 # reads the repo-root .env
 ```
 
 Open **http://localhost:3000**. Requests to `/api/*` are proxied to the backend
 URL in `NEXT_PUBLIC_API_URL` / `DOTNET_API_URL` (default `http://localhost:5000`).
 
-### 4. PDF RAG (optional)
+### 5. PDF RAG (optional)
 
 ```bash
 cd rag
 py -3.11 -m venv venv && venv\Scripts\activate      # macOS/Linux: source venv/bin/activate
 pip install -r requirements.txt -r requirements-local.txt
-cp .env.example .env                                 # add GOOGLE_API_KEY
+# set GOOGLE_API_KEY and the PYRAG_* keys in the repo-root .env
 python ingest.py --pdf data/your-file.pdf --recreate
 python ask.py "your question"
 ```
@@ -146,17 +161,21 @@ Details: [rag/README.md](rag/README.md)
 
 ## ⚙ Configuration
 
-There are three env files. Never commit real values.
+**One file for everything:** `.env` at the repo root (template:
+[`.env.example`](.env.example), every option explained there). It is git-ignored.
+Never commit real values. Real shell or Docker env vars always win over the file.
 
-| File | Used by | Key variables |
+| App | How it finds the root `.env` | Main keys |
 |---|---|---|
-| `frontend/.env.local` (template: `.env.example`) | Next.js | `NEXT_PUBLIC_API_URL`, `DOTNET_API_URL`, `ADMIN_API_TOKEN`, `LLM_*` |
-| `FactoryBrain.Backend/FactoryBrain.Api/.env` (template next to it) | API | `FACTORYBRAIN_DB`, `JWT_SIGNING_KEY`, `ADMIN_API_TOKEN`, `LLM_*`, `RAG_EMBEDDING_*`, `CORS_ORIGINS`, `SIMULATOR_ENABLED` |
-| `rag/.env` (template: `rag/.env.example`) | Python RAG | `GOOGLE_API_KEY`, `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `QDRANT_URL` / `QDRANT_PATH` |
+| Next.js | `frontend/next.config.mjs` loads it | `NEXT_PUBLIC_API_URL`, `DOTNET_API_URL`, `ADMIN_API_TOKEN` |
+| .NET API | `Program.cs` walks up from its working directory | `FACTORYBRAIN_DB`, `JWT_SIGNING_KEY`, `ADMIN_API_TOKEN`, `LLM_*`, `RAG_EMBEDDING_*`, `CORS_ORIGINS`, `SIMULATOR_ENABLED` |
+| Python RAG | `rag/config.py` loads `../.env` | `GOOGLE_API_KEY`, `PYRAG_*` |
 
-> [!IMPORTANT]
-> `ADMIN_API_TOKEN` must be the same in the frontend and backend files. It
-> protects `POST /api/settings/llm`, `/api/rag/ingest` and `/api/rag/reindex`.
+The Python keys carry a `PYRAG_` prefix so they never clash with the API's
+(for example, both have an LLM model setting).
+
+- `ADMIN_API_TOKEN` protects `POST /api/settings/llm`, `/api/rag/ingest` and
+  `/api/rag/reindex`. One value now serves both Next.js and the API.
 
 - `JWT_SIGNING_KEY` (32+ bytes) is required in Production.
 - `LLM_PROVIDER` can be `openai`, `gemini` or `anthropic`. The key can also be

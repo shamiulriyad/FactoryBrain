@@ -7,7 +7,7 @@ local development keeps working exactly as before.
 
 Two ways to run Qdrant:
   server : docker run -p 6333:6333 -v qdrant_storage:/qdrant/storage qdrant/qdrant
-  local  : set QDRANT_PATH=./qdrant_data in .env (CLI-only fallback - a running
+  local  : set PYRAG_QDRANT_PATH=./qdrant_data in .env (CLI-only fallback - a running
            service holds one open handle, so the HTTP API always needs server mode)
 """
 

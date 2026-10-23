@@ -11,10 +11,10 @@ stay with that project. Copies here would only drift out of date.
 
 | Concern | Location | Notes |
 |---|---|---|
-| Schema (model) | [`backend/FactoryBrain.Infrastructure/Persistence/FactoryBrainDbContext.cs`](../backend/FactoryBrain.Infrastructure/Persistence/FactoryBrainDbContext.cs) | Plus Fluent API configs in `Persistence/Configurations/`. Registers the `vector` (pgvector) extension. |
-| Migrations | [`backend/FactoryBrain.Infrastructure/Migrations/`](../backend/FactoryBrain.Infrastructure/Migrations/) | `InitialBaseline`, `AddEmbeddingMetadata`, `AddIngestMetadata`, `MakeDocumentChunkEmbeddingNullable`, `AddUsers`, plus the model snapshot. |
-| Seed data | [`backend/FactoryBrain.Infrastructure/Seed/DbInitializer.cs`](../backend/FactoryBrain.Infrastructure/Seed/DbInitializer.cs) | Idempotent C# seeder. It mirrors the frontend demo datasets in `frontend/src/data/*.ts`. |
-| Startup behaviour | [`backend/FactoryBrain.Api/Program.cs`](../backend/FactoryBrain.Api/Program.cs) | On startup the API runs `CREATE EXTENSION IF NOT EXISTS vector`, applies pending migrations (`Database.Migrate()`), then runs `DbInitializer`. |
+| Schema (model) | [`FactoryBrain.Backend/FactoryBrain.Infrastructure/Persistence/FactoryBrainDbContext.cs`](../FactoryBrain.Backend/FactoryBrain.Infrastructure/Persistence/FactoryBrainDbContext.cs) | Plus Fluent API configs in `Persistence/Configurations/`. Registers the `vector` (pgvector) extension. |
+| Migrations | [`FactoryBrain.Backend/FactoryBrain.Infrastructure/Migrations/`](../FactoryBrain.Backend/FactoryBrain.Infrastructure/Migrations/) | `InitialBaseline`, `AddEmbeddingMetadata`, `AddIngestMetadata`, `MakeDocumentChunkEmbeddingNullable`, `AddUsers`, plus the model snapshot. |
+| Seed data | [`FactoryBrain.Backend/FactoryBrain.Infrastructure/Seed/DbInitializer.cs`](../FactoryBrain.Backend/FactoryBrain.Infrastructure/Seed/DbInitializer.cs) | Idempotent C# seeder. It mirrors the frontend demo datasets in `frontend/src/data/*.ts`. |
+| Startup behaviour | [`FactoryBrain.Backend/FactoryBrain.Api/Program.cs`](../FactoryBrain.Backend/FactoryBrain.Api/Program.cs) | On startup the API runs `CREATE EXTENSION IF NOT EXISTS vector`, applies pending migrations (`Database.Migrate()`), then runs `DbInitializer`. |
 
 ## Connection
 
@@ -35,7 +35,7 @@ Run Postgres as a service or container (the root `README.md` shows a
 
 ## Common commands
 
-Run these from `backend/`. They need the EF Core CLI
+Run these from `FactoryBrain.Backend/`. They need the EF Core CLI
 (`dotnet tool install -g dotnet-ef`).
 
 ```bash

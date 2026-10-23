@@ -1,0 +1,35 @@
+# ---- Core LangChain ----
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-community>=0.3.0
+langchain-text-splitters>=0.3.0
+
+# ---- Step 2: PDF text extraction ----
+# PyMuPDF drives extraction; rag/pdf_font_repair.py undoes broken subset-font
+# encodings on top of it. pypdf is kept only as a reference extractor.
+pymupdf>=1.24.0
+pypdf>=4.2.0
+
+# ---- Step 5 (default) & 10: Gemini embeddings + Gemini LLM ----
+langchain-google-genai>=2.1.0
+
+# ---- Step 5: optional local embeddings ----
+# For EMBEDDING_PROVIDER=huggingface (all-MiniLM-L6-v2 or bge-m3) also run:
+#     pip install -r requirements-local.txt
+# It pulls in torch (~2 GB), which the default Gemini setup does not need.
+
+# ---- Step 6: Qdrant vector store ----
+# langchain-qdrant 1.x requires qdrant-client>=1.15.1 - keep both current together,
+# and keep the Qdrant server image at a version within one minor release
+# of whatever qdrant-client resolves to here (a bigger gap breaks get_collection/query
+# with an opaque "zstd decompressor error", not a memory problem despite the message).
+langchain-qdrant>=1.1.0
+qdrant-client>=1.15.1,<2.0.0
+
+# ---- HTTP API (main.py) ----
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+
+# ---- Utils ----
+python-dotenv>=1.0.0
+tqdm>=4.66.0

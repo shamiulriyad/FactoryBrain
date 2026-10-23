@@ -20,7 +20,7 @@ AI operations platform for Bangladeshi garment (RMG) factories. It shows live li
 | `frontend/` | Next.js app (`src/app`, components, stores, services, i18n) and dev scripts in `frontend/scripts/` |
 | `FactoryBrain.Backend/` | .NET solution: `Domain`, `Application`, `Infrastructure`, `Api` |
 | `database/` | Notes on where the schema, migrations and seed data live (EF Core code-first) |
-| `rag/` | Reserved for future standalone RAG work; see its README |
+| `rag/` | Standalone Python PDF RAG (LangChain + Qdrant + Gemini), CLI and FastAPI service, not wired into the backend; see its README and `docs/rag-pdf-setup.txt` |
 
 ## Prerequisites
 

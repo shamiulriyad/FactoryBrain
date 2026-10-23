@@ -1,0 +1,10 @@
+# Optional: local (offline) embeddings, used only when EMBEDDING_PROVIDER=huggingface.
+#
+#   pip install -r requirements.txt          # always
+#   pip install -r requirements-local.txt    # only if you want local embeddings
+#
+# This pulls in torch (~2 GB download). The default setup
+# (EMBEDDING_PROVIDER=google, gemini-embedding-001) does NOT need any of this.
+
+langchain-huggingface>=0.1.0
+sentence-transformers>=3.0.0

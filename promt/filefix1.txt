@@ -1,0 +1,36 @@
+Proceed with the following decisions:
+
+**1. Backend move**
+- Wait until I close the VS Code solution/window, then retry `git mv FactoryBrain.Backend backend/FactoryBrain.Backend`.
+- Do not kill PID 19396 or any other VS Code/C# Dev Kit process.
+- Before retrying, verify the repository's Git status and confirm that the destination does not already contain conflicting files.
+- After moving, update the `.sln` project references, Dockerfile paths/build context, scripts, configuration references, documentation links, and any other paths affected by the move.
+- Preserve all existing backend functionality and project namespaces unless a namespace change is strictly necessary.
+- Do not move the frontend from the repository root. Keep the Next.js/Vercel deployment structure unchanged and document this as an intentional decision.
+
+**2. `.gitignore`**
+- Wait until I finish editing `.gitignore`. Do not overwrite or modify it while I am editing.
+- Once I confirm it is ready, read the latest version and add your hygiene entries on top of it without removing my existing changes.
+- Correctly handle `.env.*` with an exception for `.env.example`, OS/IDE files, `.vs/`, `*.tsbuildinfo`, Python caches, and duplicate ignore patterns.
+- Do not assume that adding `.agents/` or `.cursor/` untracks their existing 57 tracked files. First report which tracked files would be affected and propose a separate cleanup. Do not untrack or delete those files without my approval.
+- Check the actual `promt/` directory before deciding whether it should be ignored.
+
+**3. API route findings**
+- Keep the three Next.js server-side proxy routes unchanged. Your runtime verification indicates that they forward requests to .NET and inject the server-only `ADMIN_API_TOKEN`.
+- Correct the inaccurate comments in `next.config.mjs`, `README.md`, and the audit documentation. Explain the distinction between proxy handlers and the real .NET API owners.
+- Do not change API contracts or routing behaviour as part of this structural task.
+
+**4. Documentation and configuration**
+- Keep the existing `database/README.md` and `rag/README.md`, updating their paths after the backend move.
+- Create `docs/README.md` and `docs/ENVIRONMENT.md`.
+- Document the actual environment-variable loading behaviour and configuration ownership.
+- Add `ADMIN_API_TOKEN` to the relevant `.env.example` files using placeholders only. Never expose real secrets or copy actual credentials into documentation.
+- Keep RAG as a documentation/placeholder area; do not implement new RAG functionality.
+
+**5. Validation and final report**
+- After the move and cleanup, run the frontend TypeScript check, frontend production build, and .NET solution build. Run other existing smoke tests if feasible.
+- Review `git diff`, `git status`, project references, Docker build paths, and documentation links.
+- Do not commit or push.
+- Report the final repository structure, all moved/created/modified/deleted files, validation results, remaining issues, and any actions that still require my approval.
+
+The baseline builds have already passed, so preserve that working state. Do not proceed with destructive or architecture-changing actions without approval.

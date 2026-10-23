@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>FactoryBrain.Application</RootNamespace>
+    <AssemblyName>FactoryBrain.Application</AssemblyName>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <LangVersion>13.0</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" Version="11.9.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FactoryBrain.Domain\FactoryBrain.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

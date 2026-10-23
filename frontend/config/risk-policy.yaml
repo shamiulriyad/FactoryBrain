@@ -1,0 +1,40 @@
+# BunonBrain risk policy
+# Editable from /app/settings in the prototype.
+
+risk_tiers:
+  low:
+    label: "Auto-execute"
+    color: "risk/low"
+  medium:
+    label: "Approval gated"
+    color: "risk/medium"
+  high:
+    label: "Human approval required"
+    color: "risk/high"
+
+# Maintenance Agent — auto-suggest threshold.
+# A repair recommendation above this BDT cost requires explicit human approval
+# before any work order can be raised. Below the threshold the maintenance
+# agent may auto-suggest (but never auto-execute) without approval.
+maintenance:
+  repair_cost_threshold_bdt: 25000
+
+# Auto-execute cap by tier (BDT)
+execution_caps:
+  low: 100000
+  medium: 25000
+  high: 0   # always approval
+
+# Stage pipeline
+stages:
+  - suggested
+  - pending_approval
+  - executing
+  - done
+  - logged
+  - rejected
+  - failed
+
+language:
+  default: "en"
+  supported: ["en", "bn"]

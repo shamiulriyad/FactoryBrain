@@ -1,0 +1,46 @@
+# BunonBrain agent routing table.
+# Read by the service layer at runtime. Never hardcode models per agent.
+#
+# Conventions:
+#   risk:       low | medium | high
+#   execution:  auto | approval_required | auto_suggest_with_threshold | per_policy
+#   fallback:   ordered list of alternative model tiers
+
+agents:
+  - id: line-throughput-agent
+    purpose: "Read line and order data, name the bottleneck operation"
+    model_tier: "mid"
+    model_family: "gpt-4.1-mini / claude-sonnet-small"
+    risk: low
+    execution: auto
+    fallback: ["templated-bottleneck"]
+    context_slices: ["lines", "orders", "targets"]
+
+  - id: maintenance-agent
+    purpose: "Read machine telemetry, flag units trending toward failure"
+    model_tier: "mid"
+    model_family: "gpt-4.1-mini"
+    risk: medium
+    execution: auto_suggest_with_threshold
+    fallback: ["threshold-only-no-rationale"]
+    context_slices: ["machines", "lines"]
+
+  - id: manager-agent
+    purpose: "Route free-text factory questions, draft the daily brief"
+    model_tier: "frontier"
+    model_family: "claude-sonnet / gpt-4.1"
+    risk: low
+    execution: auto
+    fallback: ["mid-with-degraded-confidence-flag"]
+    context_slices: ["*"]
+
+# Live slice configuration (consumed by /api/ask route handler)
+# The code in src/app/api/ask/route.ts and src/app/api/agents/[agentId]/run/route.ts
+# reads process.env.LLM_PROVIDER / LLM_API_KEY / LLM_MODEL — keep these names
+# aligned with .env.example.
+live_slice:
+  provider_env: "LLM_PROVIDER"
+  key_env: "LLM_API_KEY"
+  model_env: "LLM_MODEL"
+  enabled_when_provider_present: true
+  default_if_absent: "mock"

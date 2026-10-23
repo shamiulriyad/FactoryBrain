@@ -1,0 +1,23 @@
+﻿node_modules/
+.next/
+.env
+.env.local
+.env*.local
+*.log
+tsconfig.tsbuildinfo
+
+# .NET build artifacts
+bin/
+obj/
+*.user
+*.suo
+.puku-cli/
+
+# Build / cache artefacts
+.cache/
+.next/
+.agents/
+.cursor/
+.promt/
+docs/
+

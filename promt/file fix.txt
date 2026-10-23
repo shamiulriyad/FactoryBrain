@@ -1,0 +1,211 @@
+# Task 1: Safely Restructure the FactoryBrain Repository
+
+Act as a senior software architect and full-stack engineer. Your task is to perform the **first structural cleanup and organization pass** on my existing FactoryBrain repository.
+
+## 1. Primary Objective
+
+Organize the existing codebase into clear, maintainable boundaries for:
+
+- Frontend — Next.js / React
+- Backend — ASP.NET Core / .NET
+- Database — PostgreSQL-related scripts and schema
+- RAG — a dedicated placeholder area for future RAG work only
+- Root-level configuration, documentation, and development tooling
+
+This is a repository restructuring task, NOT a feature-development task.
+
+**Preserve existing functionality. Do not introduce new features or implement RAG functionality.**
+
+## 2. Mandatory First Step: Inspect Before Editing
+
+Before making any changes:
+
+1. Inspect the complete repository structure and current Git branch.
+2. Run `git status` and identify all existing uncommitted changes.
+3. Read `PROJECT_AUDIT.md`, `README.md`, `.gitignore`, `next.config.mjs`, package manifests, backend project files, environment examples, and relevant documentation.
+4. Inspect all source files, imports, scripts, build configurations, API routes, and references to existing file paths.
+5. Identify the actual frontend root, backend root, database integration, and existing RAG-related code.
+6. Produce a concise proposed file-movement and cleanup plan before executing destructive changes.
+
+Do not overwrite, discard, reset, or revert any pre-existing user changes. Do not run destructive Git commands. Do not commit or push changes unless explicitly requested.
+
+## 3. Target Repository Organization
+
+Use this as the desired logical structure, adapting it to the existing project and its build requirements:
+
+```text
+factoryBrain/
+├── frontend/
+│   ├── src/
+│   ├── public/
+│   ├── package.json
+│   ├── next.config.mjs
+│   └── frontend-specific configuration
+│
+├── backend/
+│   └── FactoryBrain.Backend/
+│       ├── FactoryBrain.Domain/
+│       ├── FactoryBrain.Application/
+│       ├── FactoryBrain.Infrastructure/
+│       └── FactoryBrain.Api/
+│
+├── database/
+│   ├── migrations/
+│   ├── schema/
+│   ├── seeds/
+│   └── README.md
+│
+├── rag/
+│   └── README.md
+│
+├── docs/
+│   ├── README.md
+│   ├── PROJECT_AUDIT.md
+│   ├── SECURITY_ANALYSIS.md
+│   └── existing project documentation
+│
+├── scripts/
+├── .env.example
+├── .gitignore
+├── README.md
+└── other essential root configuration
+```
+
+This is a target design, not permission to blindly move files. Preserve necessary configuration files at the root when tools, deployment platforms, or build systems require them there.
+
+If moving the existing Next.js application or .NET solution into these directories would create substantial risk, first implement the safest compatible organization and explain any deviations. Do not force a monorepo migration if the repository cannot support it safely without additional work.
+
+## 4. Frontend Organization
+
+- Keep all Next.js pages, layouts, components, hooks, client-side services, assets, and frontend-specific logic inside the frontend boundary.
+- Preserve the existing App Router structure and all functioning pages.
+- Keep frontend package manifests and Next.js configuration consistent with the actual application root.
+- Update imports, aliases, scripts, and configuration references when files move.
+- Do not rewrite the UI or replace existing application logic.
+- Do not migrate mock data to the backend during this task.
+
+## 5. Backend Organization
+
+- Keep the existing ASP.NET Core backend and its Domain, Application, Infrastructure, and API projects together.
+- Preserve project references, namespaces, solution files, controller routes, dependency injection, configuration loading, and build behaviour.
+- Update solution/project paths and scripts only when required by actual file movements.
+- Do not introduce NestJS or another backend framework.
+- Do not duplicate backend functionality in a new service.
+
+## 6. Database Organization
+
+- Create or organize a dedicated `database/` directory for database-related assets that actually exist or are genuinely needed.
+- Place existing SQL schema files, migrations, seed scripts, and database documentation there where appropriate.
+- Do not invent migrations or seed data.
+- Do not move PostgreSQL's actual runtime data directory into the repository.
+- Preserve existing database connection behaviour.
+- Keep database credentials out of source-controlled files.
+
+## 7. RAG Placeholder Only
+
+- Create a dedicated `rag/README.md` describing that this directory is reserved for future RAG-specific implementation.
+- Move existing RAG documentation into this directory only if doing so is consistent with the documentation structure and does not break references.
+- Do not implement RAG pipelines, embeddings, vector stores, retrieval logic, LLM integrations, ingestion, reindexing, or new APIs.
+- Do not delete or disable existing RAG functionality.
+- Existing RAG code that is currently part of the running application must remain operational.
+
+## 8. Environment Configuration
+
+Review and organize environment configuration without exposing secrets.
+
+- Provide a root `.env.example` containing only documented placeholder values where appropriate.
+- Keep frontend-specific variables separate from backend-only secrets when required by each framework.
+- Ensure Next.js browser-exposed variables use the `NEXT_PUBLIC_` prefix only when their values are explicitly safe for public exposure.
+- Never put database passwords, admin tokens, LLM API keys, or other secrets in `NEXT_PUBLIC_` variables.
+- Preserve the current environment variable names unless a change is necessary and all usages can be safely updated.
+- Document which application reads each variable.
+- Do not assume that Next.js, ASP.NET Core, or Docker automatically loads every root `.env` file.
+- Do not print real secrets into terminal output, reports, or generated documentation.
+
+Do not change production credentials or deployment settings without a clearly justified, separately documented requirement.
+
+## 9. Git Hygiene and `.gitignore`
+
+Review and improve `.gitignore` for the actual technologies used by this repository.
+
+Exclude applicable generated and local-only files, including:
+
+- `node_modules/`
+- `.next/`
+- Python `__pycache__/`, `.pyc` files, and virtual environments if applicable
+- .NET `bin/` and `obj/`
+- IDE-local files and operating-system artifacts
+- Local environment files containing secrets
+- Local logs, temporary files, and generated build outputs
+
+Important constraints:
+
+- Keep `.env.example` tracked.
+- Do not ignore source code, essential configuration, documentation, database migrations, or required project assets.
+- Inspect already tracked generated or sensitive files before changing their tracking status.
+- Never use `git rm --cached` or remove tracked files automatically without checking their purpose and explaining the change.
+- Do not add broad ignore patterns that could hide required files.
+
+Remove a file only after confirming that it is unnecessary, generated, accidental, or safely superseded. In particular, inspect the four previously identified root HTML dumps (`body.html`, `page.html`, `profile.html`, and `profile2.html`) and verify their current status before acting.
+
+## 10. API and Architecture Preservation
+
+The existing audit identified three potentially duplicated Next.js and ASP.NET Core routes:
+
+- `/api/settings/llm`
+- `/api/rag/ingest`
+- `/api/rag/reindex`
+
+For this task:
+
+- Inspect the existing handlers and routing configuration.
+- Document which routes are potentially duplicated and how to verify their runtime behaviour.
+- Do not delete a route merely because another route has the same path.
+- Do not silently change API ownership, request/response contracts, authentication, or proxy behaviour.
+- Preserve existing mock/demo functionality.
+- Record any routing problem that requires a separate functional fix.
+
+Likewise, document the existing hybrid mock/live data architecture rather than migrating all features to the backend.
+
+## 11. Documentation
+
+- Keep the root `README.md` as the main entry point.
+- Organize existing project documentation under `docs/` where appropriate.
+- Create `docs/README.md` as an index explaining the purpose of each existing document.
+- Update file paths and links after any moves.
+- Preserve meaningful historical and security documentation.
+- Do not rewrite technical claims unless they have been verified against the code.
+- Clearly distinguish completed changes from unresolved issues.
+
+## 12. Validation
+
+After restructuring:
+
+1. Verify that no essential source files or existing user changes were lost.
+2. Check imports, path aliases, project references, and scripts.
+3. Validate the frontend using the existing package manager and build scripts.
+4. Build the .NET solution or API project using the appropriate existing configuration.
+5. Run existing tests or smoke scripts where feasible.
+6. Check Git status and review the complete diff.
+7. Verify that `.env.example` is present and real secrets are not newly exposed.
+8. Check documentation links and all changed paths.
+9. Report any validation that could not be performed and explain why.
+
+Do not claim that a build or test passed unless you actually ran it and observed a successful result. Do not install unrelated dependencies.
+
+## 13. Final Report
+
+When finished, provide:
+
+1. The final repository tree.
+2. Files moved, created, updated, and removed, with reasons.
+3. `.gitignore` changes.
+4. Environment configuration changes.
+5. Existing functionality and API routes preserved.
+6. Commands executed and their actual results.
+7. Remaining structural or functional issues.
+8. Any decisions requiring my approval before proceeding.
+
+**Definition of done:** The repository has a clear and maintainable structure, generated/local files are appropriately ignored, environment configuration is documented, existing functionality is preserved, and no new RAG implementation or unrelated feature has been introduced.
+
+Start by inspecting the repository and presenting the proposed plan. Then execute the safe changes, validate them, and provide the final report. Do not stop after producing the plan unless a destructive or architecture-changing decision genuinely requires my approval.

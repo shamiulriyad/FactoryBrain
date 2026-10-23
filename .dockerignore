@@ -1,0 +1,19 @@
+# Keep .env files out of Docker images. The root .env and any nested
+# .env file (e.g. apps/api/.env, services/*/.env) must never be baked
+# into a published image — they typically contain DATABASE URLs with
+# passwords, API keys, and operator secrets. Configure secrets via the
+# container orchestrator's secret store instead. .env.local is excluded
+# for the same reason; .env.example is intentionally allowed so the
+# example file ships with the image.
+#
+# We also exclude every bin/ and obj/ directory (no need to ship build
+# artefacts) and the broad **/.env.* pattern so any per-project override
+# file (`api/.env.production`, `services/rag/.env.staging`, ...) is also
+# kept out of the image. .env.example is explicitly whitelisted because
+# it's the one .env* file we *want* in the image.
+.env
+**/.env
+**/.env.*
+!**/.env.example
+**/bin/
+**/obj/

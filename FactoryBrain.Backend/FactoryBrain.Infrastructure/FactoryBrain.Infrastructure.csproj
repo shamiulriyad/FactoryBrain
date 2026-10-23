@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>FactoryBrain.Infrastructure</RootNamespace>
+    <AssemblyName>FactoryBrain.Infrastructure</AssemblyName>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <LangVersion>13.0</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Replicate the Microsoft.Extensions.* implicit usings the source
+      files rely on. The original FactoryBrain.Api compiled under
+      Microsoft.NET.Sdk.Web which auto-imported these.
+      ASP.NET namespaces are NOT included here: Infrastructure is a
+      pure class library. Code that needs IWebHostEnvironment should use
+      IHostEnvironment from Microsoft.Extensions.Hosting.Abstractions.
+    -->
+    <Using Include="Microsoft.Extensions.Configuration" />
+    <Using Include="Microsoft.Extensions.DependencyInjection" />
+    <Using Include="Microsoft.Extensions.Hosting" />
+    <Using Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Persistence -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>none</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.2" />
+    <PackageReference Include="Pgvector" Version="0.3.0" />
+    <PackageReference Include="Pgvector.EntityFrameworkCore" Version="0.2.1" />
+    <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="8.0.2" />
+
+    <!-- Hosting + options -->
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.0" />
+
+    <!-- Auth (batch 52): PasswordHasher<User> lives in
+         Microsoft.AspNetCore.Identity; JwtSecurityTokenHandler lives
+         in System.IdentityModel.Tokens.Jwt; both come transitively
+         from JwtBearer in the Api project — Infrastructure is a class
+         library so we have to declare them explicitly. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
+
+    <!-- Config / env -->
+    <PackageReference Include="DotNetEnv" Version="3.1.1" />
+
+    <!-- JSON -->
+    <PackageReference Include="System.Text.Json" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FactoryBrain.Application\FactoryBrain.Application.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -65,16 +65,23 @@ public sealed class PostgresStack : IAsyncLifetime
     public const string SettingsDatabase = "factorybrain_test_settings";
     /// <summary>Used only by the embedding settings / reindex tests (they resize the vector column).</summary>
     public const string EmbeddingDatabase = "factorybrain_test_embedding";
+    /// <summary>Used only by the QC inspection tests (deterministic test detector).</summary>
+    public const string QcDatabase = "factorybrain_test_qc";
 
     private PostgreSqlContainer? _container;
     private readonly Lazy<DbApiFactory> _local;
     private readonly Lazy<DbApiFactory> _mocked;
+    private readonly Lazy<DbApiFactory> _qc;
 
     public PostgresStack()
     {
         _local  = new(() => Build(DbApiFactory.LocalEmbeddings(ConnectionStringFor(LocalDatabase))));
         _mocked = new(() => Build(DbApiFactory.MockedHostedProviders(ConnectionStringFor(MockedDatabase))));
+        _qc     = new(() => Build(DbApiFactory.QcDetector(ConnectionStringFor(QcDatabase))));
     }
+
+    /// <summary>API host whose vision provider is the deterministic TEST detector (an http provider answered by the guard).</summary>
+    public DbApiFactory Qc => _qc.Value.Activate();
 
     /// <summary>API host on its own database, local hash embeddings, no outbound HTTP at all.</summary>
     public DbApiFactory Local => _local.Value.Activate();
@@ -105,7 +112,7 @@ public sealed class PostgresStack : IAsyncLifetime
         };
         await using var admin = new NpgsqlConnection(adminCs.ConnectionString);
         await admin.OpenAsync();
-        foreach (var name in new[] { MockedDatabase, SettingsDatabase, EmbeddingDatabase })
+        foreach (var name in new[] { MockedDatabase, SettingsDatabase, EmbeddingDatabase, QcDatabase })
         {
             await using var create = new NpgsqlCommand($"CREATE DATABASE \"{name}\"", admin);
             await create.ExecuteNonQueryAsync();
@@ -131,6 +138,7 @@ public sealed class PostgresStack : IAsyncLifetime
     {
         if (_local.IsValueCreated)  await _local.Value.DisposeAsync();
         if (_mocked.IsValueCreated) await _mocked.Value.DisposeAsync();
+        if (_qc.IsValueCreated)     await _qc.Value.DisposeAsync();
         if (_container is not null) await _container.DisposeAsync();
     }
 }
@@ -228,6 +236,75 @@ public sealed class DbApiFactory : WebApplicationFactory<Program>
 
     public static DbApiFactory LocalEmbeddings(string connectionString) =>
         new(connectionString, new() { ["RAG_EMBEDDING_PROVIDER"] = "local" }, fakes: null);
+
+    // ── Deterministic TEST detector for the QC inspection workflow ──────────
+    // QC_VISION_PROVIDER=http pointed at a host the outbound guard answers:
+    // the real HttpDefectDetectionProvider code path, a scripted test model.
+    // Never a production provider; its model name says so.
+
+    public const string FakeDetectorHost = "qc.fake-detector.invalid";
+    public const string FakeDetectorModel = "TEST-deterministic-detector";
+    public static readonly string FakeDetectorKey = "qc-key-" + TestEnvironment.RandomSecret(12);
+    /// <summary>A product type containing this makes the detector return HTTP 500.</summary>
+    public const string ForceDetectorFailure = "FORCE-QC-FAILURE";
+    /// <summary>A product type containing this makes the detector return a body that is not the contract.</summary>
+    public const string ForceDetectorInvalid = "FORCE-QC-INVALID";
+    /// <summary>A product type containing this makes the detector find nothing.</summary>
+    public const string ForceDetectorClean = "FORCE-QC-CLEAN";
+
+    /// <summary>Bodies the test detector received, with the bearer header each carried.</summary>
+    public ConcurrentQueue<(string Body, string? Authorization)> DetectorRequests { get; } = new();
+
+    /// <summary>When true the detector fails every call (to test retry), until set back.</summary>
+    public bool DetectorDown { get; set; }
+
+    public static DbApiFactory QcDetector(string connectionString) =>
+        new(connectionString, new()
+        {
+            ["RAG_EMBEDDING_PROVIDER"] = "local",
+            ["QC_VISION_PROVIDER"]     = "http",
+            ["QC_VISION_HTTP_URL"]     = $"https://{FakeDetectorHost}/v1/detect",
+            ["QC_VISION_HTTP_API_KEY"] = FakeDetectorKey,
+        }, f => f.InstallDetectorFake());
+
+    private void InstallDetectorFake() => Http.Fake(FakeDetectorHost, "/v1/detect", (req, body) =>
+    {
+        DetectorRequests.Enqueue((body, req.Headers.Authorization?.ToString()));
+        if (DetectorDown || body.Contains(ForceDetectorFailure))
+            return OutboundHttpGuard.Json("""{"error":"model server overloaded"}""", HttpStatusCode.ServiceUnavailable);
+        if (body.Contains(ForceDetectorInvalid))
+            return OutboundHttpGuard.Json("""{"predictions":"not the contract"}""");
+        if (body.Contains(ForceDetectorClean))
+            return OutboundHttpGuard.Json(JsonSerializer.Serialize(new { model = FakeDetectorModel, modelVersion = "t1", localization = true, defects = Array.Empty<object>() }));
+        return OutboundHttpGuard.Json(JsonSerializer.Serialize(new
+        {
+            model = FakeDetectorModel,
+            modelVersion = "t1",
+            localization = true,
+            defects = new object[]
+            {
+                // Mapped, localised, with a mask outline.
+                new { label = "skipped_stitch", confidence = 0.91, box = new { x = 0.10, y = 0.20, width = 0.30, height = 0.10 },
+                      polygon = new[] { new[] { 0.10, 0.20 }, new[] { 0.40, 0.20 }, new[] { 0.40, 0.30 } }, severity = "major", description = "gap in seam" },
+                // Unmapped label, no box.
+                new { label = "weird_mark", confidence = 0.60 },
+                // Below the 0.25 default threshold: must not be stored.
+                new { label = "stain", confidence = 0.10, box = new { x = 0.5, y = 0.5, width = 0.1, height = 0.1 } },
+                // Box outside the image: kept, without localisation.
+                new { label = "hole", confidence = 0.80, box = new { x = 0.90, y = 0.10, width = 0.50, height = 0.10 } },
+            },
+        }));
+    });
+
+    /// <summary>Per-host image store under the temp folder, removed with the host.</summary>
+    public string QcStoragePath { get; } = Path.Combine(Path.GetTempPath(), "factorybrain-qc-tests", Guid.NewGuid().ToString("N"));
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        try { if (Directory.Exists(QcStoragePath)) Directory.Delete(QcStoragePath, recursive: true); }
+        catch (IOException) { /* best effort: temp folder */ }
+    }
 
     /// <summary>
     /// For the safety-guard test only: no loopback check here, so the API's
@@ -337,6 +414,7 @@ public sealed class DbApiFactory : WebApplicationFactory<Program>
             ["PYRAG_SERVICE_URL"]           = "http://" + FakeRagHost,
             ["PYRAG_API_KEY"]               = FakeRagKey,
             ["PYRAG_COLLECTION_NAME"]       = FakeRagCollection,
+            ["QC_IMAGE_STORAGE_PATH"]       = QcStoragePath,
         };
         foreach (var (k, v) in _overrides) env[k] = v;
         _environment = env;

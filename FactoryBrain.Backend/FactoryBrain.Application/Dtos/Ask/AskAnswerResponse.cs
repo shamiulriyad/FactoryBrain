@@ -13,27 +13,24 @@ public record AskAnswerResponse(
     IReadOnlyList<AskFactor> Factors,
     IReadOnlyList<EvidenceRefDto> Evidence,
     /// <summary>
-    /// Step 47: per-hit citation parity with the brief's
-    /// <c>{id, title, snippet, confidence, source, url}</c> shape.
-    /// <c>Confidence</c> is the hybrid score clamped to <c>[0,1]</c>.
-    /// <c>Url</c> is empty today — the parent <c>ManualDocument.Url</c> is
-    /// not propagated through to chunk-level hits yet.
+    /// The chunks the answer cites, as returned by the Python RAG service.
+    /// <c>Confidence</c> is each chunk's similarity score clamped to <c>[0,1]</c>.
     /// </summary>
     IReadOnlyList<CitationDto> Citations,
-    AskRecommendation Recommendation,
+    /// <summary>Not produced by the RAG service, so always null (kept for wire compatibility).</summary>
+    AskRecommendation? Recommendation,
     DateTime CreatedAt,
     double Confidence,
     IReadOnlyList<AskRagHit> RagHits,
     /// <summary>
-    /// How this answer was produced. <c>live</c>: a language model answered
-    /// from the retrieved passages. <c>demo</c>: no model was configured or
-    /// the model call failed; the text is a fixed template over the
-    /// retrieved passages, not a generated answer. <c>no_source</c>: nothing
-    /// relevant was retrieved, so no model was called. Clients must only
-    /// present an answer as live when this is <c>live</c>.
+    /// How this answer was produced. <c>live</c>: the RAG service answered and
+    /// cited at least one indexed chunk. <c>no_source</c>: it answered without
+    /// citing anything (the documents don't cover the question, nothing is
+    /// indexed yet, or the message was small talk). <c>demo</c> is no longer
+    /// produced; it stays a known value so older clients keep parsing.
     /// </summary>
     string Mode,
-    /// <summary>Why the answer is not live when a model was configured (e.g. the provider call failed).</summary>
+    /// <summary>Optional note about the answer; null when there is nothing to add.</summary>
     string? Warning
 );
 

@@ -242,12 +242,13 @@ export default function InspectionDetailPage() {
                 tone={a.failureCode === "provider_not_configured" ? "warning" : "danger"}
                 title={a.failureCode === "provider_not_configured" ? "No AI analysis: no vision provider is configured" : "Analysis failed"}
                 testId="qc-failure"
-                action={operator && a.retryable && a.failureCode !== "provider_not_configured" && (
+                action={operator && a.retryable && (
                   <Button size="sm" onClick={() => void retry()} disabled={busy} data-testid="qc-retry"><RefreshCw size={12} /> Retry</Button>
                 )}
               >
                 {a.failureMessage} <span className="font-mono">({a.failureCode})</span>
-                {a.failureCode === "provider_not_configured" && " An inspector can still review this image manually."}
+                {a.failureCode === "provider_not_configured" &&
+                  " An inspector can still review this image manually, or press Retry once a vision provider has been configured."}
               </Callout>
             ) : (
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-caption">

@@ -60,10 +60,11 @@ export default function AgentDetailPage() {
               <dt className="text-fg-tertiary">Status</dt><dd><Badge tone={agent.status === "ready" ? "success" : "neutral"} dot>{agent.status}</Badge></dd>
               <dt className="text-fg-tertiary">Risk tier</dt><dd><Badge tone={RISK_TONE[agent.risk] ?? "neutral"}>{agent.risk}</Badge></dd>
               <dt className="text-fg-tertiary">Execution</dt><dd className="text-fg-secondary">{agent.execution.replace(/_/g, " ")}</dd>
-              <dt className="text-fg-tertiary">Model label</dt><dd className="font-mono text-fg-secondary">{agent.model}</dd>
+              <dt className="text-fg-tertiary">Answers from</dt><dd className="font-mono text-fg-secondary">{agent.model}</dd>
               <dt className="text-fg-tertiary">Reads</dt><dd className="text-fg-secondary">{agent.contextSlices.join(", ") || "—"}</dd>
+              <dt className="text-fg-tertiary">Insights stored</dt><dd className="text-fg-secondary tabular-nums">{agent.tasksToday} today · {agent.recentCount} in total</dd>
             </dl>
-            <p className="mt-4 text-caption text-fg-tertiary">Runs are rule-based today; the configured language model is not used for agent findings.</p>
+            <p className="mt-4 text-caption text-fg-tertiary">A run asks the RAG service about this agent&apos;s readings; the finding is its answer and the passages it cites.</p>
           </Panel>
           {(runs[agent.id]?.length ?? 0) > 0 && (
             <Panel className="mt-4" title="Runs in this session">

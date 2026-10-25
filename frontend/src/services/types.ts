@@ -193,16 +193,18 @@ export type AskAnswer = {
   findingBn: string;
   factors: Array<{ label: string; labelBn: string; magnitude: string; magnitudeBn: string }>;
   evidence: EvidenceRefPublic[];
-  recommendation: {
+  /** Absent in RAG answers (the service doesn't produce one); older saved history may have it. */
+  recommendation?: {
     title: string;
     titleBn: string;
     action: string;
     actionBn: string;
     riskTier: RiskTier;
-  };
+  } | null;
   createdAt: string;
+  /** Similarity score of the best cited chunk (0 when nothing is cited). */
   confidence: number;
-  /** "live" only when a language model answered; see src/lib/askMode.ts. */
+  /** "live" when the RAG answer cites a document; see src/lib/askMode.ts. */
   mode?: "live" | "demo" | "no_source";
   /** Why the answer isn't live although a model is configured. */
   warning?: string | null;

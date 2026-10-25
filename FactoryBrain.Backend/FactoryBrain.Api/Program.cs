@@ -524,6 +524,11 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<RagHealthMonitor>(
 // Scoped helper for the live column dimension and the per-vector dim guard.
 builder.Services.AddScoped<EmbeddingColumnAdmin>();
 
+// Python RAG service (rag/main.py): the source of every Ask and agent answer.
+// PYRAG_SERVICE_URL / PYRAG_API_KEY / PYRAG_COLLECTION_NAME from the shared .env.
+builder.Services.AddSingleton(PyRagOptions.FromEnvironment(Environment.GetEnvironmentVariable));
+builder.Services.AddSingleton<IPyRagClient, PyRagClient>();
+
 // Scoped: each request gets a fresh instance with its own DbContext.
 builder.Services.AddScoped<IRagService,        RagService>();
 builder.Services.AddScoped<IAskService,        AskService>();

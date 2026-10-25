@@ -190,9 +190,8 @@ public sealed class DbEmbeddingSettingsTests
         Assert.Contains(audit, a => a.StartsWith("rag.reindex.completed|384|512|"));
 
         // 6. Retrieval now uses the new vectors (the query is embedded at 512 dims).
-        using var viewer = Rag.Client(api, Roles.Viewer);
-        var answer = await Rag.Ask(viewer, AiSettingsTestKit.LiveQuestion);
-        Assert.True(answer.GetProperty("ragHits")[0].GetProperty("denseScore").GetDouble() != 0);
+        var hits = await Rag.Retrieve(api, AiSettingsTestKit.LiveQuestion);
+        Assert.True(hits[0].DenseScore != 0);
 
         // 7. A key-only change needs no plan and re-embeds nothing.
         var calls = AiSettingsTestKit.EmbeddingCalls(api);
@@ -316,8 +315,8 @@ public sealed class DbEmbeddingSettingsTests
             Assert.Equal(("openai", 1536, 384, false, "startup_config"),
                 (emb.GetProperty("provider").GetString(), emb.GetProperty("dimensions").GetInt32(), emb.GetProperty("columnDimensions").GetInt32(),
                  emb.GetProperty("dimensionsMatchColumn").GetBoolean(), emb.GetProperty("persistence").GetString()));
-            // Ask still answers (keyword-only) and does not pay to embed the query.
-            await Rag.Ask(viewer, AiSettingsTestKit.LiveQuestion);
+            // Retrieval still answers (keyword-only) and does not pay to embed the query.
+            await Rag.Retrieve(hosted, AiSettingsTestKit.LiveQuestion);
             Assert.Equal(1, AiSettingsTestKit.EmbeddingCalls(hosted));
         }
 

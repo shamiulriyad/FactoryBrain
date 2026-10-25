@@ -93,7 +93,7 @@ export default function KnowledgePage() {
       <PageHeader
         eyebrow="Intelligence"
         title="Knowledge base"
-        description="Manuals, SOPs, compliance notes and FAQs that Ask BunonBrain searches. Documents are chunked and embedded by the API and stored in PostgreSQL (pgvector)."
+        description="The API's own pgvector document index. Ask and agent runs no longer answer from it; they use the Python RAG service."
         actions={
           <>
             <Button variant="secondary" size="sm" onClick={reloadAll} disabled={docs.refreshing} aria-label="Refresh knowledge base">
@@ -113,8 +113,12 @@ export default function KnowledgePage() {
         }
       />
 
+      <Callout tone="warning" className="mt-5" title="Documents here are not used for answers" testId="kb-not-answer-source">
+        Ask and agent runs answer only from the PDFs indexed in the Python RAG service (<span className="font-mono">rag/</span>). To add a document there, put the PDF in <span className="font-mono">rag/data/</span> and run <span className="font-mono">python ingest.py --pdf data/your.pdf</span>.
+      </Callout>
+
       {!admin && (
-        <Callout tone="info" className="mt-5" testId="kb-readonly">
+        <Callout tone="info" className="mt-3" testId="kb-readonly">
           You can browse the index. Adding documents and reindexing need an Admin.
         </Callout>
       )}

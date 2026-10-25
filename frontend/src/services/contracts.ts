@@ -368,3 +368,16 @@ export type AskRagHit = {
 };
 
 export type AskCitation = { id: string; title: string; snippet: string; confidence: number; source: string; url: string };
+
+/** GET /api/ask/status — the Python RAG service that answers Ask and agent runs. */
+export type RagServiceStatus = {
+  service: "python-rag";
+  reachable: boolean;
+  ready: boolean;
+  qdrant: string;
+  collection: string;
+  llmModel: string;
+  embeddingProvider: string;
+  embeddingModel: string;
+  error?: string | null;
+};

@@ -224,7 +224,8 @@ public sealed class DbApprovalTests
     public async Task Agent_run_approval_flows_through_the_api_and_the_brief_count_drops_after_a_decision()
     {
         var op = As(Roles.Operator);
-        using var run = await op.Client.PostAsync("/api/agents/line-throughput-agent/run", Rag.Json(new { }));
+        // maintenance-agent is configured as medium risk, so its run queues an approval.
+        using var run = await op.Client.PostAsync("/api/agents/maintenance-agent/run", Rag.Json(new { }));
         Assert.Equal(HttpStatusCode.OK, run.StatusCode);
         using var runBody = JsonDocument.Parse(await run.Content.ReadAsStringAsync());
         Assert.True(runBody.RootElement.GetProperty("approvalPending").GetBoolean());

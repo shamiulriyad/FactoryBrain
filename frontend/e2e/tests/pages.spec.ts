@@ -127,7 +127,7 @@ test("agents come from the server; an Operator runs one and a Viewer can't", asy
   await op.getByTestId("agent-run-line-throughput-agent").click();
   expect((await ran).status()).toBe(200);
   const result = op.locator('[data-agent-id="line-throughput-agent"]').getByTestId("agent-run-result");
-  await expect(result).toContainText("Rule-based demo run");
+  await expect(result).toContainText("RAG answer");
   await opContext.close();
 });
 

@@ -33,6 +33,7 @@ public static class EndpointMatrix
         ("GET",   "/",                          Access.Authenticated),
         ("GET",   "/api/auth/me",               Access.Authenticated),
         ("POST",  "/api/ask",                   Access.Authenticated),
+        ("GET",   "/api/ask/status",            Access.Authenticated),
         ("GET",   "/api/agents",                Access.Authenticated),
         ("GET",   "/api/approvals",             Access.Authenticated),
         ("GET",   "/api/brief/morning",         Access.Authenticated),

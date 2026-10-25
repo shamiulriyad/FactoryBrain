@@ -57,6 +57,21 @@ internal static class Rag
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
         return JsonDocument.Parse(await res.Content.ReadAsStringAsync()).RootElement.Clone();
     }
+
+    /// <summary>
+    /// Hybrid retrieval on the API's own pgvector index. Ask answers from the
+    /// Python RAG service now, so the index (ingest, reindex) is tested directly.
+    /// </summary>
+    public static async Task<IReadOnlyList<FactoryBrain.Application.Dtos.Ask.AskRagHit>> Retrieve(DbApiFactory api, string query)
+    {
+        using var scope = api.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<FactoryBrain.Application.Abstractions.Interfaces.IRagService>()
+            .RetrieveAsync(query, null, topK: 4);
+    }
+
+    /// <summary>Outbound calls other than the fake RAG service (which Ask and agent runs use).</summary>
+    public static IEnumerable<OutboundHttpGuard.Captured> NonRagCalls(DbApiFactory api) =>
+        api.Http.Handled.Where(c => c.Uri.Host != DbApiFactory.FakeRagHost);
 }
 
 /// <summary>
@@ -75,7 +90,7 @@ public sealed class DbRagTests
     private void AssertNoOutboundHttp()
     {
         Assert.Empty(Api.Http.Blocked);
-        Assert.Empty(Api.Http.Handled);
+        Assert.Empty(Rag.NonRagCalls(Api));
     }
 
     [DockerFact]
@@ -146,16 +161,12 @@ public sealed class DbRagTests
         Assert.Equal(chunkCount, dims.Count);
         Assert.All(dims, d => Assert.Equal("384", d));
 
-        // Retrieval through the API (no LLM configured → deterministic answer, real retrieval).
-        using var viewer = Rag.Client(Api, Roles.Viewer);
-        var answer = await Rag.Ask(viewer, $"{marker} looper skips");
-        var hits = answer.GetProperty("ragHits").EnumerateArray().ToList();
+        // Hybrid retrieval over the stored vectors.
+        var hits = await Rag.Retrieve(Api, $"{marker} looper skips");
         Assert.NotEmpty(hits);
-        Assert.Equal(docId, hits[0].GetProperty("sourceId").GetString());
-        Assert.True(hits[0].GetProperty("denseScore").GetDouble() > 0, "stored pgvector embedding contributed a dense score");
-        Assert.True(hits[0].GetProperty("bm25Score").GetDouble() > 0);
-        var citations = answer.GetProperty("citations").EnumerateArray().Select(c => c.GetProperty("id").GetString()).ToList();
-        Assert.Contains(hits[0].GetProperty("id").GetString(), citations);
+        Assert.Equal(docId, hits[0].SourceId);
+        Assert.True(hits[0].DenseScore > 0, "stored pgvector embedding contributed a dense score");
+        Assert.True(hits[0].Bm25Score > 0);
         AssertNoOutboundHttp();
     }
 
@@ -189,13 +200,9 @@ public sealed class DbRagTests
     }
 
     [DockerFact]
-    public async Task Nonsense_query_returns_no_sources_and_no_citations()
+    public async Task Nonsense_query_retrieves_nothing()
     {
-        using var viewer = Rag.Client(Api, Roles.Viewer);
-        var answer = await Rag.Ask(viewer, "zzqx purple volcano tax");
-        Assert.Empty(answer.GetProperty("ragHits").EnumerateArray());
-        Assert.Empty(answer.GetProperty("citations").EnumerateArray());
-        Assert.Equal("No confident source was found for your query.", answer.GetProperty("finding").GetString());
+        Assert.Empty(await Rag.Retrieve(Api, "zzqx purple volcano tax"));
     }
 
     [DockerFact]
@@ -231,7 +238,7 @@ public sealed class DbMockedProviderTests
     private void AssertOnlyMockedOpenAiCalls()
     {
         Assert.Empty(Api.Http.Blocked);
-        Assert.All(Api.Http.Handled, c =>
+        Assert.All(Rag.NonRagCalls(Api), c =>
         {
             // Embeddings use the OpenAI default; chat uses LLM_BASE_URL.
             var expectedHost = c.Uri.AbsolutePath == "/v1/chat/completions" ? DbApiFactory.FakeLlmHost : "api.openai.com";
@@ -331,23 +338,16 @@ public sealed class DbMockedProviderTests
     }
 
     [DockerFact]
-    public async Task Ask_with_a_mocked_llm_sends_retrieved_context_and_returns_the_model_answer()
+    public async Task Ask_answers_from_the_rag_service_even_with_a_language_model_configured()
     {
         var chatCallsBefore = Api.Http.Handled.Count(c => c.Uri.AbsolutePath == "/v1/chat/completions");
 
         using var viewer = Rag.Client(Api, Roles.Viewer);
         var answer = await Rag.Ask(viewer, "needle breakage on lockstitch machines");
 
-        Assert.Equal(DbApiFactory.FakeLlmFinding, answer.GetProperty("finding").GetString());
-        Assert.StartsWith("live-", answer.GetProperty("taskId").GetString());
-        var hits = answer.GetProperty("ragHits").EnumerateArray().ToList();
-        Assert.NotEmpty(hits);
-
-        var chatCalls = Api.Http.Handled.Where(c => c.Uri.AbsolutePath == "/v1/chat/completions").ToList();
-        Assert.Equal(chatCallsBefore + 1, chatCalls.Count);
-        var prompt = chatCalls.Last().Body;
-        Assert.Contains("\"model\":\"test-chat-model\"", prompt);
-        Assert.Contains(hits[0].GetProperty("sourceId").GetString()!, prompt); // retrieved context went to the model
-        AssertOnlyMockedOpenAiCalls();
+        Assert.Equal(DbApiFactory.FakeRagAnswer, answer.GetProperty("finding").GetString());
+        // The API's own LLM settings are not used for answers.
+        Assert.Equal(chatCallsBefore, Api.Http.Handled.Count(c => c.Uri.AbsolutePath == "/v1/chat/completions"));
+        Assert.Empty(Api.Http.Blocked);
     }
 }

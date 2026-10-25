@@ -15,14 +15,12 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
-  SlidersHorizontal,
   Trash2
 } from "lucide-react";
 import { useT } from "@/lib/useT";
 import { Button } from "@/components/ui/Button";
 import { Badge, RISK_TONE } from "@/components/ui/Badge";
 import { Callout } from "@/components/ui/Callout";
-import { FilterSelect } from "@/components/ui/Field";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EvidenceBlock } from "@/components/evidence/EvidenceBlock";
 import { cn } from "@/lib/cn";
@@ -31,22 +29,13 @@ import { useAuthStore } from "@/lib/auth";
 import { apiJson, errorMessage, isApiError } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
 import { askModeLabel, resolveAskMode, shouldShowConfidence, type AskMode } from "@/lib/askMode";
-import { RAG_CATEGORIES, RAG_DEPARTMENTS, type AskRagHit, type AskRequest, type LlmStatus } from "@/services/contracts";
+import type { AskRagHit, AskRequest, RagServiceStatus } from "@/services/contracts";
 import type { AskAnswer } from "@/services/types";
 
 type Answer = AskAnswer & { ragHits?: AskRagHit[] };
 type Block = AskRecord["blocks"][number];
-type Department = (typeof RAG_DEPARTMENTS)[number];
-type Category = (typeof RAG_CATEGORIES)[number];
 
 const MAX_QUERY = 2000;
-const SUGGESTIONS_EN = [
-  "Needle breakage procedure",
-  "AQL 1.5 sampling plan for normal inspection",
-  "Which line is at risk of missing today's target and why?",
-  "How do I calibrate the buttonhole machine?"
-];
-const SUGGESTIONS_BN = ["সুই ভাঙলে কী করতে হবে?", "এই সপ্তাহে কোন মেশিনে রক্ষণাবেক্ষণ দরকার?"];
 
 /** Turn an API answer into the blocks the page (and the history) renders. */
 function toBlocks(json: Answer, mode: AskMode): Block[] {
@@ -56,7 +45,7 @@ function toBlocks(json: Answer, mode: AskMode): Block[] {
     ...(json.factors?.length ? [{ type: "factors" as const, data: json.factors }] : []),
     ...(json.citations?.length ? [{ type: "citations" as const, data: json.citations }] : []),
     ...(json.evidence?.length ? [{ type: "evidence" as const, data: json.evidence }] : []),
-    { type: "recommendation", data: json.recommendation },
+    ...(json.recommendation ? [{ type: "recommendation" as const, data: json.recommendation }] : []),
     { type: "done", data: { confidence: shouldShowConfidence(mode) ? json.confidence : null, ragHits: json.ragHits ?? [] } }
   ];
 }
@@ -73,12 +62,10 @@ export default function AskPage() {
   const [source, setSource] = useState<AskMode>("demo");
   const [notice, setNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [department, setDepartment] = useState("");
-  const [category, setCategory] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
-  const llm = useResource<LlmStatus>("/api/settings/llm");
+  const rag = useResource<RagServiceStatus>("/api/ask/status");
+  const ragUp = rag.data ? rag.data.reachable && rag.data.ready && rag.data.qdrant === "healthy" : null;
 
   // History is kept on this device only, and only the signed-in user's own.
   const allHistory = useAskStore((s) => s.history);
@@ -105,12 +92,6 @@ export default function AskPage() {
     setNotice(null);
     setLoading(true);
     const body: AskRequest = { query: finalQ };
-    if (department || category) {
-      body.filter = {
-        ...(department ? { department: department as Department } : {}),
-        ...(category ? { category: category as Category } : {})
-      };
-    }
     try {
       const json = await apiJson<Answer>("/api/ask", { method: "POST", body, timeoutMs: 90_000 });
       // Only the API's explicit `mode` decides whether this is shown as live.
@@ -131,7 +112,7 @@ export default function AskPage() {
     } catch (e) {
       if (isApiError(e) && e.kind === "rate_limited") setError({ title: "Too many questions", body: e.message });
       else if (isApiError(e) && e.kind === "validation") setError({ title: "Question not accepted", body: e.message });
-      else if (isApiError(e) && (e.kind === "unavailable" || e.kind === "server")) setError({ title: "The answer service is unavailable", body: `${e.message} Your question was not answered; try again shortly.` });
+      else if (isApiError(e) && (e.kind === "unavailable" || e.kind === "server")) setError({ title: "The RAG service is unavailable", body: `${e.message} Your question was not answered.` });
       else setError({ title: "No answer", body: errorMessage(e) });
     } finally {
       setLoading(false);
@@ -177,7 +158,6 @@ export default function AskPage() {
   }
 
   const done = blocks.some((b) => b.type === "done");
-  const filterCount = (department ? 1 : 0) + (category ? 1 : 0);
 
   return (
     <div className="flex flex-col h-full" data-tour="ask">
@@ -185,10 +165,10 @@ export default function AskPage() {
         <div className="max-w-3xl mx-auto w-full px-4 md:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-[20px] leading-[28px] font-semibold tracking-tight">{t("ask.title")}</h1>
-            <p className="text-caption text-fg-tertiary">
-              Answers come from the documents in the{" "}
-              <Link href="/app/knowledge" className="text-accent hover:underline">knowledge base</Link>.{" "}
-              {llm.data ? (llm.data.mode === "live" ? `A language model (${llm.data.provider}) writes the answer from the retrieved passages.` : "No language model is configured, so answers are a fixed template over the retrieved passages.") : null}
+            <p className="text-caption text-fg-tertiary" data-testid="ask-rag-status">
+              {rag.data
+                ? <>Answered by the RAG service: <span className="text-fg-secondary">{rag.data.llmModel}</span> over the PDFs in <span className="font-mono text-fg-secondary">{rag.data.collection}</span> ({rag.data.embeddingModel}).</>
+                : rag.error ? "Could not read the RAG service status." : "Checking the RAG service…"}
             </p>
           </div>
           {(asked || done) && <SourceChip source={source} />}
@@ -199,22 +179,13 @@ export default function AskPage() {
         <div className="max-w-3xl mx-auto w-full px-4 md:px-6 py-5 pb-8">
           {!asked && !loading && (
             <div>
-              <p className="eyebrow">{t("ask.suggestions")}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {[...SUGGESTIONS_EN, ...SUGGESTIONS_BN].map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => void submit(s)}
-                    className="h-9 px-3 rounded-full border border-border-subtle bg-[var(--bg-surface)] text-caption text-fg-secondary hover:text-fg-primary hover:border-border-strong transition-colors"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-
-              <Callout tone="info" className="mt-6">
-                Each question is answered on its own: the assistant doesn&apos;t remember earlier questions. Sources and scores below every answer come straight from the API&apos;s retrieval.
+              {ragUp === false && (
+                <Callout tone="danger" className="mb-4" title="The RAG service is not available" testId="ask-rag-down">
+                  {rag.data?.reachable ? `The service is running but not ready (Qdrant: ${rag.data.qdrant}).` : "The API cannot reach the Python RAG service."} Start Qdrant and run <span className="font-mono">uvicorn main:app --port 8000</span> in <span className="font-mono">rag/</span>.
+                </Callout>
+              )}
+              <Callout tone="info">
+                Answers come only from the PDFs indexed in the RAG service; add documents with <span className="font-mono">python ingest.py --pdf data/your.pdf</span> in <span className="font-mono">rag/</span>. Each question is answered on its own, and the sources under an answer are the passages it cites.
               </Callout>
 
               {history.length > 0 && (
@@ -261,7 +232,7 @@ export default function AskPage() {
 
           <div className="mt-4 space-y-3">
             {notice && (
-              <Callout tone="warning" testId="ask-notice" title="Shown in demo mode">{notice}</Callout>
+              <Callout tone="warning" testId="ask-notice" title="Note">{notice}</Callout>
             )}
 
             {blocks.map((b, idx) => (
@@ -305,41 +276,13 @@ export default function AskPage() {
 
       <div className="border-t border-border-subtle bg-[var(--bg-surface)] px-4 md:px-6 pt-3 pb-4">
         <div className="max-w-3xl mx-auto">
-          {showFilters && (
-            <div className="mb-2 flex flex-wrap items-center gap-3" data-testid="ask-filters">
-              <FilterSelect label="Department" value={department} onChange={setDepartment}>
-                <option value="">Any</option>
-                {RAG_DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
-              </FilterSelect>
-              <FilterSelect label="Category" value={category} onChange={setCategory}>
-                <option value="">Any</option>
-                {RAG_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </FilterSelect>
-              {filterCount > 0 && (
-                <button type="button" className="text-caption text-accent hover:underline" onClick={() => { setDepartment(""); setCategory(""); }}>
-                  Clear filters
-                </button>
-              )}
-            </div>
-          )}
           <form
             onSubmit={(e) => {
               e.preventDefault();
               void submit();
             }}
-            className="flex items-end gap-2 rounded-[var(--radius-card)] border border-border-strong bg-[var(--bg-surface)] px-2 py-2 focus-within:border-[var(--accent)] focus-within:shadow-[0_0_0_3px_var(--accent-soft)]"
+            className="flex items-end gap-2 rounded-[var(--radius-card)] border border-border-strong bg-[var(--bg-surface)] pl-3 pr-2 py-2 focus-within:border-[var(--accent)] focus-within:shadow-[0_0_0_3px_var(--accent-soft)]"
           >
-            <button
-              type="button"
-              onClick={() => setShowFilters((v) => !v)}
-              aria-pressed={showFilters}
-              aria-label="Search filters"
-              title="Limit retrieval to a department or category"
-              className={cn("relative size-9 shrink-0 rounded-md inline-flex items-center justify-center", showFilters || filterCount ? "text-accent bg-[var(--accent-soft)]" : "text-fg-tertiary hover:text-fg-primary hover:bg-surface-2")}
-            >
-              <SlidersHorizontal size={16} />
-              {filterCount > 0 && <span className="absolute -top-1 -right-1 size-4 rounded-full bg-accent text-[10px] leading-4 text-[var(--accent-fg-on-bg)] font-semibold">{filterCount}</span>}
-            </button>
             <label htmlFor="ask-input" className="sr-only">Your question</label>
             <textarea
               id="ask-input"
@@ -466,7 +409,7 @@ function renderBlock(block: Block, locale: "en" | "bn", t: (k: string, p?: Recor
         <div className="space-y-2">
           <p className="flex items-center gap-2 text-caption text-fg-tertiary">
             <CheckCircle2 size={13} className="text-[var(--risk-low)]" />
-            {typeof block.data.confidence === "number" ? `Confidence ${Math.round(block.data.confidence * 100)}%` : "Not a generated answer: no confidence score"}
+            {typeof block.data.confidence === "number" ? `Best source match ${Math.round(block.data.confidence * 100)}% (similarity of the top cited passage)` : "No document passage was cited"}
           </p>
           {hits.length > 0 && (
             <details className="surface-2 px-3 py-2" data-testid="ask-retrieval">

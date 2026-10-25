@@ -3,7 +3,6 @@ using FactoryBrain.Application.Dtos.LineBoard;
 using FactoryBrain.Application.Dtos.Qc;
 using FactoryBrain.Application.Dtos.Sensors;
 using FactoryBrain.Application.Dtos.Settings;
-using FactoryBrain.Application.Dtos.Vision;
 using FluentValidation;
 
 namespace FactoryBrain.Application.Validation;
@@ -111,20 +110,6 @@ public class QcFlagRequestValidator : AbstractValidator<QcFlagRequest>
         RuleFor(x => x.DefectRatePct).InclusiveBetween(0, 100).When(x => x.DefectRatePct.HasValue);
         RuleFor(x => x.ReworkRatePct).InclusiveBetween(0, 100).When(x => x.ReworkRatePct.HasValue);
         RuleFor(x => x.Note).MaximumLength(280).When(x => !string.IsNullOrEmpty(x.Note));
-    }
-}
-
-public class VisionAnalyzeRequestValidator : AbstractValidator<VisionAnalyzeRequest>
-{
-    // Keep parity with src/app/api/vision/analyze — the four staged files.
-    public VisionAnalyzeRequestValidator()
-    {
-        RuleFor(x => x.SampleFile).Must(s => s is
-            "defect-1-stitch-skip.jpg" or
-            "defect-2-buttonhole.jpg" or
-            "defect-3-seam-pucker.jpg" or
-            "defect-4-fabric-stain.jpg")
-            .WithMessage("unknown_sample_file");
     }
 }
 

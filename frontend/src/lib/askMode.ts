@@ -22,15 +22,16 @@ export type AskModeLabel = { label: string; title: string; isLive: boolean };
 export function askModeLabel(mode: AskMode): AskModeLabel {
   switch (mode) {
     case "live":
-      return { label: "Live", title: "Answered by the configured language model from the cited sources", isLive: true };
+      return { label: "Live", title: "Answered by the RAG service from the cited document passages", isLive: true };
     case "no_source":
-      return { label: "No source", title: "Nothing relevant was found, so no model was asked", isLive: false };
+      return { label: "No source", title: "The RAG service answered without citing any indexed document", isLive: false };
     default:
-      return { label: "Demo", title: "Not a generated answer: a fixed template over the retrieved passages", isLive: false };
+      // Only older saved history has this mode; the API no longer produces it.
+      return { label: "Demo", title: "Saved from an earlier version: not a RAG answer", isLive: false };
   }
 }
 
-/** Confidence is only meaningful for a generated answer. */
+/** The source-match score only exists when the answer cites a document. */
 export function shouldShowConfidence(mode: AskMode): boolean {
   return mode === "live";
 }

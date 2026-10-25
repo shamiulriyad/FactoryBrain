@@ -28,5 +28,13 @@ public class AgentsController : ControllerBase
         {
             return NotFound(new { error = "agent_not_found", agentId });
         }
+        catch (AgentNoSourceException ex)
+        {
+            return Problem(statusCode: StatusCodes.Status422UnprocessableEntity, title: ex.Message, detail: ex.Answer);
+        }
+        catch (PyRagUnavailableException ex)
+        {
+            return Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "The RAG service is unavailable", detail: ex.Message);
+        }
     }
 }

@@ -1,105 +1,193 @@
+using System.Globalization;
+using System.Text;
 using FactoryBrain.Infrastructure.Persistence;
 using FactoryBrain.Domain.Entities;
 using FactoryBrain.Domain.Enums;
 using FactoryBrain.Application.Dtos.Agents;
 using FactoryBrain.Application.Dtos.Vision;
 using FactoryBrain.Application.Abstractions.Interfaces;
-using FactoryBrain.Application.Settings;
 using Microsoft.EntityFrameworkCore;
 
 namespace FactoryBrain.Infrastructure.Services;
 
 /// <summary>
-/// Mirrors <c>src/app/api/agents/[agentId]/run/route.ts</c>. Demo path
-/// produces a deterministic Insight + a secondary energy Insight when the
-/// maintenance or manager agent scores above 0.3 on the duty tool.
-/// Agent runs don't call a language model yet (audit D5); when the effective
-/// LLM settings are live the response says so instead of implying otherwise.
+/// POST /api/agents/{agentId}/run. An agent run asks the Python RAG service
+/// (<see cref="IPyRagClient"/>) one question: the agent's configured purpose
+/// plus the current line-board and machine readings its context slices name.
+/// The stored insight is that answer and the chunks it cites, nothing else.
+/// No source cited → <see cref="AgentNoSourceException"/>; service down →
+/// <see cref="PyRagUnavailableException"/>. Either way nothing is stored.
 /// </summary>
 public sealed class AgentRunService : IAgentRunService
 {
     private readonly FactoryBrainDbContext _db;
     private readonly IFloorAlertService _alerts;
     private readonly ISensorService _sensors;
-    private readonly IAiSettingsProvider _settings;
+    private readonly ILineBoardService _board;
+    private readonly IPyRagClient _rag;
     private readonly ILogger<AgentRunService> _log;
 
-    public const string ModelNotUsedWarning =
-        "Agent runs are rule-based demo runs: the configured language model is not used for agent findings yet.";
+    public const string RunSource = "rag";
 
     public AgentRunService(
         FactoryBrainDbContext db, IFloorAlertService alerts, ISensorService sensors,
-        IAiSettingsProvider settings, ILogger<AgentRunService> log)
-    { _db = db; _alerts = alerts; _sensors = sensors; _settings = settings; _log = log; }
+        ILineBoardService board, IPyRagClient rag, ILogger<AgentRunService> log)
+    { _db = db; _alerts = alerts; _sensors = sensors; _board = board; _rag = rag; _log = log; }
 
     public async Task<AgentRunResponse> RunAsync(string agentId, CancellationToken ct)
     {
         var agent = await _db.Agents.AsNoTracking().FirstOrDefaultAsync(a => a.Id == agentId, ct);
         if (agent is null) throw new KeyNotFoundException($"agent_not_found:{agentId}");
 
-        var persist = await PersistRunAsync(agent, warning: null, source: "demo", ct);
-        var energy  = await MaybeRaiseEnergyInsightAsync(agent, ct);
-        var llm     = (await _settings.GetAsync(ct)).Llm;
+        var context = await ReadContextAsync(agent, ct);
+        var result = await _rag.QueryAsync(BuildQuestion(agent, context), ct);
+        if (result.Sources.Count == 0 || string.IsNullOrWhiteSpace(result.Answer))
+        {
+            _log.LogInformation("Agent {AgentId}: RAG answer cited no source; nothing stored.", agent.Id);
+            throw new AgentNoSourceException(result.Answer);
+        }
 
+        var persist = await PersistRunAsync(agent, result, context, ct);
         return new AgentRunResponse(
-            Source: "demo",
+            Source: RunSource,
             AgentId: agentId,
             Insight: ToLite(persist.Insight),
             ApprovalPending: persist.ApprovalPending,
             ApprovalReason: persist.ApprovalReason,
             FloorAlertId: persist.FloorAlertId,
             ActivityEventId: persist.ActivityEventId,
-            EnergyInsight: energy,
-            Warning: llm.IsLive ? ModelNotUsedWarning : null
+            EnergyInsight: null,
+            Warning: null
         );
     }
 
-    public async Task<IReadOnlyList<AgentDefinition>> RosterAsync(CancellationToken ct = default) =>
-        await _db.Agents.AsNoTracking().OrderBy(a => a.Id).ToListAsync(ct);
-
-    private async Task<PersistResult> PersistRunAsync(AgentDefinition agent, string? warning, string source, CancellationToken ct)
+    /// <summary>
+    /// The seeded roster, with the run counts and model label replaced by
+    /// real values: insights each agent stored (today / in total) and the
+    /// RAG service's configured model. Status follows the service's health.
+    /// </summary>
+    public async Task<IReadOnlyList<AgentDefinition>> RosterAsync(CancellationToken ct = default)
     {
-        var seed = await _db.Insights.AsNoTracking()
-            .Where(i => i.AgentId == agent.Id)
-            .OrderByDescending(i => i.UpdatedAt)
-            .FirstOrDefaultAsync(ct);
-        string title   = seed?.Title   ?? $"{agent.Name} produced a draft insight";
-        string titleBn = seed?.TitleBn ?? $"{agent.NameBn} একটি খসড়া অন্তর্দৃষ্টি তৈরি করেছে";
-        string finding = (warning ?? seed?.Finding) ?? "Agent produced no observations in this window.";
-        string findingBn = seed?.FindingBn ?? "এই উইন্ডোতে এজেন্ট কোন পর্যবেক্ষণ দেয়নি।";
-        string action = seed?.Recommendation.Action ?? "Open the brief and approve the suggested next step.";
-        string actionBn = seed?.Recommendation.ActionBn ?? "ব্রিফ খুলুন এবং প্রস্তাবিত পরবর্তী পদক্ষেপ অনুমোদন দিন।";
-        var risk = seed?.Recommendation.RiskTier ?? RiskTier.Medium;
-        double conf = seed?.Confidence ?? 0.7;
+        var agents = await _db.Agents.AsNoTracking().OrderBy(a => a.Id).ToListAsync(ct);
+        var today = DateTime.UtcNow.Date;
+        var counts = await _db.Insights.AsNoTracking()
+            .GroupBy(i => i.AgentId)
+            .Select(g => new { AgentId = g.Key, Total = g.Count(), Today = g.Count(i => i.CreatedAt >= today) })
+            .ToDictionaryAsync(x => x.AgentId, ct);
+        var health = await _rag.HealthAsync(ct);
+        var o = _rag.Options;
 
+        foreach (var a in agents)
+        {
+            counts.TryGetValue(a.Id, out var c);
+            a.TasksToday = c?.Today ?? 0;
+            a.RecentCount = c?.Total ?? 0;
+            a.Model = $"RAG · {o.LlmModel} · {o.EmbeddingModel} ({o.Collection})";
+            a.Status = health.Reachable && health.Ready && health.Qdrant == "healthy" ? "ready" : "unavailable";
+        }
+        return agents;
+    }
+
+    // ── Context: the live readings the question is about ────────────────────
+
+    private sealed record ContextLine(string Label, string Value);
+
+    private async Task<IReadOnlyList<ContextLine>> ReadContextAsync(AgentDefinition agent, CancellationToken ct)
+    {
+        var slices = agent.ContextSlices;
+        bool all = slices.Contains("*");
+        var lines = new List<ContextLine>();
+
+        if (all || slices.Contains("lines") || slices.Contains("targets"))
+        {
+            var board = await _board.BuildAsync(ct);
+            // Lines below target first; the question is about what needs attention.
+            foreach (var r in board.Rows.Where(r => r.EfficiencyPct < r.SahTarget || r.Bottleneck != "green")
+                                        .OrderBy(r => r.EfficiencyPct - r.SahTarget))
+                lines.Add(new ContextLine(r.Name,
+                    $"efficiency {r.EfficiencyPct}% vs target {r.SahTarget}%, WIP {r.WipBundles} bundles, non-productive time {r.NptMinutes} min, board flag {r.Bottleneck}"));
+        }
+
+        if (all || slices.Contains("machines"))
+        {
+            var snap = _sensors.Snapshot();
+            foreach (var m in snap.Machines.Where(m => m.Status is "down" or "at_risk")
+                                           .OrderBy(m => m.Status == "down" ? 0 : 1).ThenBy(m => m.Id))
+                lines.Add(new ContextLine($"Machine {m.Id}",
+                    string.Create(CultureInfo.InvariantCulture,
+                        $"status {m.Status.Replace('_', ' ')}, vibration {m.Vibration:F2} mm/s, temperature {m.Temperature:F1} °C, duty cycle {m.DutyCycle * 100:F0}%")));
+        }
+        return lines;
+    }
+
+    private static string BuildQuestion(AgentDefinition agent, IReadOnlyList<ContextLine> context)
+    {
+        var q = new StringBuilder();
+        q.AppendLine($"Role: {agent.Purpose}");
+        q.AppendLine();
+        if (context.Count == 0)
+        {
+            q.AppendLine("No line or machine is currently below target or flagged.");
+            q.AppendLine("According to the documents, which routine checks should be done now?");
+        }
+        else
+        {
+            q.AppendLine("Current floor readings:");
+            foreach (var c in context) q.AppendLine($"- {c.Label}: {c.Value}");
+            q.AppendLine();
+            q.AppendLine("According to the documents, what are the likely causes and the corrective actions for these items? Answer in English.");
+        }
+        return q.ToString();
+    }
+
+    // ── Persist: insight, approval, alert, activity ─────────────────────────
+
+    private async Task<PersistResult> PersistRunAsync(AgentDefinition agent, PyRagAnswer result, IReadOnlyList<ContextLine> context, CancellationToken ct)
+    {
+        var title = Headline(result.Answer);
+        var risk = agent.Risk;
         var insight = new Insight
         {
             Id = $"ins-{Guid.NewGuid():N}",
             AgentId = agent.Id,
             AgentLabel = agent.Name,
             Title = title,
-            TitleBn = titleBn,
-            Finding = finding,
-            FindingBn = findingBn,
+            TitleBn = title,
+            Finding = result.Answer,
+            FindingBn = result.Answer,
+            // What the agent looked at: the readings it put in the question.
+            Factors = context.Select(c => new InsightFactor { Label = c.Label, LabelBn = c.Label, Magnitude = c.Value, MagnitudeBn = c.Value }).ToList(),
             Recommendation = new InsightRecommendation
             {
-                Title = $"Apply {agent.Name}",
-                TitleBn = $"{agent.NameBn} প্রয়োগ করুন",
-                Action = action,
-                ActionBn = actionBn,
+                Title = title,
+                TitleBn = title,
+                Action = string.Empty,
+                ActionBn = string.Empty,
                 RiskTier = risk,
                 TargetStage = Stage.PendingApproval
             },
+            Evidence = new List<EvidenceRow>
+            {
+                new()
+                {
+                    // The cited chunks (file + page). Filter stays null: the jsonb
+                    // column can't take a Dictionary without dynamic JSON.
+                    Domain = "manuals",
+                    Count = result.Sources.Count,
+                    PreviewIds = result.Sources.Select(s => s.Page is { } p ? $"{s.Source} p.{p}" : s.Source).Distinct().ToList()
+                }
+            },
             Stage = Stage.PendingApproval,
-            Confidence = conf,
+            // Similarity of the best cited chunk; a retrieval score, not a model-reported certainty.
+            Confidence = Math.Clamp(result.Sources.Max(s => s.Score), 0.0, 1.0),
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
         _db.Insights.Add(insight);
 
         var approvalPending = risk != RiskTier.Low;
-        string? approvalReason = approvalPending ? "Risk tier != low" : null;
-        var approvalId = (string?)null;
+        string? approvalReason = approvalPending ? $"{agent.Name} is configured as {risk.ToString().ToLowerInvariant()} risk" : null;
+        string? approvalId = null;
         if (approvalPending)
         {
             var app = new ApprovalRequest
@@ -122,9 +210,10 @@ public sealed class AgentRunService : IAgentRunService
             Id = $"alert-{Guid.NewGuid():N}",
             Channel = "whatsapp_sim",
             InsightId = insight.Id,
-            BodyEn = $"{agent.Name}: {finding}",
-            BodyBn = $"{agent.NameBn}: {findingBn}",
-            Severity = risk == RiskTier.High ? FloorAlertSeverity.Critical : FloorAlertSeverity.Warn,
+            ApprovalId = approvalId,
+            BodyEn = $"{agent.Name}: {title}",
+            BodyBn = $"{agent.NameBn}: {title}",
+            Severity = risk == RiskTier.High ? FloorAlertSeverity.Critical : risk == RiskTier.Medium ? FloorAlertSeverity.Warn : FloorAlertSeverity.Info,
             CreatedAt = DateTime.UtcNow,
             Read = false
         }, ct);
@@ -144,74 +233,16 @@ public sealed class AgentRunService : IAgentRunService
         _db.ActivityEvents.Add(act);
 
         await _db.SaveChangesAsync(ct);
-
         return new PersistResult(insight, approvalPending, approvalReason, alert.Id, act.Id, approvalId);
     }
 
-    private async Task<EnergyInsightDto?> MaybeRaiseEnergyInsightAsync(AgentDefinition agent, CancellationToken ct)
+    /// <summary>First sentence (or line) of the answer, at most 140 characters.</summary>
+    internal static string Headline(string answer)
     {
-        if (agent.Id is not ("maintenance-agent" or "manager-agent")) return null;
-        var rec = RecommendEnergyDuty();
-        if (rec.Score < 0.3) return null;
-        var riskTier = rec.Score > 0.6 ? RiskTier.High : RiskTier.Medium;
-
-        var insight = new Insight
-        {
-            Id = $"ins-energy-{Guid.NewGuid():N}",
-            AgentId = agent.Id,
-            AgentLabel = agent.Name,
-            Title = "Trim compressor duty cycle — energy spike",
-            TitleBn = "কম্প্রেসর ডিউটি সাইকেল কমান — শক্তি স্পাইক",
-            Finding = $"Latest energy readings and per-line totals imply a compressor duty score of {rec.Score:F2}. " +
-                      $"Recommendation: cap duty at {rec.RecommendedDutyPct}% (current {rec.CurrentDutyPct}%); " +
-                      $"expected saving ~{rec.ExpectedKwhSaved:F1} kWh over the {rec.Window} window.",
-            FindingBn = $"সর্বশেষ শক্তি রিডিং এবং প্রতি-লাইন মোট অনুযায়ী কম্প্রেসর ডিউটি স্কোর {rec.Score:F2}। " +
-                        $"পরামর্শ: ডিউটি {rec.RecommendedDutyPct}% এ ক্যাপ করুন।",
-            Recommendation = new InsightRecommendation
-            {
-                Title = "Trim compressor duty",
-                TitleBn = "কম্প্রেসর ডিউটি কমান",
-                Action = $"Trim duty {rec.CurrentDutyPct}% → {rec.RecommendedDutyPct}%",
-                ActionBn = $"{rec.CurrentDutyPct}% → {rec.RecommendedDutyPct}%",
-                RiskTier = riskTier,
-                TargetStage = Stage.PendingApproval
-            },
-            Stage = Stage.PendingApproval,
-            Confidence = Math.Min(0.95, 0.55 + rec.Score * 0.4),
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-        _db.Insights.Add(insight);
-
-        var alert = await _alerts.PushAsync(new FloorAlert
-        {
-            Id = $"alert-energy-{Guid.NewGuid():N}",
-            Channel = "whatsapp_sim",
-            InsightId = insight.Id,
-            BodyEn = $"{agent.Name}: trim compressor duty {rec.CurrentDutyPct}% → {rec.RecommendedDutyPct}% (score {rec.Score:F2}).",
-            BodyBn = $"{agent.NameBn}: কম্প্রেসর ডিউটি {rec.CurrentDutyPct}% → {rec.RecommendedDutyPct}% এ কমান।",
-            Severity = riskTier == RiskTier.High ? FloorAlertSeverity.Critical : FloorAlertSeverity.Warn,
-            CreatedAt = DateTime.UtcNow,
-            Read = false
-        }, ct);
-
-        await _db.SaveChangesAsync(ct);
-        return new EnergyInsightDto(insight.Id, alert.Id, rec.Score);
-    }
-
-    /// <summary>
-    /// Deterministic compressor duty recommendation — mirrors
-    /// <c>factory.tools.recommend_energy_duty</c>.
-    /// </summary>
-    private (double Score, int CurrentDutyPct, int RecommendedDutyPct, double ExpectedKwhSaved, int LineCount, string Window)
-    RecommendEnergyDuty()
-    {
-        var s = _sensors.CurrentState;
-        double totalKwh = s.Lines.Sum(l => l.EnergyKwh);
-        double peak = s.Machines.Count == 0 ? 0 : s.Machines.Average(m => m.Vibration);
-        double score = Math.Clamp(totalKwh / 1000 + peak / 10, 0, 1);
-        int current = 85, recommended = (int)Math.Round(current - score * 15);
-        return (score, current, recommended, score * 4.7, s.Lines.Count, "1h");
+        var text = answer.Trim().TrimStart('*', '#', '-', ' ');
+        var end = text.IndexOfAny(new[] { '\n', '.', '।', '?', '!' });
+        var first = (end > 0 ? text[..(end + (text[end] == '\n' ? 0 : 1))] : text).Replace("**", "").Trim();
+        return first.Length <= 140 ? first : first[..139].TrimEnd() + "…";
     }
 
     private static InsightLiteDto ToLite(Insight i) => new(

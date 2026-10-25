@@ -1,11 +1,15 @@
 "use client";
 
-// Line board for /app Overview: GET /api/line-board rows, rendered as stacked
-// cards on phones and a table from md up. The page owns the fetch (it also
-// feeds the KPI tiles); this panel only renders and, for Operators, offers
-// POST /api/line-board/refresh to advance the simulated board.
+// Line status board for /app Overview: GET /api/line-board rows, rendered as
+// an andon-style tile wall (one tile per line). The page owns the fetch (it
+// also feeds the KPI strip); this panel only renders and, for Operators,
+// offers POST /api/line-board/refresh to advance the simulated board.
+//
+// The board's bottleneck flag and the efficiency gap are shown separately:
+// the API can leave a line unflagged ("green") while it is a few points
+// below target, so the tile states the gap instead of calling it on target.
 
-import { RefreshCw, StepForward } from "lucide-react";
+import { Factory, RefreshCw, StepForward } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -19,20 +23,87 @@ import type { LineBoard, LineBoardRow } from "@/services/contracts";
 
 type Bottleneck = LineBoardRow["bottleneck"];
 
-const BOTTLENECK_TONE: Record<Bottleneck, "success" | "warning" | "danger"> = { green: "success", amber: "warning", red: "danger" };
-const BOTTLENECK_BAR: Record<Bottleneck, string> = {
+const FLAG_TONE: Record<Bottleneck, "success" | "warning" | "danger"> = { green: "success", amber: "warning", red: "danger" };
+const FLAG_FILL: Record<Bottleneck, string> = {
   green: "bg-[var(--risk-low)]",
   amber: "bg-[var(--risk-medium)]",
   red: "bg-[var(--risk-high)]"
 };
+const FLAG_TEXT: Record<Bottleneck, string> = {
+  green: "text-[var(--risk-low)]",
+  amber: "text-[var(--risk-medium)]",
+  red: "text-[var(--risk-high)]"
+};
+const FLAG_ORDER: Bottleneck[] = ["red", "amber", "green"];
 
-function EffBar({ eff, target, bottleneck }: { eff: number; target: number; bottleneck: Bottleneck }) {
+/** "Line 3 — V-Neck" → ["Line 3", "V-Neck"]. */
+function splitName(name: string): [string, string | null] {
+  const i = name.indexOf(" — ");
+  return i < 0 ? [name, null] : [name.slice(0, i), name.slice(i + 3)];
+}
+
+function Gauge({ eff, target, bottleneck }: { eff: number; target: number; bottleneck: Bottleneck }) {
   const pct = Math.max(0, Math.min(100, eff));
+  const tgt = Math.max(0, Math.min(100, target));
   return (
-    <div className="relative h-2 w-full rounded-full bg-surface-3 overflow-hidden" role="presentation">
-      <div className={cn("absolute inset-y-0 left-0 rounded-full transition-[width] duration-300", BOTTLENECK_BAR[bottleneck])} style={{ width: `${pct}%` }} />
-      <div className="absolute -inset-y-0.5 w-0.5 bg-fg-primary/50" style={{ left: `${Math.max(0, Math.min(100, target))}%` }} title={`Target ${target}%`} />
+    <div className="relative h-2.5 w-full rounded-sm bg-surface-3" role="img" aria-label={`Efficiency ${eff}% against a target of ${target}%`}>
+      <div className={cn("absolute inset-y-0 left-0 rounded-sm transition-[width] duration-500", FLAG_FILL[bottleneck])} style={{ width: `${pct}%` }} />
+      <div className="absolute -top-1 -bottom-1 w-[2px] rounded-full bg-fg-primary" style={{ left: `calc(${tgt}% - 1px)` }} title={`Target ${target}%`} />
     </div>
+  );
+}
+
+function LineTile({ row, flagLabel }: { row: LineBoardRow; flagLabel: string }) {
+  const [line, product] = splitName(row.name);
+  const gap = row.efficiencyPct - row.sahTarget;
+  const gapText = gap === 0 ? "On target" : `${gap > 0 ? "+" : "−"}${Math.abs(gap)} pts vs target`;
+  return (
+    <li
+      className={cn(
+        "relative overflow-hidden rounded-[var(--radius-control)] border bg-surface-2 pl-4 pr-3.5 py-3.5",
+        row.bottleneck === "red" ? "border-[var(--risk-high-border)]" : row.bottleneck === "amber" ? "border-[var(--risk-medium-border)]" : "border-border-subtle"
+      )}
+      data-testid={`line-board-row-${row.lineId}`}
+      data-bottleneck={row.bottleneck}
+    >
+      <span className={cn("absolute left-0 inset-y-0 w-1", FLAG_FILL[row.bottleneck])} aria-hidden />
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[11px] leading-4 font-semibold uppercase tracking-[0.06em] text-fg-tertiary">{line}</p>
+          <p className="text-body font-semibold text-fg-primary truncate">{product ?? row.lineId}</p>
+        </div>
+        {row.bottleneck === "green" ? (
+          <span className="text-caption text-fg-tertiary shrink-0 mt-0.5">{flagLabel}</span>
+        ) : (
+          <Badge tone={FLAG_TONE[row.bottleneck]} dot className="shrink-0">{flagLabel}</Badge>
+        )}
+      </div>
+
+      <div className="mt-3 flex items-end justify-between gap-2">
+        <p className="leading-none">
+          <span className="text-[30px] font-semibold tracking-tight tabular-nums text-fg-primary">{row.efficiencyPct}</span>
+          <span className="text-body font-semibold text-fg-secondary">%</span>
+          <span className="ml-1.5 text-caption text-fg-tertiary">efficiency</span>
+        </p>
+        <p className="text-right text-caption leading-4">
+          <span className="block text-fg-tertiary">Target {row.sahTarget}%</span>
+          <span className={cn("block font-semibold tabular-nums", gap >= 0 ? "text-[var(--risk-low)]" : row.bottleneck === "green" ? "text-fg-secondary" : FLAG_TEXT[row.bottleneck])}>{gapText}</span>
+        </p>
+      </div>
+
+      <div className="mt-2.5"><Gauge eff={row.efficiencyPct} target={row.sahTarget} bottleneck={row.bottleneck} /></div>
+
+      <dl className="mt-3 grid grid-cols-2 gap-2 border-t border-border-subtle pt-2.5 text-caption">
+        <div>
+          <dt className="text-fg-tertiary">WIP</dt>
+          <dd className="text-fg-primary font-semibold tabular-nums">{row.wipBundles} <span className="font-normal text-fg-tertiary">bundles</span></dd>
+        </div>
+        <div>
+          <dt className="text-fg-tertiary">Non-productive time</dt>
+          <dd className="text-fg-primary font-semibold tabular-nums">{row.nptMinutes} <span className="font-normal text-fg-tertiary">min</span></dd>
+        </div>
+      </dl>
+    </li>
   );
 }
 
@@ -52,12 +123,14 @@ export function LineBoardPanel({
   const meta = board.data?.meta;
 
   const label = (b: Bottleneck) =>
-    b === "green" ? t("overview.bottleneckGreen") : b === "amber" ? t("overview.bottleneckAmber") : t("overview.bottleneckRed");
+    b === "green" ? t("overview.bottleneckNone") : b === "amber" ? t("overview.bottleneckAmber") : t("overview.bottleneckRed");
+  const counts = FLAG_ORDER.map((b) => ({ b, n: rows.filter((r) => r.bottleneck === b).length }));
 
   return (
     <Panel
-      title={t("overview.lineBoard")}
-      subtitle={meta ? `${t("overview.lineBoardSubtitle")} · tick #${meta.tick} · updated ${formatRelative(meta.updatedAt, locale)}` : t("overview.lineBoardSubtitle")}
+      title="Line status board"
+      subtitle={meta ? `${rows.length} sewing lines · tick #${meta.tick} · updated ${formatRelative(meta.updatedAt, locale)}` : "Efficiency against target, WIP and non-productive time per line"}
+      icon={<Factory size={14} />}
       right={
         <>
           {meta && (
@@ -75,7 +148,7 @@ export function LineBoardPanel({
           </Button>
         </>
       }
-      flush
+      className="h-full"
     >
       {board.error && rows.length === 0 ? (
         <ErrorState
@@ -86,62 +159,26 @@ export function LineBoardPanel({
           onRetry={() => void board.reload()}
         />
       ) : board.loading ? (
-        <div className="p-4"><SkeletonRows rows={5} rowHeight="h-11" /></div>
+        <SkeletonRows rows={3} rowHeight="h-36" />
       ) : rows.length === 0 ? (
-        <p className="p-5 text-caption text-fg-tertiary">The API returned no lines.</p>
+        <p className="text-caption text-fg-tertiary">The API returned no lines.</p>
       ) : (
         <div data-testid="line-board" data-row-count={rows.length} data-simulated={meta?.simulated ? "true" : "false"}>
-          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 md:hidden" aria-label={t("overview.lineBoard")}>
-            {rows.map((r) => (
-              <li key={r.lineId} className="surface-2 p-3" data-testid={`line-board-row-${r.lineId}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-body font-medium text-fg-primary truncate">{r.name}</p>
-                  <Badge tone={BOTTLENECK_TONE[r.bottleneck]} dot>{label(r.bottleneck)}</Badge>
-                </div>
-                <div className="mt-3"><EffBar eff={r.efficiencyPct} target={r.sahTarget} bottleneck={r.bottleneck} /></div>
-                <div className="mt-2 grid grid-cols-3 gap-2 text-caption">
-                  <div><p className="text-fg-tertiary">Efficiency</p><p className="text-fg-primary font-medium tabular-nums">{r.efficiencyPct}% <span className="text-fg-tertiary">/ {r.sahTarget}%</span></p></div>
-                  <div><p className="text-fg-tertiary">{t("overview.colWip")}</p><p className="text-fg-primary font-medium tabular-nums">{r.wipBundles}</p></div>
-                  <div><p className="text-fg-tertiary">{t("overview.colNpt")}</p><p className="text-fg-primary font-medium tabular-nums">{r.nptMinutes}</p></div>
-                </div>
-              </li>
+          <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-fg-secondary" aria-label="Board flags">
+            {counts.map(({ b, n }) => (
+              <span key={b} className="inline-flex items-center gap-1.5">
+                <span className={cn("size-2 rounded-sm", FLAG_FILL[b])} aria-hidden />
+                <span className="tabular-nums font-semibold text-fg-primary">{n}</span> {label(b).toLowerCase()}
+              </span>
             ))}
-          </ul>
-          <div className="hidden md:block overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>{t("overview.colLine")}</th>
-                  <th>{t("overview.colBottleneck")}</th>
-                  <th className="min-w-[200px]">{t("overview.colEff")}</th>
-                  <th className="num">{t("overview.colSah")}</th>
-                  <th className="num">{t("overview.colWip")}</th>
-                  <th className="num">{t("overview.colNpt")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.lineId} data-testid={`line-board-row-${r.lineId}`}>
-                    <td>
-                      <span className="block text-fg-primary font-medium">{r.name}</span>
-                      <span className="block font-mono text-[11px] text-fg-tertiary">{r.lineId}</span>
-                    </td>
-                    <td><Badge tone={BOTTLENECK_TONE[r.bottleneck]} dot>{label(r.bottleneck)}</Badge></td>
-                    <td>
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 min-w-[120px]"><EffBar eff={r.efficiencyPct} target={r.sahTarget} bottleneck={r.bottleneck} /></div>
-                        <span className="w-10 text-right tabular-nums text-fg-primary font-medium">{r.efficiencyPct}%</span>
-                      </div>
-                    </td>
-                    <td className="num">{r.sahTarget}%</td>
-                    <td className="num">{r.wipBundles}</td>
-                    <td className="num">{r.nptMinutes}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <span className="inline-flex items-center gap-1.5 text-fg-tertiary">
+              <span className="h-3 w-[2px] rounded-full bg-fg-primary" aria-hidden /> target marker
+            </span>
           </div>
-          {meta?.notes && <p className="px-4 py-2.5 border-t border-border-subtle text-caption text-fg-tertiary">{meta.notes}</p>}
+          <ul className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-3" aria-label="Lines">
+            {rows.map((r) => <LineTile key={r.lineId} row={r} flagLabel={label(r.bottleneck)} />)}
+          </ul>
+          {meta?.notes && <p className="mt-3 text-caption text-fg-tertiary">{meta.notes}</p>}
         </div>
       )}
     </Panel>

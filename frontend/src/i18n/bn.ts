@@ -165,6 +165,7 @@ export const bn: Dict = {
     bottleneckGreen: "লক্ষ্যে",
     bottleneckAmber: "নজরে",
     bottleneckRed: "সংকটাপন্ন",
+    bottleneckNone: "ফ্ল্যাগ নেই",
     effShort: "{target}% লক্ষ্যের {eff}% পূরণ",
     refreshAria: "লাইন বোর্ড রিফ্রেশ করুন",
     retry: "পুনরায় চেষ্টা",

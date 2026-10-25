@@ -2,7 +2,7 @@
 
 // Morning brief for /app Overview: GET /api/brief/morning. The brief is a
 // deterministic summary of the line board and approval queue (no language
-// model), and is labelled as such.
+// model), and is labelled as such; the API's own source line is shown under it.
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
@@ -31,11 +31,12 @@ export function BriefCard({ tick }: { tick?: number }) {
   }, [tick]);
   const b = brief.data;
   const bullets = b ? (locale === "bn" ? b.bulletsBn : b.bulletsEn) : [];
+  const [headline, ...rest] = bullets;
 
   return (
     <Panel
       title={t("brief.cardTitle")}
-      subtitle={b ? `${b.date} · generated ${formatRelative(b.meta.generatedAt, locale)}` : undefined}
+      subtitle={b ? `For ${b.date} · generated ${formatRelative(b.meta.generatedAt, locale)}` : undefined}
       icon={<Sunrise size={14} />}
       right={
         <>
@@ -45,7 +46,6 @@ export function BriefCard({ tick }: { tick?: number }) {
           </Button>
         </>
       }
-      className="h-full"
     >
       {brief.error && !b ? (
         <div className="text-center py-4">
@@ -55,27 +55,32 @@ export function BriefCard({ tick }: { tick?: number }) {
           <Button className="mt-3" variant="secondary" size="sm" onClick={() => void brief.reload()}>{t("brief.retry")}</Button>
         </div>
       ) : brief.loading ? (
-        <div className="space-y-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-5" />)}</div>
+        <div className="space-y-2"><Skeleton className="h-14" />{[0, 1].map((i) => <Skeleton key={i} className="h-5" />)}</div>
       ) : b ? (
         <div data-testid="brief-card" data-simulated={b.meta.simulated ? "true" : "false"}>
-          <ul className="space-y-2.5">
-            {bullets.map((text, i) => {
-              return (
+          {headline && (
+            <div
+              className={cn(
+                "rounded-[var(--radius-control)] border px-3.5 py-3",
+                b.topBottleneckLineId ? "border-[var(--risk-high-border)] bg-[var(--risk-high-soft)]" : "border-[var(--risk-low-border)] bg-[var(--risk-low-soft)]"
+              )}
+            >
+              <p className="eyebrow !text-[10.5px]">{b.topBottleneckLineId ? "Top issue" : "Headline"}</p>
+              <p className="mt-1 text-[15px] leading-[22px] font-semibold text-fg-primary">{headline}</p>
+            </div>
+          )}
+          {rest.length > 0 && (
+            <ol className="mt-3 space-y-2">
+              {rest.map((text, i) => (
                 <li key={`${i}-${text.slice(0, 16)}`} className="flex items-start gap-2.5">
-                  <span
-                    className={cn(
-                      "mt-0.5 size-5 shrink-0 rounded-full text-[11px] font-semibold inline-flex items-center justify-center",
-                      i === 0 ? "bg-accent text-[var(--accent-fg-on-bg)]" : "bg-surface-2 border border-border-subtle text-fg-tertiary"
-                    )}
-                    aria-hidden
-                  >
-                    {i + 1}
+                  <span className="mt-0.5 size-5 shrink-0 rounded-md bg-surface-2 border border-border-subtle text-[11px] font-semibold inline-flex items-center justify-center text-fg-tertiary" aria-hidden>
+                    {i + 2}
                   </span>
-                  <span className={cn("text-body", i === 0 ? "text-fg-primary font-medium" : "text-fg-secondary")}>{text}</span>
+                  <span className="text-body text-fg-secondary">{text}</span>
                 </li>
-              );
-            })}
-          </ul>
+              ))}
+            </ol>
+          )}
           <div className="mt-4 flex flex-wrap items-center gap-2">
             {b.pendingApprovals > 0 && (
               <Link href="/app/approvals" data-testid="brief-approvals-link" className="badge hover:border-[var(--accent-border)] hover:text-accent">
@@ -97,6 +102,7 @@ export function BriefCard({ tick }: { tick?: number }) {
               </span>
             )}
           </div>
+          {b.meta.simulated && <p className="mt-3 text-caption text-fg-tertiary">{b.meta.source}</p>}
         </div>
       ) : null}
     </Panel>

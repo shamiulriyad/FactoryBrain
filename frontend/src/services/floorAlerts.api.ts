@@ -15,6 +15,16 @@ export function setUnreadFrom(list: FloorAlertList) {
   useUnreadAlerts.setState({ unread: list.alerts.filter((a) => !a.read).length, loaded: true });
 }
 
+/**
+ * True for the six alerts the database seed writes (ids `alert-1`…`alert-6`,
+ * see DbInitializer.SeedFloorAlertsAsync). Their text refers to lines and
+ * approvals that do not exist. Alerts raised at runtime carry a GUID id
+ * (`alert-<hex>`, `alert-vision-<hex>`, `alert-energy-<hex>`).
+ */
+export function isSeedAlert(a: Pick<FloorAlert, "id">): boolean {
+  return /^alert-\d{1,4}$/.test(a.id);
+}
+
 export async function refreshUnreadAlerts(): Promise<void> {
   try {
     setUnreadFrom(await apiJson<FloorAlertList>("/api/floor-alerts"));

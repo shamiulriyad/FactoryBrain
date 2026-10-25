@@ -186,8 +186,45 @@ public sealed class DbApiFactory : WebApplicationFactory<Program>
     {
         _connectionString = connectionString;
         _overrides = overrides;
+        InstallRagFake();
         fakes?.Invoke(this);
     }
+
+    // ── Fake Python RAG service (rag/main.py) ───────────────────────────────
+
+    /// <summary>Host of the fake RAG service (PYRAG_SERVICE_URL). Never resolvable.</summary>
+    public const string FakeRagHost = "rag.fake-pyrag.invalid";
+    public const string FakeRagCollection = "test_kb";
+    public const string FakeRagAnswer = "MOCK-RAG-ANSWER: replace the bearing above 4.5 mm/s";
+    public const string FakeRagNoSourceAnswer = "The documents do not cover this.";
+    public const string FakeRagSourceFile = "maintenance-manual.pdf";
+    public const double FakeRagScore = 0.81;
+    /// <summary>A question containing this gets an answer that cites nothing.</summary>
+    public const string RagNoSourceMarker = "zzqx";
+    /// <summary>A question containing this makes the fake RAG service return HTTP 500.</summary>
+    public const string ForceRagFailure = "FORCE-RAG-FAILURE";
+    public static readonly string FakeRagKey = "rag-key-" + TestEnvironment.RandomSecret(12);
+
+    /// <summary>Questions the fake RAG service received, with the X-Rag-Api-Key each carried.</summary>
+    public ConcurrentQueue<(string Question, string? ApiKey)> RagQuestions { get; } = new();
+
+    private void InstallRagFake() => Http
+        .Fake(FakeRagHost, "/health", (_, _) => OutboundHttpGuard.Json("""{"status":"ok","ready":true,"qdrant":"healthy"}"""))
+        .Fake(FakeRagHost, $"/api/kb/{FakeRagCollection}/query", (req, body) =>
+        {
+            using var doc = JsonDocument.Parse(body);
+            var question = doc.RootElement.GetProperty("question").GetString() ?? "";
+            RagQuestions.Enqueue((question, req.Headers.TryGetValues("X-Rag-Api-Key", out var k) ? k.FirstOrDefault() : null));
+            if (question.Contains(ForceRagFailure))
+                return OutboundHttpGuard.Json("""{"detail":"Gemini quota exceeded"}""", HttpStatusCode.InternalServerError);
+            if (question.Contains(RagNoSourceMarker))
+                return OutboundHttpGuard.Json(JsonSerializer.Serialize(new { answer = FakeRagNoSourceAnswer, sources = Array.Empty<object>() }));
+            return OutboundHttpGuard.Json(JsonSerializer.Serialize(new
+            {
+                answer = FakeRagAnswer,
+                sources = new[] { new { document_id = "doc-test", chunk_id = "0", page = 2, source = FakeRagSourceFile, score = FakeRagScore, excerpt = "Replace the bearing when vibration exceeds 4.5 mm/s." } }
+            }));
+        });
 
     public static DbApiFactory LocalEmbeddings(string connectionString) =>
         new(connectionString, new() { ["RAG_EMBEDDING_PROVIDER"] = "local" }, fakes: null);
@@ -297,6 +334,9 @@ public sealed class DbApiFactory : WebApplicationFactory<Program>
             ["RAG_HEALTH_INTERVAL_SECONDS"] = "3600",
             ["AI_SETTINGS_ENCRYPTION_KEY"]  = EncryptionKey,
             ["PUBLIC_APP_URL"]              = "https://app.factorybrain.test",
+            ["PYRAG_SERVICE_URL"]           = "http://" + FakeRagHost,
+            ["PYRAG_API_KEY"]               = FakeRagKey,
+            ["PYRAG_COLLECTION_NAME"]       = FakeRagCollection,
         };
         foreach (var (k, v) in _overrides) env[k] = v;
         _environment = env;

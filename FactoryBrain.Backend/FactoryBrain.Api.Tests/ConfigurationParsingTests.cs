@@ -1,6 +1,5 @@
 using FactoryBrain.Api.Middleware;
-using FactoryBrain.Application.Settings;
-using FactoryBrain.Infrastructure.Services;
+using FactoryBrain.Application.Abstractions.Interfaces;
 
 namespace FactoryBrain.Api.Tests;
 
@@ -22,17 +21,28 @@ public sealed class ConfigurationParsingTests
     }
 
     [Theory]
-    [InlineData(null, "https://api.openai.com")]
-    [InlineData("", "https://api.openai.com")]
-    [InlineData("http://127.0.0.1:4010", "http://127.0.0.1:4010")]
-    [InlineData("https://llm.internal.example/v1/ignored?x=1", "https://llm.internal.example")]
-    [InlineData("ftp://llm.example", "https://api.openai.com")]
-    [InlineData("file:///etc/passwd", "https://api.openai.com")]
-    [InlineData("not a url", "https://api.openai.com")]
-    public void Llm_base_url_accepts_only_absolute_http_urls(string? value, string expected)
+    [InlineData(null, "http://localhost:8000/")]
+    [InlineData("", "http://localhost:8000/")]
+    [InlineData("http://127.0.0.1:9000", "http://127.0.0.1:9000/")]
+    [InlineData("https://rag.internal.example", "https://rag.internal.example/")]
+    [InlineData("ftp://rag.example", "http://localhost:8000/")]
+    [InlineData("file:///etc/passwd", "http://localhost:8000/")]
+    [InlineData("not a url", "http://localhost:8000/")]
+    public void Rag_service_url_accepts_only_absolute_http_urls(string? value, string expected)
     {
-        var startup = StartupAiConfig.FromEnvironment(name => name == "LLM_BASE_URL" ? value : null);
-        Assert.Equal(expected, AskService.OpenAiBaseUrl(startup.LlmBaseUrl));
+        var options = PyRagOptions.FromEnvironment(name => name == "PYRAG_SERVICE_URL" ? value : null);
+        Assert.Equal(expected, options.BaseUrl.ToString());
+    }
+
+    [Fact]
+    public void Rag_options_default_to_the_python_service_defaults()
+    {
+        var options = PyRagOptions.FromEnvironment(_ => null);
+        Assert.Equal("pdf_rag", options.Collection);
+        Assert.Equal("gemini-2.5-flash", options.LlmModel);
+        Assert.Equal("gemini-embedding-001", options.EmbeddingModel);
+        Assert.Null(options.ApiKey);
+        Assert.Equal(TimeSpan.FromSeconds(90), options.Timeout);
     }
 
     [Theory]

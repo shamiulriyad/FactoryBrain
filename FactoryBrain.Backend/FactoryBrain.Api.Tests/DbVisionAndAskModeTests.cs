@@ -5,7 +5,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FactoryBrain.Api.Tests;
 
-/// <summary>Vision analysis persistence and floor-alert labelling on the real database.</summary>
+/// <summary>
+/// The retired simulated vision demo and floor-alert labelling on the real
+/// database. Real image inspection is covered by DbQcInspectionTests.
+/// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class DbVisionTests
 {
@@ -15,44 +18,25 @@ public sealed class DbVisionTests
     private DbApiFactory Api => _stack.Local;
 
     [DockerFact]
-    public async Task Vision_analysis_persists_the_alert_and_approval_it_returns()
+    public async Task Retired_vision_demo_answers_410_and_creates_no_results_approvals_or_alerts()
     {
+        var resultsBefore = await Rag.WithDb(Api, db => db.VisionResults.CountAsync());
+        var approvalsBefore = await Rag.WithDb(Api, db => db.Approvals.CountAsync());
+        var alertsBefore = await Rag.WithDb(Api, db => db.FloorAlerts.CountAsync());
+
         using var op = Rag.Client(Api, Roles.Operator);
-        using var res = await op.PostAsync("/api/vision/analyze", Rag.Json(new { sampleFile = "defect-1-stitch-skip.jpg" }));
-        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
-        using var body = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
-        var alertId = body.RootElement.GetProperty("floorAlertId").GetString()!;
-        var insightId = body.RootElement.GetProperty("insight").GetProperty("id").GetString()!;
-        Assert.True(body.RootElement.GetProperty("simulated").GetBoolean()); // honest: no real model
+        using var post = await op.PostAsync("/api/vision/analyze", Rag.Json(new { sampleFile = "defect-1-stitch-skip.jpg" }));
+        Assert.Equal(HttpStatusCode.Gone, post.StatusCode);
+        using var body = JsonDocument.Parse(await post.Content.ReadAsStringAsync());
+        Assert.Equal("vision_demo_retired", body.RootElement.GetProperty("error").GetString());
+        Assert.Equal("/api/qc/inspections", body.RootElement.GetProperty("replacement").GetString());
 
-        // The returned alert id exists and is listed.
-        using var alerts = JsonDocument.Parse(await op.GetStringAsync("/api/floor-alerts"));
-        Assert.Contains(alerts.RootElement.GetProperty("alerts").EnumerateArray(),
-            a => a.GetProperty("id").GetString() == alertId && a.GetProperty("insightId").GetString() == insightId);
+        using var get = await op.GetAsync("/api/vision/analyze");
+        Assert.Equal(HttpStatusCode.Gone, get.StatusCode);
 
-        // …and its approval is in the server-side queue.
-        using var approvals = JsonDocument.Parse(await op.GetStringAsync("/api/approvals?status=pending&limit=200"));
-        Assert.Contains(approvals.RootElement.GetProperty("items").EnumerateArray(),
-            a => a.GetProperty("insightId").GetString() == insightId);
-
-        Assert.True(await Rag.WithDb(Api, db => db.VisionResults.AnyAsync(v => v.Id == body.RootElement.GetProperty("result").GetProperty("id").GetString())));
-    }
-
-    [DockerFact]
-    public async Task Concurrent_vision_analyses_get_distinct_ids()
-    {
-        using var op = Rag.Client(Api, Roles.Operator);
-        var responses = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
-            op.PostAsync("/api/vision/analyze", Rag.Json(new { sampleFile = "defect-3-seam-pucker.jpg" }))));
-        Assert.All(responses, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
-        var ids = new List<string>();
-        foreach (var r in responses)
-        {
-            using var doc = JsonDocument.Parse(await r.Content.ReadAsStringAsync());
-            ids.Add(doc.RootElement.GetProperty("result").GetProperty("id").GetString()!);
-            r.Dispose();
-        }
-        Assert.Equal(ids.Count, ids.Distinct().Count());
+        Assert.Equal(resultsBefore, await Rag.WithDb(Api, db => db.VisionResults.CountAsync()));
+        Assert.Equal(approvalsBefore, await Rag.WithDb(Api, db => db.Approvals.CountAsync()));
+        Assert.Equal(alertsBefore, await Rag.WithDb(Api, db => db.FloorAlerts.CountAsync()));
     }
 
     [DockerFact]
@@ -65,4 +49,3 @@ public sealed class DbVisionTests
         Assert.Contains("no message is sent", source);
     }
 }
-

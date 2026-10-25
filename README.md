@@ -33,7 +33,7 @@ English and বাংলা.
 | 📊 | **Overview** | Morning brief, line board (throughput and bottlenecks), QC summary, live sensor readings |
 | 💬 | **Ask BunonBrain** | Answers questions from manuals and policies with hybrid RAG (vector + BM25) and cites its sources |
 | 🤖 | **Agents** | Agent runs with a risk tier, and an approval queue for risky actions |
-| 🔍 | **QC and Vision** | Defect logging and flagging, image analysis results |
+| 🔍 | **Quality inspection** | Upload garment photos, AI defect detection with boxes (configurable vision provider), inspector review and corrections, inspection history, defect rates and DHU from reviewed records |
 | 🚨 | **Floor alerts** | Alerts stored by the backend and broadcast over SignalR (`/hubs/factory`) |
 | 🎭 | **Demo mode** | With no LLM key, Ask and agent runs return deterministic canned answers |
 | 📄 | **PDF RAG (Python)** | Standalone LangChain + Qdrant + Gemini pipeline in [`rag/`](rag/) |
@@ -193,6 +193,10 @@ The Python keys carry a `PYRAG_` prefix so they never clash with the API's
   local hash vectorizer. Changing the embedding provider or dimensions, or
   reindexing, shows a plan (documents, vector size, cost) and runs only after an
   Admin confirms it; the API never re-embeds on its own at startup.
+- Quality inspection: `QC_VISION_PROVIDER` = `llm` (the configured LLM provider's vision model)
+  or `http` (your own detection model, contract in ARCHITECTURE.md §9). Unset, inspections
+  are stored and marked "AI analysis not configured" and can be reviewed manually; nothing
+  is predicted. Images are stored under `QC_IMAGE_STORAGE_PATH` (mount a volume in Docker).
 - `SIMULATOR_ENABLED=true` makes the API generate a live sensor event stream.
   The Overview page only reads it (`GET /api/sensors/snapshot`); without the
   simulator the data moves only when an Operator presses *Simulate tick*.
@@ -211,8 +215,10 @@ The Python keys carry a `PYRAG_` prefix so they never clash with the API's
 | `/api/brief/morning` | Morning brief |
 | `/api/line-board` | Line metrics, `POST /refresh` |
 | `/api/sensors/{ingest,live,latest}` | Sensor readings |
-| `/api/qc/{defects,flag}` | QC defects |
-| `/api/vision/analyze` | Vision results |
+| `/api/qc/inspections`, `/{id}`, `/{id}/image`, `/{id}/review`, `/{id}/retry` | Garment inspections: upload (multipart, `Idempotency-Key`), results, review |
+| `/api/qc/summary`, `/api/qc/categories`, `/api/qc/vision/status` | Quality metrics, defect taxonomy (Admin edits), vision provider status |
+| `/api/qc/{defects,flag}` | Seeded weekly QC grid (API only, not shown in the UI) |
+| `/api/vision/analyze` | Retired simulated demo: `410 Gone` |
 | `/api/floor-alerts` | Floor alerts, `PATCH /{id}` |
 | `/api/rag/{ingest,reindex,documents,status}` | RAG index management |
 | `/api/settings/llm` | LLM settings (admin) |

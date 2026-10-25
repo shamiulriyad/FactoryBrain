@@ -166,6 +166,7 @@ export const en = {
     bottleneckGreen: "On target",
     bottleneckAmber: "Watch",
     bottleneckRed: "Critical",
+    bottleneckNone: "No flag",
     effShort: "{eff}% of target {target}%",
     refreshAria: "Refresh line board",
     retry: "Retry",

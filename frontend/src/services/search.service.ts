@@ -67,14 +67,14 @@ const PAGE_HINTS_EN: Record<string, { title: string; hint: string; titleBn: stri
     hintBn: "পর্যায়, এজেন্ট ও ঝুঁকি দিয়ে ফিল্টার"
   },
   "/app/qc": {
-    title: "Quality Control",
-    hint: "Defect and rework rates by operation and line",
+    title: "Quality inspections",
+    hint: "Inspection history, review, defect rates and the defect taxonomy",
     titleBn: "মান নিয়ন্ত্রণ",
-    hintBn: "অপারেশন ও লাইন অনুযায়ী ত্রুটি ও রি-ওয়ার্ক হার"
+    hintBn: "পরিদর্শনের ইতিহাস, পর্যালোচনা ও ত্রুটির হার"
   },
   "/app/vision": {
-    title: "Vision",
-    hint: "Camera-based line diagnostics and defect detection",
+    title: "Inspect a garment",
+    hint: "Upload a garment photo for AI defect detection and inspector review",
     titleBn: "ভিশন",
     hintBn: "ক্যামেরা-ভিত্তিক লাইন ডায়াগনস্টিক ও ত্রুটি সনাক্তকরণ"
   },

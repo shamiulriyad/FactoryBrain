@@ -1,9 +1,10 @@
 "use client";
 
-// Running an agent: POST /api/agents/{agentId}/run (Operator). The API stores
-// the resulting insight, queues an approval when the risk tier isn't low and
-// raises a floor alert. Runs are rule-based demo runs today (the response's
-// `source` is "demo"); the UI says so instead of implying a model answered.
+// Running an agent: POST /api/agents/{agentId}/run (Operator). The API asks
+// the Python RAG service about the agent's current readings, stores the
+// answer as an insight, queues an approval when the risk tier isn't low and
+// raises a floor alert. 422 = no document covered the question (nothing
+// stored); 503 = the RAG service is down.
 
 import { useState } from "react";
 import Link from "next/link";
@@ -12,7 +13,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge, RISK_TONE } from "@/components/ui/Badge";
 import { Callout } from "@/components/ui/Callout";
 import { useToast } from "@/components/ui/Toast";
-import { apiJson, errorMessage } from "@/lib/api";
+import { apiJson, errorMessage, isApiError } from "@/lib/api";
 import { announceDataChanged } from "@/lib/useResource";
 import { refreshPendingApprovals } from "@/services/approvals.api";
 import { refreshUnreadAlerts } from "@/services/floorAlerts.api";
@@ -40,7 +41,12 @@ export function useAgentRun() {
       void refreshPendingApprovals();
       void refreshUnreadAlerts();
     } catch (e) {
-      toast.push({ tone: "error", title: `${agent.name} did not run`, description: errorMessage(e) });
+      const noSource = isApiError(e) && e.status === 422;
+      toast.push({
+        tone: "error",
+        title: noSource ? `${agent.name}: no document covers this` : `${agent.name} did not run`,
+        description: noSource ? `Nothing was stored. RAG service: ${errorMessage(e)}` : errorMessage(e)
+      });
     } finally {
       setRunningId(null);
     }
@@ -64,19 +70,17 @@ export function RunResult({ record }: { record: RunRecord }) {
   return (
     <div className="surface-2 p-3.5 space-y-2.5" data-testid="agent-run-result">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge tone="accent" title="Agent findings are rule-based today; no language model is called.">{r.source === "demo" ? "Rule-based demo run" : r.source}</Badge>
+        <Badge tone="info" title="Answered by the Python RAG service from the indexed PDFs">{r.source === "rag" ? "RAG answer" : r.source}</Badge>
         <Badge tone={RISK_TONE[ins.riskTier]}>{t(`risk.${ins.riskTier}`)}</Badge>
         {r.approvalPending ? <Badge tone="warning" dot>Approval pending</Badge> : <Badge tone="success" dot>No approval needed</Badge>}
         <span className="text-caption text-fg-tertiary">{new Date(record.at).toLocaleTimeString(locale === "bn" ? "bn-BD" : "en-GB")}</span>
       </div>
       <div>
         <p className="text-body font-medium text-fg-primary">{locale === "bn" ? ins.titleBn : ins.title}</p>
-        <p className="mt-0.5 text-caption text-fg-secondary">{locale === "bn" ? ins.findingBn : ins.finding}</p>
-        <p className="mt-1 text-caption text-fg-primary">→ {ins.recommendationAction || ins.recommendationTitle}</p>
+        <p className="mt-0.5 text-caption text-fg-secondary whitespace-pre-wrap">{locale === "bn" ? ins.findingBn : ins.finding}</p>
+        {ins.recommendationAction && <p className="mt-1 text-caption text-fg-primary">→ {ins.recommendationAction}</p>}
+        <p className="mt-1 text-[11px] text-fg-tertiary">Best source match {Math.round(ins.confidence * 100)}%</p>
       </div>
-      {r.energyInsight && (
-        <p className="text-caption text-fg-secondary">Also raised an energy insight (duty score {r.energyInsight.score.toFixed(2)}).</p>
-      )}
       {r.warning && <Callout tone="warning">{r.warning}</Callout>}
       <div className="flex flex-wrap gap-3 text-caption">
         {r.approvalPending && <Link className="text-accent hover:underline" href={`/app/approvals?focus=${encodeURIComponent(ins.id)}`}>Open the approval</Link>}

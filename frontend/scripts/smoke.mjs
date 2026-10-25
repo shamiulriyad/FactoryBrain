@@ -253,20 +253,30 @@ async function main() {
   assert(qcFlagRoute.includes(".strict()"), "qc/flag: body + response schemas are Zod-strict");
   assert(qcFlagRoute.includes("FlagResponseSchema"), "qc/flag: response schema parsed");
 
-  // Overview shows a one-liner QC summary that links to /app/qc.
+  // Overview QC card: real metrics from the inspection summary, not the seeded grid.
   const qcSummary = await read("src/components/overview/QcSummary.tsx");
   assert(qcSummary.includes("export function QcSummary"), "QcSummary: component exported");
-  assert(qcSummary.includes('"/api/qc/defects"'), "QcSummary: fetches real /api/qc/defects (not mock state)");
+  assert(qcSummary.includes("\"/api/qc/summary?days=7\""), "QcSummary: reads GET /api/qc/summary (persisted inspections)");
+  assert(!qcSummary.includes("/api/qc/defects"), "QcSummary: no longer shows the seeded defect grid");
   assert(qcSummary.includes("pollMs"), "QcSummary: refreshes on a poll");
   assert(!qcSummary.includes("Silently swallow"), "QcSummary: shows load errors instead of swallowing them");
   assert(qcSummary.includes('testId="qc-summary"'), "QcSummary: smoke-visible testid present (Panel testId)");
-  assert(qcSummary.includes('href="/app/qc"'), "QcSummary: deep-links to /app/qc");
+  assert(qcSummary.includes("/app/qc"), "QcSummary: deep-links to /app/qc");
 
+  // QC inspection workflow pages: everything comes from the API.
   const qcPage = await read("src/app/app/qc/page.tsx");
-  assert(qcPage.includes('"/api/qc/defects"'), "qc page: fetches real /api/qc/defects");
-  assert(qcPage.includes('"/api/qc/flag"'), "qc page: POSTs to /api/qc/flag");
-  assert(qcPage.includes('data-testid="qc-page-table"'), "qc page: smoke-visible testid present");
-  assert(qcPage.includes("useFactoryBrainLiveStore"), "qc page: subscribes to live tick store");
+  const qcDetail = await read("src/app/app/qc/[id]/page.tsx");
+  const visionPage = await read("src/app/app/vision/page.tsx");
+  const qcApi = await read("src/services/qc.api.ts");
+  assert(qcPage.includes("inspectionsPath(") && qcApi.includes("/api/qc/inspections"), "qc page: lists GET /api/qc/inspections");
+  assert(!qcPage.includes("/api/qc/defects") && !qcPage.includes("@/data/"), "qc page: no seeded or fixture data");
+  assert(qcDetail.includes("/api/qc/inspections/") && qcDetail.includes("reviewInspection("), "qc detail: reads and reviews through the API");
+  assert(visionPage.includes("createInspection(") && visionPage.includes("/api/qc/vision/status"), "vision page: uploads to the API and shows the provider status");
+  assert(!visionPage.includes("/api/vision/analyze") && !visionPage.includes("sampleFile"), "vision page: the simulated staged-sample demo is gone");
+  assert(qcApi.includes("\"Idempotency-Key\""), "qc.api: uploads carry an Idempotency-Key");
+  for (const [name, src] of [["qc page", qcPage], ["qc detail", qcDetail], ["vision page", visionPage]]) {
+    assert(!/Math\.random\(/.test(src), `${name}: never generates numbers`);
+  }
 
   // Overview mounts the one-liner QC summary alongside the Line Board.
   assert(overview.includes("<QcSummary"), "overview: mounts <QcSummary />");
@@ -301,8 +311,8 @@ async function main() {
     assert(en.includes(k), `i18n en: has qc.${k.replace(/:$/, "")}`);
     assert(bn.includes(k), `i18n bn: has qc.${k.replace(/:$/, "")}`);
   }
-  assert(en.includes('qc: "QC defects"'), "i18n en: nav.qc label present");
-  assert(bn.includes('qc: "মান নিয়ন্ত্রণ ত্রুটি"'), "i18n bn: nav.qc label present");
+  assert(en.includes('qc: "Quality inspections"'), "i18n en: nav.qc label present");
+  assert(bn.includes('qc: "মান পরিদর্শন"'), "i18n bn: nav.qc label present");
 
   // Integrations page — category grouping + sensor calibration + demoted social sources.
   const businessStore = await read("src/store/business.store.ts");
@@ -408,8 +418,7 @@ async function main() {
   assert(/href: "\/app\/audit"[^}]*role: "Admin"/.test(navConfig), "navigation: the audit log is declared Admin-only");
   const overviewUi = await read("src/app/app/page.tsx");
   assert(!overviewUi.includes("factoryTools"), "overview: no browser-simulated energy recommendation presented as live");
-  const visionPage = await read("src/app/app/vision/page.tsx");
-  assert(visionPage.includes("allowedSampleFiles"), "vision picks from the API's allowed sample list");
+  assert(visionPage.includes('accept="image/jpeg,image/png,image/webp"'), "vision: real image upload (JPEG / PNG / WebP)");
   const agentsPage = await read("src/app/app/agents/page.tsx");
   assert(agentsPage.includes('"/api/agents"') && agentsPage.includes("RunResult"), "agents: server roster and the real run result");
   const kbPage = await read("src/app/app/knowledge/page.tsx");
@@ -463,6 +472,45 @@ async function main() {
   assert(!/setSource\("live"\)/.test(askPage), "ask page never hard-codes a live source");
   assert(askPage.includes("resolveAskMode(json)"), "ask page derives the chip from the API's mode");
   assert(askPage.includes('data-testid="ask-citations"'), "ask page renders citations");
+
+  // 10b. QC inspection client rules — src/lib/qcInspection.ts, imported directly.
+  const qcl = await import(url.pathToFileURL(path.join(root, "src/lib/qcInspection.ts")).href);
+  const MB = 1024 * 1024;
+  assert(qcl.validateImageFile({ name: "a.png", type: "image/png", size: 1000 }, 10 * MB) === null, "qc: a PNG under the limit is accepted");
+  assert(qcl.validateImageFile({ name: "a.gif", type: "image/gif", size: 1000 }, 10 * MB)?.includes("JPEG, PNG"), "qc: GIF rejected");
+  assert(qcl.validateImageFile({ name: "a.html", type: "text/html", size: 10 }, 10 * MB) !== null, "qc: HTML rejected");
+  assert(qcl.validateImageFile({ name: "a.jpg", type: "", size: 10 }, 10 * MB) === null, "qc: extension used when the browser gives no type");
+  assert(qcl.validateImageFile({ name: "big.jpg", type: "image/jpeg", size: 11 * MB }, 10 * MB)?.includes("limit"), "qc: over-limit rejected");
+  assert(qcl.validateImageFile({ name: "e.png", type: "image/png", size: 0 }, 10 * MB) === "The file is empty.", "qc: empty file rejected");
+  assert(qcl.validateImageFile(null, 10 * MB) !== null, "qc: no file rejected");
+  assert(qcl.sniffImageType(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) === "image/png", "qc: PNG magic sniffed");
+  assert(qcl.sniffImageType(new Uint8Array([0xff, 0xd8, 0xff, 0xe0])) === "image/jpeg", "qc: JPEG magic sniffed");
+  assert(qcl.sniffImageType(new TextEncoder().encode("<html>")) === null, "qc: renamed HTML is not an image");
+  const bs = qcl.boxStyle({ x: 0.1, y: 0.2, width: 0.95, height: 0.3 });
+  assert(bs.left === "10.000%" && bs.width === "90.000%", "qc: overlay boxes are clamped inside the image");
+  assert(qcl.formatConfidence(null) === "—" && qcl.formatConfidence(0.914) === "91%", "qc: confidence never invented");
+  assert(qcl.formatPct(null) === "—", "qc: a rate without a sample shows a dash, not 0");
+  const insp = {
+    status: "completed", version: 7, review: null,
+    findings: [
+      { id: "m1", source: "model", categoryCode: "stain", decision: "unreviewed", effectiveSeverity: "major", rawLabel: "stain" },
+      { id: "m2", source: "model", categoryCode: null, decision: "unreviewed", effectiveSeverity: "major", rawLabel: "weird_mark" }
+    ]
+  };
+  const draft = qcl.initialDraft(insp);
+  assert(qcl.validateReviewDraft(insp, draft).some((e) => e.includes("2 left")), "qc review: undecided predictions block the review");
+  draft.decisions.m1 = { decision: "accepted" };
+  draft.decisions.m2 = { decision: "accepted" };
+  draft.outcome = "rework";
+  assert(qcl.validateReviewDraft(insp, draft).some((e) => e.includes("matches no category")), "qc review: unmapped prediction must be corrected or rejected");
+  draft.decisions.m2 = { decision: "corrected", correctedCategoryCode: "hole" };
+  assert(qcl.validateReviewDraft(insp, draft).length === 0, "qc review: complete draft passes");
+  const reqBody = qcl.buildReviewRequest(insp, draft);
+  assert(reqBody.expectedVersion === 7 && reqBody.decisions.length === 2 && reqBody.decisions[1].correctedCategoryCode === "hole", "qc review: request carries the version and corrections");
+  draft.decisions.m1 = { decision: "rejected" };
+  draft.decisions.m2 = { decision: "rejected" };
+  assert(qcl.validateReviewDraft(insp, draft).some((e) => e.includes("Explain")), "qc review: rework without a defect needs a note");
+  assert(!qcl.canReview("pending") && !qcl.canReview("processing") && qcl.canReview("failed"), "qc review: not while analysing");
 
   // 11. Approvals are server-side: the UI reads and decides through the API.
   // ---------------------------------------------------------------------

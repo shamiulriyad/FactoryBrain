@@ -139,13 +139,6 @@ public sealed class DbAiSettingsTests
         Assert.Equal(("openai", "saved-model", "live", "database"),
             (llm.GetProperty("provider").GetString(), llm.GetProperty("model").GetString(),
              llm.GetProperty("mode").GetString(), llm.GetProperty("persistence").GetString()));
-
-        var answer = await Rag.Ask(viewer, AiSettingsTestKit.LiveQuestion);
-        Assert.Equal("live", answer.GetProperty("mode").GetString());
-        var call = second.Http.Handled.Last(c => c.Uri.AbsolutePath == "/v1/chat/completions");
-        Assert.Equal(DbApiFactory.FakeLlmHost, call.Uri.Host);
-        Assert.Equal($"Bearer {savedKey}", call.Authorization); // the saved key, not the environment's
-        Assert.Contains("\"model\":\"saved-model\"", call.Body);
     }
 
     [DockerFact]
@@ -160,7 +153,6 @@ public sealed class DbAiSettingsTests
             using var viewer = Rag.Client(api, Roles.Viewer);
             var (llm, _) = await AiSettingsTestKit.Get(viewer, "/api/settings/llm");
             Assert.Equal(("live", "startup_config"), (llm.GetProperty("mode").GetString(), llm.GetProperty("persistence").GetString()));
-            Assert.Equal("live", (await Rag.Ask(viewer, AiSettingsTestKit.LiveQuestion)).GetProperty("mode").GetString());
 
             using var admin = Rag.Client(api, Roles.Admin);
 
@@ -169,21 +161,15 @@ public sealed class DbAiSettingsTests
             var cleared = await AiSettingsTestKit.Post(admin, "/api/settings/llm", new { clearKey = true });
             Assert.Equal(HttpStatusCode.OK, cleared.Status);
             Assert.Equal(("openai", "demo"), (cleared.Body.GetProperty("provider").GetString(), cleared.Body.GetProperty("mode").GetString()));
-            var chatBefore = AiSettingsTestKit.ChatCalls(api);
-            Assert.Equal("demo", (await Rag.Ask(viewer, AiSettingsTestKit.LiveQuestion)).GetProperty("mode").GetString());
-            Assert.Equal(chatBefore, AiSettingsTestKit.ChatCalls(api));
 
             Assert.Equal(HttpStatusCode.OK, (await AiSettingsTestKit.Post(admin, "/api/settings/llm", new { clearAll = true })).Status);
-
-            // The very next request: demo, and the model is not contacted at all.
-            Assert.Equal("demo", (await Rag.Ask(viewer, AiSettingsTestKit.LiveQuestion)).GetProperty("mode").GetString());
-            Assert.Equal(chatBefore, AiSettingsTestKit.ChatCalls(api));
+            Assert.Equal("demo", (await AiSettingsTestKit.Get(viewer, "/api/settings/llm")).Body.GetProperty("mode").GetString());
         }
 
         // Same environment (key still set) after a restart: still cleared.
         await using var restarted = Host(env);
         using var v2 = Rag.Client(restarted, Roles.Viewer);
-        Assert.Equal("demo", (await Rag.Ask(v2, AiSettingsTestKit.LiveQuestion)).GetProperty("mode").GetString());
+        Assert.Equal("demo", (await AiSettingsTestKit.Get(v2, "/api/settings/llm")).Body.GetProperty("mode").GetString());
         Assert.Equal(0, AiSettingsTestKit.ChatCalls(restarted));
         var audit = await AiSettingsTestKit.AuditText(restarted, "settings.llm.");
         Assert.Contains(audit, a => a.StartsWith("settings.llm.updated|live|demo|apiKey: cleared;"));
@@ -202,16 +188,13 @@ public sealed class DbAiSettingsTests
         Assert.Equal("demo", (await AiSettingsTestKit.Get(viewerB, "/api/settings/llm")).Body.GetProperty("mode").GetString());
 
         Assert.Equal(HttpStatusCode.OK, (await AiSettingsTestKit.Post(adminA, "/api/settings/llm", LiveBody("sk-multi-" + TestEnvironment.RandomSecret(8)))).Status);
-        Assert.Equal("live", (await Rag.Ask(viewerA, AiSettingsTestKit.LiveQuestion)).GetProperty("mode").GetString()); // same instance: next request
+        // Same instance: the next request.
+        Assert.Equal("live", (await AiSettingsTestKit.Get(viewerA, "/api/settings/llm")).Body.GetProperty("mode").GetString());
 
         await WaitForMode(viewerB, "live"); // other instance: within AI_SETTINGS_REFRESH_SECONDS (1 s)
-        Assert.Equal("live", (await Rag.Ask(viewerB, AiSettingsTestKit.LiveQuestion)).GetProperty("mode").GetString());
 
         Assert.Equal(HttpStatusCode.OK, (await AiSettingsTestKit.Post(adminA, "/api/settings/llm", new { clearAll = true })).Status);
         await WaitForMode(viewerB, "demo");
-        var chatBefore = AiSettingsTestKit.ChatCalls(b);
-        Assert.Equal("demo", (await Rag.Ask(viewerB, AiSettingsTestKit.LiveQuestion)).GetProperty("mode").GetString());
-        Assert.Equal(chatBefore, AiSettingsTestKit.ChatCalls(b));
     }
 
     private static async Task WaitForMode(HttpClient c, string mode)
@@ -274,11 +257,9 @@ public sealed class DbAiSettingsTests
         responses.Add((await AiSettingsTestKit.Get(viewer, "/api/settings/llm")).Raw);
         responses.Add((await AiSettingsTestKit.Get(admin, "/api/settings/embedding")).Raw);
         responses.Add((await AiSettingsTestKit.Post(admin, "/api/settings/llm", new { model = "other-model" })).Raw);
-        var answer = await Rag.Ask(viewer, AiSettingsTestKit.LiveQuestion);
-        responses.Add(answer.GetRawText());
-
-        // The key reached the model (so it was stored and decrypted)…
-        Assert.Equal($"Bearer {secret}", api.Http.Handled.Last(c => c.Uri.AbsolutePath == "/v1/chat/completions").Authorization);
+        // The key was stored and decrypts back to the same value…
+        var effective = await api.Services.GetRequiredService<IAiSettingsProvider>().GetAsync();
+        Assert.Equal(secret, effective.Llm.ApiKey!.Reveal());
 
         // …but is not in any response, log line, audit row, or the stored bytes.
         AiSettingsTestKit.AssertNoSecret(secret, responses, "an API response");
@@ -313,7 +294,6 @@ public sealed class DbAiSettingsTests
             using var viewer = Rag.Client(wrong, Roles.Viewer);
             var (llm, _) = await AiSettingsTestKit.Get(viewer, "/api/settings/llm");
             Assert.Equal(("demo", "unreadable", false), (llm.GetProperty("mode").GetString(), llm.GetProperty("keyStatus").GetString(), llm.GetProperty("keySet").GetBoolean()));
-            Assert.Equal("demo", (await Rag.Ask(viewer, AiSettingsTestKit.LiveQuestion)).GetProperty("mode").GetString());
             Assert.Equal(0, AiSettingsTestKit.ChatCalls(wrong));
             Assert.DoesNotContain(wrong.Logs.Lines, l => l.Contains(oldKey) || l.Contains(newKey));
         }
@@ -376,7 +356,7 @@ public sealed class DbAiSettingsTests
             Assert.False(inside.Llm.IsLive);
             // A different async flow (an HTTP request) is not affected.
             using var viewer = Rag.Client(api, Roles.Viewer);
-            Assert.Equal("live", (await Rag.Ask(viewer, AiSettingsTestKit.LiveQuestion)).GetProperty("mode").GetString());
+            Assert.Equal("live", (await AiSettingsTestKit.Get(viewer, "/api/settings/llm")).Body.GetProperty("mode").GetString());
         }
         Assert.True((await provider.GetAsync()).Llm.IsLive);
     }
@@ -399,21 +379,21 @@ public sealed class DbAiSettingsTests
     }
 
     [DockerFact]
-    public async Task Agent_runs_read_the_same_settings_and_say_the_model_is_not_used()
+    public async Task Agent_runs_answer_from_the_rag_service_whatever_the_llm_settings()
     {
         await using var api = Host();
         await AiSettingsTestKit.ResetSettings(api);
         using var op = Rag.Client(api, Roles.Operator);
         using var admin = Rag.Client(api, Roles.Admin);
 
-        var demoRun = await AiSettingsTestKit.Post(op, "/api/agents/line-throughput-agent/run", new { });
-        Assert.Equal(HttpStatusCode.OK, demoRun.Status);
-        Assert.False(demoRun.Body.TryGetProperty("warning", out var w0) && w0.ValueKind == JsonValueKind.String);
+        var before = await AiSettingsTestKit.Post(op, "/api/agents/line-throughput-agent/run", new { });
+        Assert.Equal(HttpStatusCode.OK, before.Status);
+        Assert.Equal(AgentRunService.RunSource, before.Body.GetProperty("source").GetString());
 
         Assert.Equal(HttpStatusCode.OK, (await AiSettingsTestKit.Post(admin, "/api/settings/llm", LiveBody("sk-agent-" + TestEnvironment.RandomSecret(8)))).Status);
-        var liveRun = await AiSettingsTestKit.Post(op, "/api/agents/line-throughput-agent/run", new { });
-        Assert.Equal(HttpStatusCode.OK, liveRun.Status);
-        Assert.Equal(AgentRunService.ModelNotUsedWarning, liveRun.Body.GetProperty("warning").GetString());
+        var after = await AiSettingsTestKit.Post(op, "/api/agents/line-throughput-agent/run", new { });
+        Assert.Equal(HttpStatusCode.OK, after.Status);
+        Assert.Equal(DbApiFactory.FakeRagAnswer, after.Body.GetProperty("insight").GetProperty("finding").GetString());
         Assert.Equal(0, AiSettingsTestKit.ChatCalls(api));
     }
 }

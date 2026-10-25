@@ -4,7 +4,6 @@ using FactoryBrain.Infrastructure.Persistence;
 using FactoryBrain.Domain.Entities;
 using FactoryBrain.Domain.Enums;
 using FactoryBrain.Application.Dtos.Agents;
-using FactoryBrain.Application.Dtos.Vision;
 using FactoryBrain.Application.Abstractions.Interfaces;
 using Microsoft.EntityFrameworkCore;
 

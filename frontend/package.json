@@ -7,8 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "smoke": "node scripts/smoke.mjs && node scripts/test-rag.mjs",
+    "smoke": "node scripts/smoke.mjs",
     "test:rag": "node scripts/test-rag.mjs",
+    "e2e": "node e2e/run-e2e.mjs",
     "probe": "node scripts/probe.mjs",
     "sensor:live": "node scripts/sensor-live.mjs"
   },
@@ -33,6 +34,7 @@
     "driver.js": "1.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.0",
     "@types/node": "22.7.4",
     "@types/react": "18.3.11",
     "@types/react-dom": "18.3.0",

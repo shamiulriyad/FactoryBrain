@@ -5,17 +5,20 @@
 
 import { create } from "zustand";
 import { persist as storage } from "@/lib/persist";
+import type { AskMode } from "@/lib/askMode";
 
 export type AskRecord = {
   id: string;
+  /** Who asked; the page only lists the signed-in user's own questions. */
+  userId?: string;
   query: string;
   /** Locale the user was in at the time of asking. */
   locale: "en" | "bn";
-  /** Source of the answer. */
-  source: "demo" | "live";
+  /** How the answer was produced (the API's `mode`). */
+  source: AskMode;
   /** Block kind set we persisted for this answer. */
   blocks: Array<{
-    type: "analyzed" | "finding" | "factors" | "evidence" | "recommendation" | "done";
+    type: "analyzed" | "finding" | "factors" | "evidence" | "citations" | "recommendation" | "done";
     data: any;
   }>;
   /** ISO timestamp. */

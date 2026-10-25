@@ -54,7 +54,11 @@ public sealed class QcService : IQcService
         var id = $"qc-flag-{stamp}";
 
         var opTitle = req.Operation.Replace('_', ' ');
-        var lineTitle = string.Join(' ', req.LineId.Replace('-', ' ').Split(' ').Select(w => char.ToUpper(w[0]) + w[1..]));
+        // RemoveEmptyEntries: an id like "line--1" used to yield an empty
+        // word and crash on w[0] (the validator now also rejects such ids).
+        var lineTitle = string.Join(' ', req.LineId.Replace('-', ' ')
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(w => char.ToUpperInvariant(w[0]) + w[1..]));
 
         var insight = new Insight
         {

@@ -1,55 +1,56 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using FactoryBrain.Application.Settings;
 using Pgvector;
 
 namespace FactoryBrain.Infrastructure.Rag;
 
 /// <summary>
-/// OpenAI <c>text-embedding-3-*</c> embedder. Resolves the output dimensions
-/// from the configured model name (1536 for <c>3-small</c>, 3072 for
-/// <c>3-large</c>); falls back to 1536 when the model is unknown.
+/// OpenAI <c>text-embedding-3-*</c> / <c>ada-002</c> embedder. The requested
+/// output size is sent as <c>dimensions</c> for the models that accept it
+/// (see <see cref="EmbeddingCatalog"/>); callers still check the length of
+/// what comes back.
 /// </summary>
 public sealed class OpenAiEmbeddingService : HostedEmbeddingServiceBase
 {
     public const string Provider = "openai";
 
+    private readonly int _dimensions;
+    private readonly bool _sendDimensions;
+
     public OpenAiEmbeddingService(
         IHttpClientFactory httpFactory,
         ILogger<OpenAiEmbeddingService> logger,
         string apiKey,
-        string model)
+        string model,
+        int dimensions = 0)
         : base(httpFactory, logger, apiKey, model)
     {
+        var spec = EmbeddingCatalog.Find(Provider, model);
+        _dimensions = dimensions > 0 ? dimensions : spec?.DefaultDimensions ?? 1536;
+        _sendDimensions = spec?.AcceptsDimensionsParameter == true;
     }
 
     public override string ProviderId => Provider;
 
-    public override int Dimensions => Model switch
-    {
-        var m when m.Contains("3-large", StringComparison.OrdinalIgnoreCase) => 3072,
-        var m when m.Contains("3-small", StringComparison.OrdinalIgnoreCase) => 1536,
-        var m when m.Contains("ada-002",  StringComparison.OrdinalIgnoreCase) => 1536,
-        _ => 1536
-    };
+    public override int Dimensions => _dimensions;
 
     public override async Task<Vector> EmbedAsync(string text, CancellationToken ct = default)
     {
         var client = HttpFactory.CreateClient(nameof(OpenAiEmbeddingService));
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ApiKey);
 
-        var body = new
-        {
-            model = Model,
-            input = text ?? string.Empty
-        };
+        object body = _sendDimensions
+            ? new { model = Model, input = text ?? string.Empty, dimensions = _dimensions }
+            : new { model = Model, input = text ?? string.Empty };
         // OpenAI passes the API key via the Authorization header, NOT the
         // URL — so the URL we log and re-throw references never contains
         // key material. The body sanitization below strips any accidental
         // echo of the key from the response body before it reaches a log.
         using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/embeddings")
         {
-            Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json")
+            Content = new StringContent(JsonSerializer.Serialize(body, body.GetType()), Encoding.UTF8, "application/json")
         };
         using var resp = await client.SendAsync(req, ct).ConfigureAwait(false);
         var raw = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);

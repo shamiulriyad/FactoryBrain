@@ -12,16 +12,13 @@ import { useMounted } from "@/lib/persist";
 function stepsFor(t: (path: string, p?: Record<string, string | number>) => string) {
   return [
     { element: '[data-tour="overview-kpis"]', popover: { title: t("tour.steps.overviewKpis.title"), description: t("tour.steps.overviewKpis.body") } },
-    { element: '[data-tour="overview-important"]', popover: { title: t("tour.steps.overviewImportant.title"), description: t("tour.steps.overviewImportant.body") } },
     { element: '[data-tour="overview-actions"]', popover: { title: t("tour.steps.overviewActions.title"), description: t("tour.steps.overviewActions.body") } },
-    { element: '[data-tour="ask"]', popover: { title: t("tour.steps.ask.title"), description: t("tour.steps.ask.body") } },
-    { element: '[data-tour="brain"]', popover: { title: t("tour.steps.brain.title"), description: t("tour.steps.brain.body") } },
-    { element: '[data-tour="insights"]', popover: { title: t("tour.steps.insights.title"), description: t("tour.steps.insights.body") } },
-    { element: '[data-tour="agents"]', popover: { title: t("tour.steps.agents.title"), description: t("tour.steps.agents.body") } },
-    { element: '[data-tour="approvals"]', popover: { title: t("tour.steps.approvals.title"), description: t("tour.steps.approvals.body") } },
-    { element: '[data-tour="activity"]', popover: { title: t("tour.steps.activity.title"), description: t("tour.steps.activity.body") } },
-    { element: '[data-tour="integrations"]', popover: { title: t("tour.steps.integrations.title"), description: t("tour.steps.integrations.body") } },
-    { element: '[data-tour="settings"]', popover: { title: t("tour.steps.settings.title"), description: t("tour.steps.settings.body") } },
+    { element: '[data-testid="nav-approvals"]', popover: { title: t("tour.steps.approvals.title"), description: t("tour.steps.approvals.body") } },
+    { element: '[data-testid="nav-ask"]', popover: { title: t("tour.steps.ask.title"), description: t("tour.steps.ask.body") } },
+    { element: '[data-testid="nav-knowledge"]', popover: { title: t("tour.steps.knowledge.title"), description: t("tour.steps.knowledge.body") } },
+    { element: '[data-testid="nav-agents"]', popover: { title: t("tour.steps.agents.title"), description: t("tour.steps.agents.body") } },
+    { element: '[data-testid="nav-activity"]', popover: { title: t("tour.steps.activity.title"), description: t("tour.steps.activity.body") } },
+    { element: '[data-testid="nav-settings"]', popover: { title: t("tour.steps.settings.title"), description: t("tour.steps.settings.body") } },
     { element: '[data-tour="search"]', popover: { title: t("tour.steps.search.title"), description: t("tour.steps.search.body") } }
   ];
 }

@@ -41,18 +41,37 @@ function firstNonEmpty(...values) {
   return null;
 }
 
-const RAW_BASE_URL =
-  firstNonEmpty(
-    process.env.RAG_EVAL_BASE_URL,
-    process.env.NEXT_PUBLIC_API_URL,
-    process.env.DOTNET_API_URL
-  ) ?? "http://localhost:5000";
-
+// Test-only configuration. The target must be named explicitly with
+// RAG_EVAL_BASE_URL (the app's own NEXT_PUBLIC_API_URL / DOTNET_API_URL are
+// deliberately NOT used as a fallback), and it must be a loopback API unless
+// RAG_EVAL_ALLOW_REMOTE=1. `npm run e2e` runs this against the disposable
+// test stack with seeded test credentials.
+const RAW_BASE_URL = firstNonEmpty(process.env.RAG_EVAL_BASE_URL);
+if (!RAW_BASE_URL) {
+  console.error("FAIL: set RAG_EVAL_BASE_URL to a test API (e.g. the one started by `npm run e2e`).");
+  process.exit(2);
+}
 const BASE_URL = RAW_BASE_URL.replace(/\/$/, "");
+{
+  const host = new URL(BASE_URL).hostname;
+  const loopback = host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
+  if (!loopback && process.env.RAG_EVAL_ALLOW_REMOTE !== "1") {
+    console.error(`FAIL: ${host} is not a loopback host; refusing to run the eval against it (set RAG_EVAL_ALLOW_REMOTE=1 to override).`);
+    process.exit(2);
+  }
+}
 const PATH_ASK = process.env.RAG_EVAL_PATH ?? "/api/ask";
 const TIMEOUT_MS = Number(process.env.RAG_EVAL_TIMEOUT_MS ?? 10000);
+const EVAL_EMAIL = firstNonEmpty(process.env.RAG_EVAL_EMAIL);
+const EVAL_PASSWORD = process.env.RAG_EVAL_PASSWORD ?? "";
+if (!EVAL_EMAIL || !EVAL_PASSWORD) {
+  console.error("FAIL: set RAG_EVAL_EMAIL / RAG_EVAL_PASSWORD (a test account on the target API); /api/ask requires sign-in.");
+  process.exit(2);
+}
 
 console.log(`RAG eval base URL: ${BASE_URL}`);
+
+let accessToken = null;
 
 // ---------------------------------------------------------------------------
 // Golden set — 22 questions.
@@ -235,13 +254,47 @@ function citationFieldErrors(c) {
   return errs;
 }
 
+async function login() {
+  const res = await fetch(`${BASE_URL}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: EVAL_EMAIL, password: EVAL_PASSWORD }),
+    cache: "no-store",
+  });
+  if (res.status !== 200) throw new Error(`login failed: HTTP ${res.status}`);
+  accessToken = (await res.json()).accessToken;
+}
+
+async function getAuthed(pathname) {
+  const res = await fetch(`${BASE_URL}${pathname}`, { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" });
+  if (res.status !== 200) throw new Error(`GET ${pathname}: HTTP ${res.status}`);
+  return res.json();
+}
+
+/**
+ * The eval only measures retrieval, so it refuses to run when the target API
+ * would send these questions to a hosted model or hosted embeddings (which
+ * can cost money) unless explicitly allowed, e.g. against a fake model.
+ */
+async function assertNoPaidProviders() {
+  const llm = await getAuthed("/api/settings/llm");
+  if (llm.mode === "live" && process.env.RAG_EVAL_ALLOW_LLM !== "1") {
+    throw new Error(`target API has a live LLM configured (provider=${llm.provider}); set RAG_EVAL_ALLOW_LLM=1 only for a fake/local model`);
+  }
+  const rag = await getAuthed("/api/rag/status");
+  if (rag.activeProvider !== "local" && process.env.RAG_EVAL_ALLOW_HOSTED_EMBEDDINGS !== "1") {
+    throw new Error(`target API embeds queries with '${rag.activeProvider}'; set RAG_EVAL_ALLOW_HOSTED_EMBEDDINGS=1 to allow`);
+  }
+  console.log(`# providers: llm=${llm.mode} embeddings=${rag.activeProvider} (${rag.dims} dims)`);
+}
+
 async function postAsk(question) {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
   try {
     const res = await fetch(`${BASE_URL}${PATH_ASK}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
       body: JSON.stringify({ query: question }),
       signal: ac.signal,
       cache: "no-store",
@@ -273,6 +326,8 @@ async function main() {
     `# cases:   ${GOLDEN.length}  (${GOLDEN.filter(g => g.kind === "en").length} EN, ${GOLDEN.filter(g => g.kind === "bn").length} BN, ${GOLDEN.filter(g => g.kind === "nonsense").length} nonsense)`
   );
   console.log(`# timeout: ${TIMEOUT_MS}ms per request`);
+  await login();
+  await assertNoPaidProviders();
   console.log("");
 
   const results = [];
@@ -298,6 +353,27 @@ async function main() {
     if (status !== 200 || !json) {
       row.hardFail = true;
       row.reason = `HTTP ${status}`;
+      results.push(row);
+      console.log(`[fail] ${idx} ${q.query}  → ${row.reason}`);
+      continue;
+    }
+
+    // ----- Hard failure: answer mode contract (see src/lib/askMode.ts). -----
+    const mode = json.mode;
+    if (!["live", "demo", "no_source"].includes(mode)) {
+      row.hardFail = true;
+      row.reason = `missing or unknown mode: ${JSON.stringify(mode)}`;
+    } else if (q.kind === "nonsense" && mode !== "no_source") {
+      row.hardFail = true;
+      row.reason = `nonsense answered with mode '${mode}'; expected 'no_source'`;
+    } else if (q.kind !== "nonsense" && mode === "no_source") {
+      row.hardFail = true;
+      row.reason = "real question answered with mode 'no_source' (nothing retrieved)";
+    } else if (mode !== "live" && json.confidence !== 0) {
+      row.hardFail = true;
+      row.reason = `mode '${mode}' reported confidence ${json.confidence}; only live answers may claim confidence`;
+    }
+    if (row.hardFail) {
       results.push(row);
       console.log(`[fail] ${idx} ${q.query}  → ${row.reason}`);
       continue;
@@ -391,7 +467,7 @@ async function main() {
   const rate = realTotal > 0 ? realHits / realTotal : 0;
 
   console.log("");
-  console.log(`# hard fails: ${hardFailed}  (HTTP / nonsense-leak / citation-field)`);
+  console.log(`# hard fails: ${hardFailed}  (HTTP / mode / nonsense-leak / citation-field)`);
   console.log(`# strict top-3 hit rate: ${rate.toFixed(3)} (${realHits}/${realTotal} real queries; nonsense excluded)`);
   if (realMisses.length > 0) {
     console.log(`# top-3 misses (${realMisses.length}):`);

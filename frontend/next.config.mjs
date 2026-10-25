@@ -6,12 +6,21 @@ import nextEnv from '@next/env';
 // from frontend/) instead of frontend/.env*. Next.js has already called
 // loadEnvConfig(frontend/) and cached it by the time this file runs, so
 // forceReload (4th arg) is needed. Values in the real process env still win.
+//
+// FACTORYBRAIN_SKIP_ROOT_ENV=1 skips the repo-root .env entirely. The
+// end-to-end harness (e2e/run-e2e.mjs) sets it so test builds are configured
+// only by the variables it passes, never by a developer's real .env.
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-nextEnv.loadEnvConfig(repoRoot, process.env.NODE_ENV !== 'production', undefined, true);
+if (process.env.FACTORYBRAIN_SKIP_ROOT_ENV !== '1') {
+  nextEnv.loadEnvConfig(repoRoot, process.env.NODE_ENV !== 'production', undefined, true);
+}
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // NEXT_DIST_DIR lets the e2e harness build into its own (git-ignored)
+  // folder instead of overwriting the .next a running `next start` serves.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   experimental: {
     optimizePackageImports: ["lucide-react", "recharts"]
   },

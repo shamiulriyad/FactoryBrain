@@ -1,117 +1,87 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { ArrowUpRight, ArrowDownRight, AlertTriangle, Sparkles, ShieldCheck, PlugZap, RefreshCw } from "lucide-react";
-import { motion } from "framer-motion";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Activity, ArrowUpRight, Bell, Cpu, Gauge, RefreshCw, ShieldCheck, StepForward } from "lucide-react";
 import { useT } from "@/lib/useT";
 import { Panel } from "@/components/ui/Panel";
-import { Sparkline } from "@/components/ui/Sparkline";
-import { StageBadge, RiskPill } from "@/components/ui/StatusPill";
-import { RiskBadge } from "@/components/ui/RiskBadge";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatCard } from "@/components/ui/StatCard";
+import { Badge, RISK_TONE } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { SimulatedPill } from "@/components/ui/Status";
+import { Callout } from "@/components/ui/Callout";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { useToast } from "@/components/ui/Toast";
 import { LineBoardPanel } from "@/components/overview/LineBoardPanel";
-import { Brain3D } from "@/components/agents/Brain3D";
 import { QcSummary } from "@/components/overview/QcSummary";
 import { BriefCard } from "@/components/overview/BriefCard";
-import { metricService } from "@/services/metric.service";
-import { insightService } from "@/services/insight.service";
-import { approvalService } from "@/services/approval.service";
-import { activityService } from "@/services/activity.service";
-import { businessService } from "@/services/business.service";
-import { factoryTools } from "@/services/factory.tools";
-import type { EnergyDutyTool } from "@/services/factory.tools";
-import { useAppStore } from "@/store/app.store";
+import { approvalInsight, refreshPendingApprovals, usePendingApprovals } from "@/services/approvals.api";
+import { setUnreadFrom } from "@/services/floorAlerts.api";
 import { useBusinessStore } from "@/store/business.store";
-import { connectedSourceCount } from "@/store/business.store";
-import { useFactoryBrainLiveStore, type TickSnapshot } from "@/store/factoryBrain.live.store";
-import { formatBDT, formatNumber, formatPercent, formatRelative } from "@/lib/format";
+import { useAppStore } from "@/store/app.store";
+import { useFactoryBrainLiveStore } from "@/store/factoryBrain.live.store";
+import { formatRelative } from "@/lib/format";
 import { useMounted } from "@/lib/persist";
+import { apiJson, errorMessage } from "@/lib/api";
+import { useResource, announceDataChanged, type Resource } from "@/lib/useResource";
+import { canOperate, useAuthStore } from "@/lib/auth";
+import { cn } from "@/lib/cn";
+import type { FloorAlertList, LineBoard, SensorSnapshot } from "@/services/contracts";
 import type { SensorReading } from "@/data/sensors";
 
-/** Periodically (or manually) POST /api/sensors/ingest and store the
- *  resulting snapshot. Reuses the SensorReading types from the route. */
-function useLiveIngest({ intervalMs = 6000 }: { intervalMs?: number }) {
-  const setSnapshot = useFactoryBrainLiveStore((s) => s.setSnapshot);
-  const setFetching = useFactoryBrainLiveStore((s) => s.setFetching);
-  const setError = useFactoryBrainLiveStore((s) => s.setError);
-  const inflight = useRef<AbortController | null>(null);
-
-  const run = useCallback(async () => {
-    if (inflight.current) inflight.current.abort();
-    const ctrl = new AbortController();
-    inflight.current = ctrl;
-    setFetching(true);
-    try {
-      const res = await fetch("/api/sensors/ingest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-        signal: ctrl.signal
-      });
-      if (!res.ok) throw new Error(`ingest_${res.status}`);
-      const data = (await res.json()) as TickSnapshot & { readings: SensorReading[] };
-      setSnapshot({
-        tick: data.tick,
-        lines: data.lines ?? [],
-        machines: data.machines ?? [],
-        readings: data.readings ?? [],
-        appliedAt: new Date().toISOString()
-      });
-    } catch (e) {
-      if ((e as Error).name !== "AbortError") {
-        setError((e as Error).message ?? "ingest_failed");
-      }
-    } finally {
-      if (inflight.current === ctrl) inflight.current = null;
-      setFetching(false);
-    }
-  }, [setSnapshot, setFetching, setError]);
-
-  useEffect(() => {
-    // First tick on mount.
-    void run();
-    const id = setInterval(() => {
-      void run();
-    }, intervalMs);
-    return () => {
-      clearInterval(id);
-      if (inflight.current) inflight.current.abort();
-    };
-  }, [run, intervalMs]);
-
-  return { run };
-}
+/** How often the read-only sensor snapshot is polled. Polling never advances the simulation. */
+const SNAPSHOT_POLL_MS = 6000;
 
 export default function OverviewPage() {
   const { t, locale } = useT();
-  const search = useSearchParams();
+  const toast = useToast();
   const mounted = useMounted();
-  const [tick, setTick] = useState(0);
+  const user = useAuthStore((s) => s.user);
+  const operator = canOperate(user);
+  const profile = useBusinessStore((s) => s.profile);
+  const plantName = mounted ? profile.businessName || profile.factoryName || "" : "";
+
+  const snapshot = useResource<SensorSnapshot>("/api/sensors/snapshot", { pollMs: SNAPSHOT_POLL_MS });
+  const board = useResource<LineBoard>("/api/line-board");
+  const alerts = useResource<FloorAlertList>("/api/floor-alerts", { pollMs: 15_000 });
+  const pending = usePendingApprovals((s) => s.pending);
+  const pendingCount = usePendingApprovals((s) => s.pendingCount);
+  const pendingLoaded = usePendingApprovals((s) => s.loaded);
+  const [advancing, setAdvancing] = useState<null | "sensors" | "board">(null);
+
+  // Publish the snapshot for other views (QC page refreshes on tick changes).
+  const setLive = useFactoryBrainLiveStore((s) => s.setSnapshot);
+  const tick = snapshot.data?.tick;
   useEffect(() => {
-    const id = setInterval(() => setTick((n) => n + 1), 800);
-    return () => clearInterval(id);
+    const d = snapshot.data;
+    if (!d) return;
+    setLive({
+      tick: d.tick,
+      lines: d.lines,
+      machines: d.machines as never,
+      readings: d.readings as unknown as SensorReading[],
+      appliedAt: new Date().toISOString()
+    });
+  }, [snapshot.data, setLive]);
+
+  // When the simulation moves, the board moves with it.
+  const lastTick = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (tick === undefined) return;
+    if (lastTick.current !== undefined && lastTick.current !== tick) void board.reload();
+    lastTick.current = tick;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick]);
+
+  useEffect(() => {
+    if (alerts.data) setUnreadFrom(alerts.data);
+  }, [alerts.data]);
+
+  useEffect(() => {
+    void refreshPendingApprovals();
   }, []);
 
-  // tick is intentional — services are static; tick triggers re-render after
-  // async server refreshes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const health = useMemo(() => metricService.health(), [tick]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const profile = useMemo(() => businessService.getProfile(), [tick, mounted]);
-  const name = profile.businessName || profile.industry || "Your business";
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const pinned = useMemo(() => insightService.feed({ stage: "suggested" }).slice(0, 3), [tick]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const approvals = useMemo(() => approvalService.pending().slice(0, 2), [tick]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const activity = useMemo(() => activityService.recent({ limit: 5 }), [tick]);
-  const sourcesCount = mounted ? connectedSourceCount() : 0;
-
-  // First-time arrival on Overview after onboarding: mark + tour trigger.
+  // First arrival after onboarding: lets the guided tour start.
   useEffect(() => {
     if (!mounted) return;
     if (!useAppStore.getState().onboardedAt && useBusinessStore.getState().onboardingComplete) {
@@ -119,563 +89,264 @@ export default function OverviewPage() {
     }
   }, [mounted]);
 
-  const revDelta = health.revenuePrev30 > 0 ? (health.revenue30 - health.revenuePrev30) / health.revenuePrev30 : 0;
-  const custDelta = health.activeCustomersPrev > 0 ? (health.activeCustomers - health.activeCustomersPrev) / health.activeCustomersPrev : 0;
+  const rows = board.data?.rows ?? [];
+  const avgEff = rows.length ? Math.round(rows.reduce((a, r) => a + r.efficiencyPct, 0) / rows.length) : null;
+  const onTarget = rows.filter((r) => r.efficiencyPct >= r.sahTarget).length;
+  const behind = rows.filter((r) => r.bottleneck !== "green");
+  const machines = snapshot.data?.machines ?? [];
+  const down = machines.filter((m) => m.status === "down").length;
+  const atRisk = machines.filter((m) => m.status === "at_risk").length;
+  const unread = alerts.data?.alerts.filter((a) => !a.read).length ?? null;
+  const simulated = snapshot.data?.simulated ?? board.data?.meta.simulated ?? null;
 
-  // Live simulated sensor stream (extends the page; existing KPIs above are unchanged).
-  const { run: runTick } = useLiveIngest({ intervalMs: 6000 });
-  const snapshot = useFactoryBrainLiveStore((s) => s.snapshot);
-  const fetching = useFactoryBrainLiveStore((s) => s.fetching);
-  const liveError = useFactoryBrainLiveStore((s) => s.error);
-
-  // Snapshot-derived KPIs. A small local history buffer keeps a 12-point
-  // sparkline per metric so cards visibly move over time.
-  const [sparks, setSparks] = useState<{ eff: number[]; uptime: number[]; energy: number[] }>({
-    eff: [],
-    uptime: [],
-    energy: []
-  });
-  const liveLines = snapshot?.lines ?? [];
-  const liveMachines = snapshot?.machines ?? [];
-  const avgEff = liveLines.length
-    ? liveLines.reduce((acc, l) => acc + l.efficiency, 0) / liveLines.length
-    : 0;
-  const avgUptime = liveLines.length
-    ? liveLines.reduce((acc, l) => acc + l.uptime, 0) / liveLines.length
-    : 0;
-  const totalEnergy = liveLines.reduce((acc, l) => acc + l.energyKwh, 0);
-  const machinesDown = liveMachines.filter((m) => m.status === "down").length;
-  const machinesAtRisk = liveMachines.filter((m) => m.status === "at_risk").length;
-
-  useEffect(() => {
-    if (!snapshot) return;
-    setSparks((s) => ({
-      eff: pushSample(s.eff, avgEff, 12),
-      uptime: pushSample(s.uptime, avgUptime, 12),
-      energy: pushSample(s.energy, totalEnergy, 12)
-    }));
-  }, [snapshot, avgEff, avgUptime, totalEnergy]);
-
-  // Deterministic compressor duty recommendation. Re-derives whenever the
-  // live snapshot advances so the card visibly responds to the tick.
-  const energyRec = useMemo<EnergyDutyTool | null>(() => {
-    if (!snapshot) return null;
+  async function advanceSensors() {
+    if (advancing) return;
+    setAdvancing("sensors");
     try {
-      return factoryTools.recommend_energy_duty({ timeframe: "1h" });
-    } catch {
-      return null;
+      const next = await apiJson<SensorSnapshot>("/api/sensors/ingest", { method: "POST", body: {} });
+      snapshot.setData(next);
+      toast.push({ title: "Simulation advanced", description: `Now at tick #${next.tick}.` });
+      announceDataChanged();
+    } catch (e) {
+      toast.push({ tone: "error", title: "Could not advance the simulation", description: errorMessage(e) });
+    } finally {
+      setAdvancing(null);
     }
-  }, [snapshot]);
+  }
+
+  async function advanceBoard() {
+    if (advancing) return;
+    setAdvancing("board");
+    try {
+      const next = await apiJson<LineBoard>("/api/line-board/refresh", { method: "POST", body: {} });
+      board.setData(next);
+      toast.push({ title: "Line board advanced", description: `Tick #${next.meta.tick}.` });
+    } catch (e) {
+      toast.push({ tone: "error", title: "Could not advance the line board", description: errorMessage(e) });
+    } finally {
+      setAdvancing(null);
+    }
+  }
+
+  function refreshAll() {
+    void snapshot.reload();
+    void board.reload();
+    void alerts.reload();
+    void refreshPendingApprovals();
+  }
+
+  const greeting = useMemo(() => {
+    const h = new Date().getHours();
+    const key = h < 12 ? "overview.greetingMorning" : h < 18 ? "overview.greetingAfternoon" : "overview.greetingEvening";
+    return t(key, { name: plantName || "" }).replace(/,\s*$/, "").replace(/\s+—\s*$/, "");
+  }, [t, plantName]);
 
   return (
-    <div className="px-6 md:px-8 py-6 max-w-6xl mx-auto">
-      <div className="flex items-end justify-between gap-6">
-        <div>
-          <p className="text-caption text-fg-tertiary">{greetingFor(t, name)}</p>
-          <h1 className="mt-1 text-display font-semibold tracking-tight">{name}</h1>
-        </div>
-        <Link href="/app/agents" className="hidden sm:flex flex-col items-center shrink-0">
-          <Brain3D size={88} />
-          <span className="text-caption text-fg-secondary">Factory Brain</span>
-        </Link>
-      </div>
-
-      <div className="mt-4">
-        <LineBoardPanel />
-      </div>
-
-      {/* Morning brief — deterministic demo summary (no LLM). */}
-      <div className="mt-4">
-        <BriefCard />
-      </div>
-
-      {/* Live sensor tick — extends the page without touching existing layout. */}
-      <Panel
-        className="mt-4"
-        title={t("overview.tickTitle")}
-        subtitle={
-          snapshot
-            ? (t("overview.tickUpdated", { rel: formatRelative(snapshot.appliedAt, locale), tick: snapshot.tick }) as string)
-            : (t("overview.tickAwaiting") as string)
-        }
-        right={
-          <div className="flex items-center gap-2">
-            <SimulatedPill tip="Simulated data" testId="live-tick-simulated-pill" />
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => void runTick()}
-              disabled={fetching}
-              data-testid="simulate-tick"
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <RefreshCw size={14} className={fetching ? "animate-spin" : undefined} />
-                {t("overview.demoPathSimulate")}
+    <div className="page" data-tour="overview">
+      <PageHeader
+        eyebrow={new Date().toLocaleDateString(locale === "bn" ? "bn-BD" : "en-GB", { weekday: "long", day: "numeric", month: "long" })}
+        title={plantName || "Floor overview"}
+        description={plantName ? greeting : "Lines, decisions and alerts, straight from the API."}
+        meta={
+          simulated === null ? null : (
+            <>
+              <span title={snapshot.data?.source ?? board.data?.meta.source} data-testid="overview-data-source">
+                <Badge tone={simulated ? "accent" : "success"} dot>{simulated ? "Simulated floor data" : "Live gateway data"}</Badge>
               </span>
+              {snapshot.data && <span className="text-caption text-fg-tertiary">Tick #{snapshot.data.tick}{snapshot.updatedAt ? ` · polled ${formatRelative(snapshot.updatedAt.toISOString(), locale)}` : ""}</span>}
+            </>
+          )
+        }
+        actions={
+          <>
+            {operator && (
+              <Button variant="secondary" size="sm" onClick={() => void advanceSensors()} disabled={advancing !== null} data-testid="simulate-tick" title="Advance the sensor simulation one tick (Operator)">
+                <StepForward size={13} /> {advancing === "sensors" ? "Advancing…" : t("overview.demoPathSimulate")}
+              </Button>
+            )}
+            <Button variant="secondary" size="sm" onClick={refreshAll} disabled={snapshot.refreshing} aria-label="Refresh overview">
+              <RefreshCw size={13} className={cn(snapshot.refreshing && "animate-spin")} /> Refresh
             </Button>
-          </div>
+          </>
         }
-      >
-        {!snapshot ? (
-          <p className="text-caption text-fg-tertiary">
-            {liveError
-              ? (t("overview.tickFailed", { message: liveError }) as string)
-              : (t("overview.tickInit") as string)}
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <LiveMetric
-              label={t("overview.avgEffLabel") as string}
-              value={formatPercent(avgEff, locale)}
-              delta={sparkDelta(sparks.eff)}
-              spark={sparks.eff}
-              locale={locale}
-              note={t("overview.effNote", { n: liveLines.length }) as string}
-              goodDir="up"
-            />
-            <LiveMetric
-              label={t("overview.avgUptimeLabel") as string}
-              value={formatPercent(avgUptime, locale)}
-              delta={sparkDelta(sparks.uptime)}
-              spark={sparks.uptime}
-              locale={locale}
-              note={t("overview.uptimeNote") as string}
-              goodDir="up"
-            />
-            <LiveMetric
-              label={t("overview.energyTotalLabel") as string}
-              value={formatNumber(Math.round(totalEnergy), locale)}
-              delta={sparkDelta(sparks.energy)}
-              spark={sparks.energy}
-              locale={locale}
-              note={t("overview.energyNote") as string}
-              goodDir="down"
-            />
-            <LiveMetric
-              label={t("overview.machinesDownLabel") as string}
-              value={`${machinesDown}`}
-              delta={null}
-              locale={locale}
-              note={t("overview.machinesDownNote", { atRisk: machinesAtRisk }) as string}
-              tone={machinesDown > 0 ? "risk" : "neutral"}
-            />
-            <LiveMetric
-              label={t("overview.latestReadingsLabel") as string}
-              value={`${snapshot.readings.length}`}
-              delta={null}
-              locale={locale}
-              note={t("overview.latestReadingsNote", { tick: snapshot.tick }) as string}
-            />
-          </div>
-        )}
-      </Panel>
+      />
 
-      <QcSummary />
+      {snapshot.error && !snapshot.data && (
+        <Callout tone="danger" className="mt-5" title="Sensor data unavailable">
+          {errorMessage(snapshot.error)}
+        </Callout>
+      )}
 
-      {/* Deterministic compressor duty recommendation. Explicit
-          Simulated / not-RL labeling so the demo surface never reads as a
-          learned policy. */}
-      <Panel
-        className="mt-4"
-        title={t("overview.energyTitle")}
-        subtitle={
-          energyRec
-            ? (t("overview.energyWindow", {
-                window: energyRec.basedOn.window,
-                readings: energyRec.basedOn.sensorReadings,
-                lines: energyRec.basedOn.lineCount
-              }) as string)
-            : (t("overview.energyAwaiting") as string)
-        }
-        right={
-          <SimulatedPill notRL testId="energy-duty-simulated-pill" />
-        }
-      >
-        {!energyRec ? (
-          <p className="text-caption text-fg-tertiary">
-            {t("overview.energyAwaitingBody") as string}
-          </p>
-        ) : (
-          <EnergyDutyCard rec={energyRec} locale={locale} />
-        )}
-      </Panel>
+      <section className="mt-6 grid grid-cols-2 lg:grid-cols-5 gap-3" aria-label="Key figures" data-tour="overview-kpis">
+        <StatCard
+          label="Avg line efficiency"
+          value={avgEff === null ? "—" : `${avgEff}%`}
+          hint={rows.length ? `${onTarget} of ${rows.length} lines at or above target` : undefined}
+          tone={avgEff === null ? "neutral" : onTarget === rows.length ? "good" : "warn"}
+          loading={board.loading}
+          error={board.error && !board.data ? "Unavailable" : null}
+          icon={<Gauge size={15} />}
+          testId="kpi-efficiency"
+        />
+        <StatCard
+          label="Lines needing attention"
+          value={rows.length ? `${behind.length}` : "—"}
+          hint={behind.length ? behind.slice(0, 3).map((r) => r.name).join(", ") : rows.length ? "All lines green" : undefined}
+          tone={behind.some((r) => r.bottleneck === "red") ? "bad" : behind.length ? "warn" : "good"}
+          loading={board.loading}
+          error={board.error && !board.data ? "Unavailable" : null}
+          icon={<Activity size={15} />}
+        />
+        <StatCard
+          label="Pending approvals"
+          value={`${pendingCount}`}
+          hint={pendingCount ? "Waiting for a decision" : "Nothing waiting"}
+          tone={pendingCount ? "warn" : "good"}
+          loading={!pendingLoaded}
+          href="/app/approvals"
+          icon={<ShieldCheck size={15} />}
+          testId="kpi-approvals"
+        />
+        <StatCard
+          label="Unread floor alerts"
+          value={unread === null ? "—" : `${unread}`}
+          hint={alerts.data ? `${alerts.data.count} in the feed` : undefined}
+          tone={unread ? "warn" : "good"}
+          loading={alerts.loading}
+          error={alerts.error && !alerts.data ? "Unavailable" : null}
+          href="/app/activity"
+          icon={<Bell size={15} />}
+        />
+        <StatCard
+          label="Machines down / at risk"
+          value={machines.length ? `${down} / ${atRisk}` : "—"}
+          hint={machines.length ? `${machines.length} machines reporting` : undefined}
+          tone={down ? "bad" : atRisk ? "warn" : "good"}
+          loading={snapshot.loading}
+          error={snapshot.error && !snapshot.data ? "Unavailable" : null}
+          href="/app/sensors"
+          icon={<Cpu size={15} />}
+        />
+      </section>
 
-      <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Panel className="lg:col-span-2" title={t("overview.importantToday")} subtitle="Top insights from the workforce">
-          <div data-tour="overview-important">
-            {pinned.length === 0 && <p className="text-caption text-fg-tertiary">{t("overview.nothingImportant")}</p>}
-            <ul className="space-y-2.5">
-              {pinned.map((i) => (
-                <li key={i.id} className="surface-2 p-3">
-                  <Link href={`/app/insights?focus=${i.id}`} className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-body text-fg-primary truncate">{locale === "bn" ? i.titleBn : i.title}</p>
-                      <p className="mt-0.5 text-caption text-fg-tertiary truncate">{i.agentLabel}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <RiskPill tier={i.recommendation.riskTier} label={t(`risk.${i.recommendation.riskTier}`) as string} />
-                      <StageBadge stage={i.stage} label={t(`insights.stages.${i.stage}`) as string} />
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </Panel>
+      <div className="mt-4 grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="xl:col-span-2 min-w-0">
+          <LineBoardPanel board={board} canAdvance={operator} advancing={advancing === "board"} onAdvance={() => void advanceBoard()} />
+        </div>
+        <BriefCard tick={tick} />
+      </div>
 
-        <Panel title={t("overview.recommendedActions")} subtitle="Decisions for you">
+      <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Panel
+          title="Decisions waiting"
+          subtitle="Newest pending approvals from the server queue"
+          icon={<ShieldCheck size={14} />}
+          right={<Link href="/app/approvals" className="text-caption text-accent hover:underline inline-flex items-center gap-1">All approvals <ArrowUpRight size={12} /></Link>}
+        >
           <div data-tour="overview-actions">
-            {approvals.length === 0 ? (
+            {!pendingLoaded ? (
+              <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12" />)}</div>
+            ) : pending.length === 0 ? (
               <p className="text-caption text-fg-tertiary">{t("approvals.empty")}</p>
             ) : (
-              <ul className="space-y-2.5">
-                {approvals.map((a) => (
-                  <li key={a.id} className="surface-2 p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-body text-fg-primary truncate">{locale === "bn" ? a.titleBn : a.title}</p>
-                        <p className="mt-0.5 text-caption text-fg-tertiary truncate">{a.recommendation.action}</p>
-                      </div>
-                      <RiskBadge tier={a.recommendation.riskTier} label={t(`risk.${a.recommendation.riskTier}`) as string} size="sm" />
-                    </div>
-                    <div className="mt-3 flex items-center justify-end gap-2">
-                      <Button
-                        variant="success"
-                        size="sm"
-                        onClick={() => {
-                          approvalService.approve(a.id);
-                          setTick((n) => n + 1);
-                        }}
-                      >
-                        {t("approvals.approve")}
-                      </Button>
-                      <Link
-                        href={`/app/approvals?focus=${a.id}`}
-                        className="text-caption text-accent hover:underline"
-                      >
-                        {t("approvals.viewDetails")}
+              <ul className="divide-y divide-border-subtle -my-2">
+                {pending.slice(0, 4).map((a) => {
+                  const ins = approvalInsight(a);
+                  return (
+                    <li key={a.id}>
+                      <Link href={`/app/approvals?focus=${a.id}`} className="flex items-center gap-3 py-2.5 group">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-body text-fg-primary truncate group-hover:text-accent">{locale === "bn" ? a.titleBn || a.title : a.title}</p>
+                          <p className="text-caption text-fg-tertiary truncate">{ins.agentLabel} · {formatRelative(a.createdAt, locale)}</p>
+                        </div>
+                        <Badge tone={RISK_TONE[a.riskTier]}>{t(`risk.${a.riskTier}`)}</Badge>
                       </Link>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
         </Panel>
-      </div>
 
-      <Panel
-        className="mt-4"
-        title={t("overview.businessHealth")}
-        subtitle={t("overview.trend")}
-      >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-tour="overview-kpis">
-          <Link href="/app/insights?filter=revenue" className="block">
-            <Metric
-              label={t("overview.revenue")}
-              value={formatBDT(health.revenue30, locale)}
-              delta={revDelta}
-              locale={locale}
-              spark={health.revenueTrend}
-            />
-          </Link>
-          <Link href="/app/insights?filter=customers" className="block">
-            <Metric
-              label={t("overview.customers")}
-              value={formatNumber(health.activeCustomers, locale)}
-              delta={custDelta}
-              locale={locale}
-            />
-          </Link>
-          <Link href="/app/insights?filter=stockout" className="block">
-            <Metric
-              label={t("overview.inventory")}
-              value={`${health.inventoryAtRisk}`}
-              delta={-0.18}
-              locale={locale}
-              note="at risk < 14d"
-            />
-          </Link>
-        </div>
-      </Panel>
-
-      <nav
-        className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-fg-tertiary"
-        data-tour="judge-walkthrough"
-        aria-label="Demo walkthrough"
-      >
-        <span>{t("overview.demoPathLabel")}</span>
-        <span>{t("overview.demoPathSimulate")}</span>
-        <Link href="/app/agents" className="text-fg-secondary hover:text-fg-primary">{t("overview.demoPathAgents")}</Link>
-        <Link href="/app/activity" className="text-fg-secondary hover:text-fg-primary">{t("overview.demoPathFloor")}</Link>
-        <Link href="/app/vision" className="text-fg-secondary hover:text-fg-primary">{t("overview.demoPathVision")}</Link>
-        <Link href="/app/ask?q=compressor%20duty" className="text-fg-secondary hover:text-fg-primary">{t("overview.demoPathAsk")}</Link>
-      </nav>
-
-      <Panel className="mt-4" title={t("overview.recentActivity")} subtitle="">
-        {activity.length === 0 ? (
-          <p className="text-caption text-fg-tertiary">{t("overview.noActivity")}</p>
-        ) : (
-          <ul className="divide-y divide-border-subtle">
-            {activity.map((a) => (
-              <li key={a.id} className="py-2.5 flex items-center justify-between gap-3">
-                <div className="min-w-0 flex items-center gap-3">
-                  <span className="size-7 rounded-md bg-surface-2 flex items-center justify-center text-fg-tertiary">
-                    {a.actor === "user" ? <ShieldCheck size={14} /> : <Sparkles size={14} />}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-body text-fg-primary truncate">
-                      <span className="text-fg-secondary">{a.actorLabel}</span>{" "}
-                      <span>{locale === "bn" ? a.verbBn : a.verb}</span>{" "}
-                      {a.target && <span className="text-fg-secondary">{locale === "bn" ? a.targetBn : a.target}</span>}
-                    </p>
+        <Panel
+          title={t("nav.floorAlerts")}
+          subtitle={alerts.data?.simulated ? "Simulated WhatsApp channel — no message is actually sent" : undefined}
+          icon={<Bell size={14} />}
+          right={<Link href="/app/activity" className="text-caption text-accent hover:underline inline-flex items-center gap-1">Open feed <ArrowUpRight size={12} /></Link>}
+        >
+          {alerts.loading ? (
+            <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12" />)}</div>
+          ) : alerts.error && !alerts.data ? (
+            <p className="text-caption text-[var(--risk-high)]" role="alert">{errorMessage(alerts.error)}</p>
+          ) : (alerts.data?.alerts.length ?? 0) === 0 ? (
+            <p className="text-caption text-fg-tertiary">No alerts.</p>
+          ) : (
+            <ul className="divide-y divide-border-subtle -my-2">
+              {alerts.data!.alerts.slice(0, 4).map((a) => (
+                <li key={a.id} className="py-2.5 flex items-start gap-3">
+                  <span
+                    className={cn("mt-1.5 size-2 rounded-full shrink-0", a.read ? "bg-fg-tertiary/40" : a.severity === "critical" ? "bg-[var(--risk-high)]" : a.severity === "warn" ? "bg-[var(--risk-medium)]" : "bg-[var(--info)]")}
+                    aria-label={a.read ? "read" : "unread"}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className={cn("text-body line-clamp-2", a.read ? "text-fg-tertiary" : "text-fg-primary")}>{locale === "bn" ? a.bodyBn : a.bodyEn}</p>
+                    <p className="text-caption text-fg-tertiary">{a.severity} · {formatRelative(a.createdAt, locale)}</p>
                   </div>
-                </div>
-                <span className="text-caption text-fg-tertiary shrink-0">{formatRelative(a.isoDate, locale)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </div>
 
-      {sourcesCount < 3 && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="mt-4 surface-2 p-4 flex items-start gap-3"
-        >
-          <span className="size-7 rounded-md bg-[var(--accent-soft)] border border-[var(--accent-border)] flex items-center justify-center shrink-0 text-accent">
-            <PlugZap size={14} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-body text-fg-primary">{t("overview.nudgeConnect")}</p>
-            <p className="text-caption text-fg-tertiary mt-1">{t("overview.nudgeConnectBody")}</p>
-          </div>
-          <Link href="/app/integrations" className="text-caption text-accent hover:underline inline-flex items-center gap-1">
-            {t("common.search")} <ArrowUpRight size={12} />
-          </Link>
-        </motion.div>
-      )}
-
-      {health.dhakaDip.pct < -0.05 && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 surface-2 p-4 flex items-start gap-3">
-          <span className="size-7 rounded-md bg-[var(--risk-medium-soft)] border border-[var(--risk-medium-border)] flex items-center justify-center shrink-0">
-            <AlertTriangle size={14} className="text-[var(--risk-medium)]" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-body text-fg-primary">
-              {locale === "bn"
-                ? `ঢাকার আয় ${(health.dhakaDip.pct * 100).toFixed(1)}% কমেছে — সিঙ্গেল সবচেয়ে বড় ঝুঁকি।`
-                : `Dhaka revenue down ${(health.dhakaDip.pct * 100).toFixed(1)}% — single largest risk.`}
-            </p>
-            <p className="text-caption text-fg-tertiary mt-1">
-              {locale === "bn" ? "অনুমোদন ও কার্যকলাপ স্ক্রিনে বিস্তারিত।" : "Details in Approvals and Activity."}
-            </p>
-          </div>
-          <Link href="/app/insights?focus=ins-1" className="text-caption text-accent hover:underline inline-flex items-center gap-1">
-            {t("common.search")} <ArrowDownRight size={12} className="rotate-45" />
-          </Link>
-        </motion.div>
-      )}
+      <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <MachinesPanel snapshot={snapshot} />
+        <QcSummary />
+      </div>
     </div>
   );
 }
 
-function Metric({
-  label,
-  value,
-  delta,
-  locale,
-  spark,
-  note
-}: {
-  label: string;
-  value: string;
-  delta: number;
-  locale: "en" | "bn";
-  spark?: number[];
-  note?: string;
-}) {
-  const isUp = delta >= 0;
+const MACHINE_TONE: Record<string, "success" | "warning" | "danger" | "neutral"> = { healthy: "success", at_risk: "warning", down: "danger" };
+
+function MachinesPanel({ snapshot }: { snapshot: Resource<SensorSnapshot> }) {
+  const machines = (snapshot.data?.machines ?? []).slice().sort((a, b) => {
+    const rank = (s: string) => (s === "down" ? 0 : s === "at_risk" ? 1 : 2);
+    return rank(a.status) - rank(b.status);
+  });
   return (
-    <div className="surface-2 p-4">
-      <p className="text-caption text-fg-tertiary">{label}</p>
-      <p className="mt-1 text-[28px] leading-[34px] font-semibold tracking-tight">{value}</p>
-      <div className="mt-1.5 flex items-center gap-2">
-        <span
-          className={
-            "inline-flex items-center gap-1 text-caption " +
-            (isUp ? "text-[var(--risk-low)]" : "text-[var(--risk-high)]")
-          }
-        >
-          {isUp ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-          {formatPercent(Math.abs(delta), locale)}
-        </span>
-        {note && <span className="text-caption text-fg-tertiary">{note}</span>}
-      </div>
-      {spark && spark.length > 1 && (
-        <div className="mt-3">
-          <Sparkline values={spark} width={220} height={36} stroke={isUp ? "var(--risk-low)" : "var(--risk-high)"} />
+    <Panel
+      title="Machines"
+      subtitle={snapshot.data ? `From the sensor snapshot · ${snapshot.data.readings.length} readings this tick` : undefined}
+      icon={<Cpu size={14} />}
+      right={<Link href="/app/sensors" className="text-caption text-accent hover:underline inline-flex items-center gap-1">Sensors <ArrowUpRight size={12} /></Link>}
+      flush
+    >
+      {snapshot.loading ? (
+        <div className="p-4 space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-9" />)}</div>
+      ) : machines.length === 0 ? (
+        <p className="p-5 text-caption text-fg-tertiary">{snapshot.error ? errorMessage(snapshot.error) : "No machines are reporting yet."}</p>
+      ) : (
+        <div className="overflow-x-auto max-h-72">
+          <table className="data-table">
+            <thead>
+              <tr><th>Machine</th><th>Status</th><th className="num">Vibration</th><th className="num">Temp</th><th className="num">Duty</th></tr>
+            </thead>
+            <tbody>
+              {machines.map((m) => (
+                <tr key={m.id}>
+                  <td className="font-mono text-fg-primary">{m.id}</td>
+                  <td><Badge tone={MACHINE_TONE[m.status] ?? "neutral"} dot>{m.status.replace("_", " ")}</Badge></td>
+                  <td className="num">{m.vibration.toFixed(1)} mm/s</td>
+                  <td className="num">{m.temperature.toFixed(1)} °C</td>
+                  <td className="num">{Math.round(m.dutyCycle * 100)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
-    </div>
-  );
-}
-
-function greetingFor(t: (k: string, p?: Record<string, string | number>) => string, name: string) {
-  const h = new Date().getHours();
-  if (h < 12) return t("overview.greetingMorning", { name });
-  if (h < 18) return t("overview.greetingAfternoon", { name });
-  return t("overview.greetingEvening", { name });
-}
-
-/** Append a sample to a fixed-length rolling buffer, dropping the oldest. */
-function pushSample(buf: number[], next: number, cap: number): number[] {
-  const seed = Number.isFinite(next) ? next : 0;
-  if (buf.length < cap) return [...buf, seed];
-  return [...buf.slice(1), seed];
-}
-
-function sparkDelta(values: number[]): number | null {
-  if (!values || values.length < 2) return null;
-  const first = values[0];
-  const last = values[values.length - 1];
-  if (first === 0) return null;
-  return (last - first) / Math.abs(first);
-}
-
-function LiveMetric({
-  label,
-  value,
-  delta,
-  spark,
-  locale,
-  note,
-  goodDir = "up",
-  tone = "neutral"
-}: {
-  label: string;
-  value: string;
-  delta: number | null;
-  spark?: number[];
-  locale: "en" | "bn";
-  note?: string;
-  goodDir?: "up" | "down";
-  tone?: "neutral" | "risk";
-}) {
-  const isUp = delta !== null && delta >= 0;
-  const positive = goodDir === "up" ? isUp : !isUp;
-  const deltaColor =
-    tone === "risk"
-      ? "text-[var(--risk-high)]"
-      : delta === null
-      ? "text-fg-tertiary"
-      : positive
-      ? "text-[var(--risk-low)]"
-      : "text-[var(--risk-high)]";
-  return (
-    <div className="surface-2 p-4">
-      <p className="text-caption text-fg-tertiary">{label}</p>
-      <p className="mt-1 text-[28px] leading-[34px] font-semibold tracking-tight">{value}</p>
-      <div className="mt-1.5 flex items-center gap-2">
-        {delta !== null && (
-          <span className={"inline-flex items-center gap-1 text-caption " + deltaColor}>
-            {isUp ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-            {formatPercent(Math.abs(delta), locale)}
-          </span>
-        )}
-        {note && <span className="text-caption text-fg-tertiary">{note}</span>}
-      </div>
-      {spark && spark.length > 1 && (
-        <div className="mt-3">
-          <Sparkline
-            values={spark}
-            width={220}
-            height={36}
-            stroke={positive ? "var(--risk-low)" : "var(--risk-high)"}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Renders the deterministic compressor duty recommendation: current →
- *  recommended duty %, expected kWh saved, rationale, and a deep-link to
- *  the related manual (doc-5 — "Energy spike on Line 4 compressor").
- *  No ML / RL surface here — the headline explicitly states that. */
-function EnergyDutyCard({ rec, locale }: { rec: EnergyDutyTool; locale: "en" | "bn" }) {
-  const { t } = useT();
-  const delta = rec.currentDutyPct - rec.recommendedDutyPct;
-  const tone =
-    rec.score > 0.6 ? "high" : rec.score >= 0.3 ? "medium" : "low";
-  const toneSoft = `risk-${tone}-soft` as const;
-  const toneBorder = `risk-${tone}-border` as const;
-  const toneFg = `risk-${tone}` as const;
-  const rationale = locale === "bn" ? rec.rationaleBn : rec.rationaleEn;
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-tour="energy-duty-card">
-      <div className="surface-2 p-4">
-        <p className="text-caption text-fg-tertiary">{t("overview.energyCurrentDuty")}</p>
-        <p className="mt-1 text-[28px] leading-[34px] font-semibold tracking-tight">
-          {rec.currentDutyPct}%
-        </p>
-        <p className="mt-1 text-caption text-fg-tertiary">{t("overview.energyFloorAvg")}</p>
-      </div>
-      <div className="surface-2 p-4">
-        <p className="text-caption text-fg-tertiary">{t("overview.energyRecommendedDuty")}</p>
-        <p className="mt-1 text-[28px] leading-[34px] font-semibold tracking-tight">
-          {rec.recommendedDutyPct}%
-        </p>
-        <p className="mt-1 text-caption text-fg-tertiary">
-          {delta > 0
-            ? (t("overview.energyTrimBy", { delta }) as string)
-            : (t("overview.energyNoChange") as string)}
-        </p>
-      </div>
-      <div className="surface-2 p-4">
-        <p className="text-caption text-fg-tertiary">{t("overview.energyExpectedSaved")}</p>
-        <p className="mt-1 text-[28px] leading-[34px] font-semibold tracking-tight">
-          {rec.expectedKwhSaved.toFixed(1)}
-        </p>
-        <p className="mt-1 text-caption text-fg-tertiary">
-          {t("overview.energyOverWindow", { window: rec.basedOn.window })}
-        </p>
-      </div>
-
-      <div className="md:col-span-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3 mt-1">
-        <div
-          className="inline-flex items-start gap-2 px-3 py-2 rounded-md border"
-          style={{
-            backgroundColor: `var(--${toneSoft})`,
-            borderColor: `var(--${toneBorder})`
-          }}
-        >
-          <span
-            className="mt-0.5 inline-flex items-center gap-1 text-caption font-medium"
-            style={{ color: `var(--${toneFg})` }}
-          >
-            {t("overview.energyScore", { score: rec.score.toFixed(2) })}
-          </span>
-          <p className="text-caption text-fg-primary">{rationale}</p>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <Link
-            href="/app/ask?q=compressor%20duty%20Line%204"
-            className="text-caption text-accent hover:underline inline-flex items-center gap-1"
-            data-testid="energy-duty-manual-link"
-          >
-            {locale === "bn" ? "Ask: Line 4 কম্প্রেসর ম্যানুয়াল" : "Ask: Line 4 compressor manual"}
-            <ArrowUpRight size={12} />
-          </Link>
-          <Link
-            href="/app/agents"
-            className="text-caption text-fg-tertiary hover:text-fg-primary"
-          >
-            {locale === "bn" ? "এজেন্ট →" : "Run an agent →"}
-          </Link>
-        </div>
-      </div>
-    </div>
+    </Panel>
   );
 }

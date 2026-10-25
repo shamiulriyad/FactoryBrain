@@ -13,7 +13,8 @@ const stageStyles: Record<Stage, string> = {
   done: "text-stage-done bg-stage-done/15 border-stage-done/30",
   logged: "text-stage-logged bg-stage-logged/15 border-stage-logged/30",
   rejected: "text-risk-high bg-risk-high/15 border-risk-high/30",
-  failed: "text-risk-high bg-risk-high/15 border-risk-high/30"
+  failed: "text-risk-high bg-risk-high/15 border-risk-high/30",
+  approved: "text-risk-low bg-risk-low/15 border-risk-low/30"
 };
 
 const riskStyles: Record<RiskTier, string> = {
@@ -83,13 +84,13 @@ const variantStyles: Record<ButtonVariant, string> = {
 };
 
 const sizes: Record<ButtonSize, string> = {
-  sm: "h-7 px-2 text-caption",
-  md: "h-9 px-3 text-body",
-  lg: "h-11 px-4 text-body"
+  sm: "h-8 px-2.5 text-caption",
+  md: "h-9 px-3.5 text-body",
+  lg: "h-11 px-5 text-body"
 };
 
 const base =
-  "inline-flex items-center justify-center gap-1.5 font-medium rounded-md transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap select-none";
+  "inline-flex items-center justify-center gap-1.5 font-medium rounded-[var(--radius-control)] transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap select-none";
 
 export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
     { variant = "secondary", size = "md", className, children, iconLeft, iconRight, style, ...rest },

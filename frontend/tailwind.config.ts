@@ -11,6 +11,8 @@ const config: Config = {
         sidebar: "var(--bg-sidebar)",
         surface: "var(--bg-surface)",
         "surface-2": "var(--bg-surface-2)",
+        "surface-3": "var(--bg-surface-3)",
+        info: "var(--info)",
         glass: "var(--bg-glass)",
         // Borders
         border: {

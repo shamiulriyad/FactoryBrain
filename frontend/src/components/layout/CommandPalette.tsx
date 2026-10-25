@@ -1,36 +1,41 @@
 "use client";
 
+// Ctrl/⌘ K palette: jump to a page or settings section the signed-in role
+// can open, or send the typed text to Ask. It searches navigation only —
+// there is no local copy of factory records to search.
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  CornerDownLeft,
-  FileText,
-  Layers,
-  Settings as SettingsIcon,
-  Search,
-  Sparkles,
-  X as XIcon,
-  Clock
-} from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { CornerDownLeft, MessageSquareText, Search, Settings as SettingsIcon, X as XIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useAppStore } from "@/store/app.store";
 import { useT } from "@/lib/useT";
-import { Input } from "@/components/ui/Input";
+import { hasRole, useAuthStore, type RequiredRole } from "@/lib/auth";
 import { cn } from "@/lib/cn";
-import { searchService, type SearchItem, type SearchKind } from "@/services/search.service";
+import { NAV_GROUPS } from "./nav";
+
+type Item = { id: string; group: string; title: string; hint?: string; href: string; icon: LucideIcon; keywords: string };
+
+const SETTINGS: Array<{ section: string; title: string; hint: string; role: RequiredRole; keywords: string }> = [
+  { section: "advanced", title: "AI & models", hint: "Language model, API keys, embeddings, reindex", role: "Viewer", keywords: "llm openai gemini anthropic key embedding" },
+  { section: "users", title: "Users & roles", hint: "Your access; Admins change roles", role: "Viewer", keywords: "user role admin operator viewer" },
+  { section: "appearance", title: "Appearance", hint: "Theme and language", role: "Viewer", keywords: "theme dark light language bangla" },
+  { section: "profile", title: "Business profile", hint: "Plant name (this browser)", role: "Viewer", keywords: "name city plant" },
+  { section: "dataReset", title: "Reset this browser", hint: "Clear local preferences", role: "Viewer", keywords: "reset clear demo" }
+];
 
 export function CommandPalette() {
   const open = useAppStore((s) => s.commandPaletteOpen);
   const close = useAppStore((s) => s.closeCommandPalette);
   const toggle = useAppStore((s) => s.toggleCommandPalette);
   const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+  const { t } = useT();
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
-  const { t, locale } = useT();
-  const recent = useAppStore((s) => s.recentSearches);
-  const pushRecent = useAppStore((s) => s.pushRecentSearch);
-  const clearRecent = useAppStore((s) => s.clearRecentSearches);
-  const listRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -45,72 +50,85 @@ export function CommandPalette() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, toggle, close]);
 
-  // Reset query + active row on open.
   useEffect(() => {
-    if (open) {
-      setQ("");
-      setActive(0);
-    }
+    if (!open) return;
+    setQ("");
+    setActive(0);
+    setTimeout(() => inputRef.current?.focus(), 0);
   }, [open]);
 
-  const flat = useMemo<SearchItem[]>(() => {
-    if (!q.trim()) return [];
-    void open; // open is intentionally part of deps so the palette re-derives on open.
-    return searchService.search(q, locale);
-  }, [q, locale, open]);
+  const all = useMemo<Item[]>(() => {
+    const pages: Item[] = NAV_GROUPS.flatMap((g) =>
+      g.items
+        .filter((it) => hasRole(user, it.role))
+        .map((it) => ({
+          id: it.href,
+          group: "Pages",
+          title: t(it.labelKey),
+          hint: it.demo ? "Demo data" : t(g.labelKey),
+          href: it.href,
+          icon: it.icon,
+          keywords: `${t(it.labelKey)} ${it.keywords ?? ""}`.toLowerCase()
+        }))
+    );
+    const settings: Item[] = SETTINGS.filter((s) => hasRole(user, s.role)).map((s) => ({
+      id: `settings-${s.section}`,
+      group: "Settings",
+      title: s.title,
+      hint: s.hint,
+      href: `/app/settings?section=${s.section}`,
+      icon: SettingsIcon,
+      keywords: `${s.title} ${s.hint} ${s.keywords}`.toLowerCase()
+    }));
+    return [...pages, ...settings];
+  }, [user, t]);
 
-  const grouped = useMemo(() => searchService.group(flat), [flat]);
+  const results = useMemo<Item[]>(() => {
+    const query = q.trim().toLowerCase();
+    const matches = query ? all.filter((i) => query.split(/\s+/).every((w) => i.keywords.includes(w))) : all;
+    if (!query) return matches;
+    return [
+      ...matches,
+      { id: "ask", group: "Ask", title: `Ask BunonBrain: “${q.trim()}”`, hint: "Search the knowledge base", href: `/app/ask?q=${encodeURIComponent(q.trim())}`, icon: MessageSquareText, keywords: "" }
+    ];
+  }, [q, all]);
 
-  // Flat index across grouped results — used for keyboard nav.
-  const flatForNav = useMemo(() => grouped.flatMap((g) => g.items), [grouped]);
-
-  // Keep `active` within range.
   useEffect(() => {
-    if (active >= flatForNav.length) setActive(0);
-  }, [flatForNav.length, active]);
+    if (active >= results.length) setActive(0);
+  }, [results.length, active]);
 
-  function pick(item: SearchItem) {
-    if (q.trim()) pushRecent(q.trim());
+  useEffect(() => {
+    listRef.current?.querySelector(`[data-index="${active}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [active]);
+
+  function pick(item: Item) {
     router.push(item.href);
     close();
-    setQ("");
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActive((n) => Math.min(flatForNav.length - 1, n + 1));
+      setActive((n) => Math.min(results.length - 1, n + 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActive((n) => Math.max(0, n - 1));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const cur = flatForNav[active];
+      const cur = results[active];
       if (cur) pick(cur);
     }
   }
 
-  // Scroll active row into view.
-  useEffect(() => {
-    if (!listRef.current) return;
-    const el = listRef.current.querySelector(`[data-row-index="${active}"]`) as HTMLElement | null;
-    if (el) el.scrollIntoView({ block: "nearest" });
-  }, [active]);
-
-  // locale is intentional re-trigger signal; suggestions() closes over translations.
-  const suggestions = useMemo(() => { void locale; return searchService.suggestions(locale); }, [locale]);
-  const showEmptyQueryState = !q.trim();
-  const showNoResults = !!q.trim() && flatForNav.length === 0;
-
+  let lastGroup = "";
   return (
     <AnimatePresence>
       {open && (
         <motion.div
-          key="cp"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.18 }}
+          transition={{ duration: 0.15 }}
           className="fixed inset-0 z-50 bg-[var(--bg-overlay)] flex items-start justify-center p-4 pt-16 md:pt-24"
           onClick={close}
         >
@@ -118,285 +136,71 @@ export function CommandPalette() {
             initial={{ opacity: 0, y: -8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            className="glass w-full max-w-xl shadow-glass rounded-md overflow-hidden"
+            transition={{ duration: 0.18 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Search pages"
             onClick={(e) => e.stopPropagation()}
+            className="glass-strong w-full max-w-xl overflow-hidden"
           >
-            <div className="p-3 border-b border-border-subtle">
-              <div className="relative flex items-center gap-2">
-                <Search size={14} className="absolute left-3 text-fg-tertiary pointer-events-none" />
-                <Input
-                  autoFocus
-                  placeholder={t("common.searchHint")}
-                  value={q}
-                  onChange={(e) => {
-                    setQ(e.target.value);
-                    setActive(0);
-                  }}
-                  onKeyDown={onKeyDown}
-                  className="pl-8"
-                  aria-label={t("common.search")}
-                />
-                <kbd className="hidden md:inline mono-pill border border-border-subtle bg-surface-2 px-1.5 py-0.5 rounded-sm text-fg-tertiary">
-                  ⏎
-                </kbd>
-              </div>
-              <p className="mt-2 text-caption text-fg-tertiary">{t("common.banglaHint")}</p>
+            <div className="flex items-center gap-2 px-4 h-12 border-b border-border-subtle">
+              <Search size={16} className="text-fg-tertiary" aria-hidden />
+              <input
+                ref={inputRef}
+                value={q}
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  setActive(0);
+                }}
+                onKeyDown={onKeyDown}
+                placeholder="Go to a page, a setting, or ask a question…"
+                aria-label="Search"
+                aria-controls="cp-results"
+                aria-activedescendant={results[active] ? `cp-${results[active].id}` : undefined}
+                className="flex-1 bg-transparent outline-none text-body text-fg-primary placeholder:text-fg-tertiary"
+              />
+              <button type="button" onClick={close} aria-label="Close search" className="size-7 rounded-md inline-flex items-center justify-center text-fg-tertiary hover:text-fg-primary hover:bg-surface-2">
+                <XIcon size={14} />
+              </button>
             </div>
-
-            <div ref={listRef} className="max-h-[60vh] overflow-y-auto">
-              {showEmptyQueryState && (
-                <EmptyQueryState
-                  recent={recent}
-                  suggestions={suggestions}
-                  onPick={(value) => {
-                    setQ(value);
-                    setActive(0);
-                  }}
-                  onClearRecent={clearRecent}
-                  t={t}
-                />
-              )}
-
-              {showNoResults && <NoResultsState t={t} />}
-
-              {!showEmptyQueryState && !showNoResults && (
-                <ResultsList
-                  grouped={grouped}
-                  active={active}
-                  onPick={pick}
-                  onHover={setActive}
-                  t={t}
-                  locale={locale}
-                  q={q}
-                />
-              )}
-            </div>
-
-            <div className="border-t border-border-subtle px-3 py-2 flex items-center justify-between text-caption text-fg-tertiary">
-              <span className="inline-flex items-center gap-2">
-                <kbd className="mono-pill border border-border-subtle bg-surface-2 px-1 rounded-sm">↑</kbd>
-                <kbd className="mono-pill border border-border-subtle bg-surface-2 px-1 rounded-sm">↓</kbd>
-                navigate
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <kbd className="mono-pill border border-border-subtle bg-surface-2 px-1 rounded-sm">
-                  <CornerDownLeft size={10} className="inline" />
-                </kbd>
-                open
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <kbd className="mono-pill border border-border-subtle bg-surface-2 px-1 rounded-sm">esc</kbd>
-                close
-              </span>
+            <ul id="cp-results" ref={listRef} role="listbox" className="max-h-[60vh] overflow-y-auto py-2">
+              {results.length === 0 && <li className="px-4 py-6 text-center text-caption text-fg-tertiary">No pages match.</li>}
+              {results.map((item, i) => {
+                const header = item.group !== lastGroup;
+                lastGroup = item.group;
+                const Icon = item.icon;
+                return (
+                  <li key={item.id} role="presentation">
+                    {header && <p className="px-4 pt-2 pb-1 eyebrow">{item.group}</p>}
+                    <button
+                      type="button"
+                      id={`cp-${item.id}`}
+                      role="option"
+                      aria-selected={i === active}
+                      data-index={i}
+                      onMouseEnter={() => setActive(i)}
+                      onClick={() => pick(item)}
+                      className={cn("w-full flex items-center gap-3 px-4 py-2 text-left", i === active ? "bg-[var(--accent-soft)]" : "hover:bg-surface-2")}
+                    >
+                      <Icon size={15} className={i === active ? "text-accent" : "text-fg-tertiary"} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-body text-fg-primary truncate">{item.title}</span>
+                        {item.hint && <span className="block text-caption text-fg-tertiary truncate">{item.hint}</span>}
+                      </span>
+                      {i === active && <CornerDownLeft size={13} className="text-fg-tertiary" aria-hidden />}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="px-4 py-2 border-t border-border-subtle flex items-center gap-3 text-[11px] text-fg-tertiary">
+              <span><span className="kbd">↑</span> <span className="kbd">↓</span> move</span>
+              <span><span className="kbd">Enter</span> open</span>
+              <span><span className="kbd">Esc</span> close</span>
             </div>
           </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
   );
-}
-
-function EmptyQueryState({
-  recent,
-  suggestions,
-  onPick,
-  onClearRecent,
-  t
-}: {
-  recent: string[];
-  suggestions: string[];
-  onPick: (q: string) => void;
-  onClearRecent: () => void;
-  t: (k: string) => string;
-}) {
-  return (
-    <div className="p-3 space-y-4">
-      {recent.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-caption text-fg-tertiary inline-flex items-center gap-1.5">
-              <Clock size={12} /> {t("common.recent")}
-            </p>
-            <button
-              type="button"
-              onClick={onClearRecent}
-              className="text-caption text-fg-tertiary hover:text-fg-primary inline-flex items-center gap-1"
-            >
-              <XIcon size={10} /> {t("common.cancel")}
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {recent.map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => onPick(r)}
-                className="h-8 px-3 rounded-md border border-border-subtle bg-surface-2 text-caption text-fg-secondary hover:text-fg-primary hover:border-border-strong transition-colors"
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-      <section>
-        <p className="text-caption text-fg-tertiary mb-2 inline-flex items-center gap-1.5">
-          <Sparkles size={12} /> {t("common.suggestedQueries")}
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-          {suggestions.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => onPick(s)}
-              className="flex items-center gap-2 px-3 py-2 rounded-md border border-border-subtle bg-surface-2 text-caption text-fg-primary hover:border-border-strong transition-colors text-left"
-            >
-              <Search size={12} className="text-fg-tertiary shrink-0" />
-              <span className="truncate">{s}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function NoResultsState({ t }: { t: (k: string) => string }) {
-  return (
-    <div className="p-6 text-center">
-      <p className="text-body text-fg-primary">{t("common.noResults")}</p>
-      <p className="mt-1 text-caption text-fg-tertiary max-w-sm mx-auto">
-        {t("common.noResultsHint")}
-      </p>
-    </div>
-  );
-}
-
-function ResultsList({
-  grouped,
-  active,
-  onPick,
-  t,
-  locale,
-  q,
-  onHover
-}: {
-  grouped: Array<{ kind: SearchKind; items: SearchItem[] }>;
-  active: number;
-  onPick: (it: SearchItem) => void;
-  t: (k: string) => string;
-  locale: "en" | "bn";
-  q: string;
-  onHover: (idx: number) => void;
-}) {
-  let runningIdx = 0;
-  return (
-    <div className="py-1">
-      {grouped.map((g) => (
-        <section key={g.kind} className="py-1">
-          <p className="px-4 py-1.5 text-caption text-fg-tertiary flex items-center gap-1.5 sticky top-0 bg-[var(--bg-surface)]/95 backdrop-blur z-[1]">
-            <KindIcon kind={g.kind} />
-            {t(`search.types.${g.kind}`)}
-            <span className="ml-auto mono-pill bg-surface-2 px-1.5 rounded-sm">
-              {g.items.length}
-            </span>
-          </p>
-          <ul>
-            {g.items.map((it) => {
-              const idx = runningIdx++;
-              const isActive = idx === active;
-              return (
-                <li key={it.id}>
-                  <button
-                    type="button"
-                    data-row-index={idx}
-                    onMouseEnter={() => onHover(idx)}
-                    onClick={() => onPick(it)}
-                    className={cn(
-                      "flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors",
-                      isActive
-                        ? "bg-[var(--accent-soft)] border-l-2 border-[var(--accent)]"
-                        : "border-l-2 border-transparent hover:bg-surface-2"
-                    )}
-                  >
-                    <span className="size-6 rounded-md bg-surface-2 border border-border-subtle flex items-center justify-center text-fg-tertiary shrink-0">
-                      <KindIcon kind={it.kind} small />
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-body text-fg-primary truncate">
-                        <HighlightedText
-                          text={locale === "bn" ? it.titleBn : it.title}
-                          q={q}
-                        />
-                      </div>
-                      <div className="text-caption text-fg-tertiary truncate">
-                        <HighlightedText
-                          text={locale === "bn" ? it.hintBn : it.hint}
-                          q={q}
-                        />
-                      </div>
-                    </div>
-                    <CornerDownLeft
-                      size={12}
-                      className={cn(
-                        "self-center shrink-0",
-                        isActive ? "text-accent" : "text-fg-tertiary opacity-0"
-                      )}
-                    />
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ))}
-    </div>
-  );
-}
-
-function HighlightedText({ text, q }: { text: string; q: string }) {
-  if (!q.trim()) return <>{text}</>;
-  const lower = text.toLowerCase();
-  const needle = q.toLowerCase();
-  const idx = lower.indexOf(needle);
-  if (idx === -1) return <>{text}</>;
-  return (
-    <>
-      {text.slice(0, idx)}
-      <mark className="bg-[var(--accent-soft)] text-accent rounded-sm px-0.5">
-        {text.slice(idx, idx + needle.length)}
-      </mark>
-      {text.slice(idx + needle.length)}
-    </>
-  );
-}
-
-function KindIcon({ kind, small }: { kind: SearchKind; small?: boolean }) {
-  const size = small ? 12 : 12;
-  switch (kind) {
-    case "page":
-      return <Layers size={size} />;
-    case "agent":
-      return <Sparkles size={size} />;
-    case "insight":
-    case "approval":
-      return <Sparkles size={size} />;
-    case "activity":
-      return <Clock size={size} />;
-    case "order":
-    case "buyer":
-    case "supplier":
-    case "compliance":
-    case "process":
-    case "target":
-    case "risk":
-      return <FileText size={size} />;
-    case "integration":
-      return <Layers size={size} />;
-    case "setting":
-      return <SettingsIcon size={size} />;
-    default:
-      return <Search size={size} />;
-  }
 }

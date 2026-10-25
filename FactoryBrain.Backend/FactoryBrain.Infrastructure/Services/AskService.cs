@@ -4,35 +4,33 @@ using FactoryBrain.Domain.Entities;
 using FactoryBrain.Domain.Enums;
 using FactoryBrain.Application.Dtos.Ask;
 using FactoryBrain.Application.Abstractions.Interfaces;
+using FactoryBrain.Application.Settings;
 
 namespace FactoryBrain.Infrastructure.Services;
 
 /// <summary>
 /// Equivalent of <c>src/services/ask.service.ts</c> + the SSE /api/ask handler.
-/// If <c>LLM_PROVIDER</c> + <c>LLM_API_KEY</c> are set, forwards to the model;
-/// otherwise returns the deterministic demo payload assembled from RAG hits +
-/// the agent roster.
+/// When the effective LLM settings (<see cref="IAiSettingsProvider"/>: saved
+/// settings, else the startup configuration) are live, forwards to the model;
+/// otherwise returns the deterministic demo payload assembled from RAG hits.
 /// </summary>
 public sealed class AskService : IAskService
 {
     private readonly IRagService _rag;
-    private readonly IConfiguration _cfg;
+    private readonly IAiSettingsProvider _settings;
     private readonly IHttpClientFactory _http;
     private readonly FactoryBrainDbContext _db;
     private readonly ILogger<AskService> _log;
 
     public AskService(
-        IRagService rag, IConfiguration cfg, IHttpClientFactory http,
+        IRagService rag, IAiSettingsProvider settings, IHttpClientFactory http,
         FactoryBrainDbContext db, ILogger<AskService> log)
-    { _rag = rag; _cfg = cfg; _http = http; _db = db; _log = log; }
+    { _rag = rag; _settings = settings; _http = http; _db = db; _log = log; }
 
     public async Task<AskAnswerResponse> AskAsync(AskRequest req, CancellationToken ct)
     {
-        var provider  = _cfg["LLM_PROVIDER"] ?? Environment.GetEnvironmentVariable("LLM_PROVIDER");
-        var apiKey    = _cfg["LLM_API_KEY"]  ?? Environment.GetEnvironmentVariable("LLM_API_KEY");
-        var model     = _cfg["LLM_MODEL"]    ?? Environment.GetEnvironmentVariable("LLM_MODEL");
-        if (string.IsNullOrWhiteSpace(model) && string.Equals(provider?.Trim(), "openai", StringComparison.OrdinalIgnoreCase))
-            model = "gpt-6-luna";
+        // Read once per request: a settings change applies from the next request on.
+        var llm = (await _settings.GetAsync(ct)).Llm;
 
         var ragHits = await _rag.RetrieveAsync(req.Query, req.Filter, topK: 4, ct: ct);
 
@@ -47,11 +45,11 @@ public sealed class AskService : IAskService
             return NoConfidentSourceAsync(req);
         }
 
-        if (!string.IsNullOrWhiteSpace(provider) && !string.IsNullOrWhiteSpace(apiKey))
+        if (llm.IsLive)
         {
             try
             {
-                return await LiveAsync(req, ragHits, provider!, apiKey!, model!, ct);
+                return await LiveAsync(req, ragHits, llm.Provider!, llm.ApiKey!, llm.EffectiveModel!, ct);
             }
             catch (Exception ex)
             {
@@ -66,7 +64,8 @@ public sealed class AskService : IAskService
                 _log.LogWarning(
                     "Live ask failed, falling back to demo: status={Status} providerErrorType={ErrorType} providerErrorCode={ErrorCode}.",
                     status, ex.GetType().Name, ex.Message is null ? "unknown" : "see-status");
-                return DemoAsync(req, ragHits, "Live model unavailable, showing demo answer.", ct);
+                return DemoAsync(req, ragHits,
+                    "The language model call failed, so this is a demo answer built from the retrieved passages, not a generated one.", ct);
             }
         }
         return DemoAsync(req, ragHits, null, ct);
@@ -96,7 +95,9 @@ public sealed class AskService : IAskService
                 "low"),
             CreatedAt: DateTime.UtcNow,
             Confidence: 0.0,
-            RagHits: Array.Empty<AskRagHit>());
+            RagHits: Array.Empty<AskRagHit>(),
+            Mode: AskModes.NoSource,
+            Warning: null);
     }
 
     /// <summary>
@@ -116,19 +117,22 @@ public sealed class AskService : IAskService
             Url: string.Empty
         )).ToList();
 
+    /// <summary>
+    /// Answer used when no language model produced one. It only points at
+    /// what retrieval found: no factors, figures or advice are invented
+    /// (this used to return a fixed "−12% efficiency" factor and a staffing
+    /// recommendation for every question), and the confidence is 0 because
+    /// nothing was generated.
+    /// </summary>
     private AskAnswerResponse DemoAsync(AskRequest req, IReadOnlyList<AskRagHit> hits, string? warning, CancellationToken ct)
     {
-        var factors = new List<AskFactor>
-        {
-            new("Line efficiency vs target", "লক্ষ্যের বিপরীতে লাইনের দক্ষতা", "−12%", "−১২%"),
-            new("Helper allocation", "সহায়ক বরাদ্দ", "watch", "নজরে")
-        };
+        var top = hits[0];
         var rec = new AskRecommendation(
-            "Open the line board and review the bottleneck",
-            "লাইন বোর্ড খুলুন এবং বটলনেক পর্যালোচনা করুন",
-            "Pull helpers from Finishing → Sewing, validate SAH against target.",
-            "ফিনিশিং থেকে সেলাইতে সহায়ক পুনর্বণ্টন করুন।",
-            "medium");
+            "Read the cited passages",
+            "উদ্ধৃত অংশগুলো পড়ুন",
+            "Open the sources listed with this answer. Configure a language model in Settings to get generated answers.",
+            "এই উত্তরের সাথে দেওয়া সূত্রগুলো খুলুন। তৈরি করা উত্তর পেতে Settings-এ একটি ভাষা মডেল কনফিগার করুন।",
+            "low");
 
         var evidence = new List<EvidenceRefDto>();
         if (hits.Count > 0)
@@ -139,21 +143,23 @@ public sealed class AskService : IAskService
         return new AskAnswerResponse(
             TaskId: $"ask-{Guid.NewGuid():N}",
             Analyzed: evidence.Select(e => new AskAnalyzedDomain(e.Domain, e.Count, null)).ToList(),
-            Finding: $"Demo answer for: {req.Query}",
-            FindingBn: $"ডেমো উত্তর: {req.Query}",
-            Factors: factors,
+            Finding: $"Demo mode: no language model answered this question. The most relevant passage is \"{top.Title}\"; {hits.Count} source(s) are cited below.",
+            FindingBn: $"ডেমো মোড: কোনো ভাষা মডেল এই প্রশ্নের উত্তর দেয়নি। সবচেয়ে প্রাসঙ্গিক অংশ \"{top.Title}\"; নিচে {hits.Count}টি সূত্র দেওয়া হলো।",
+            Factors: Array.Empty<AskFactor>(),
             Evidence: evidence,
             Citations: BuildCitations(hits),
             Recommendation: rec,
             CreatedAt: DateTime.UtcNow,
-            Confidence: 0.7,
-            RagHits: hits.ToList()
+            Confidence: 0.0,
+            RagHits: hits.ToList(),
+            Mode: AskModes.Demo,
+            Warning: warning
         );
     }
 
     private async Task<AskAnswerResponse> LiveAsync(
         AskRequest req, IReadOnlyList<AskRagHit> hits,
-        string provider, string apiKey, string model, CancellationToken ct)
+        string provider, SecretValue apiKey, string model, CancellationToken ct)
     {
         var prompt = string.Join("\n\n", new[]
         {
@@ -174,25 +180,35 @@ public sealed class AskService : IAskService
         };
 
         string finding = raw;
+        string? findingBn = null;
+        string? warning = null;
         try
         {
             var m = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(MatchJson(raw));
             finding = m.GetProperty("finding").GetString() ?? finding;
+            if (m.TryGetProperty("findingBn", out var bn) && bn.ValueKind == System.Text.Json.JsonValueKind.String)
+                findingBn = bn.GetString();
         }
-        catch { /* swallow, keep raw as finding */ }
+        catch
+        {
+            // Keep the raw text, but say so instead of presenting it as a structured answer.
+            warning = "The model replied in an unexpected format; its raw text is shown.";
+        }
 
         return new AskAnswerResponse(
             TaskId: $"live-{Guid.NewGuid():N}",
             Analyzed: Array.Empty<AskAnalyzedDomain>(),
             Finding: finding,
-            FindingBn: finding,
+            FindingBn: string.IsNullOrWhiteSpace(findingBn) ? finding : findingBn,
             Factors: new List<AskFactor>(),
             Evidence: new List<EvidenceRefDto>(),
             Citations: BuildCitations(hits),
             Recommendation: new AskRecommendation("Review the raw answer", "কাঁচা উত্তর পর্যালোচনা", raw.Length > 240 ? raw[..240] : raw, raw.Length > 240 ? raw[..240] : raw, "low"),
             CreatedAt: DateTime.UtcNow,
             Confidence: 0.65,
-            RagHits: hits.ToList());
+            RagHits: hits.ToList(),
+            Mode: AskModes.Live,
+            Warning: warning);
     }
 
     private static string MatchJson(string raw)
@@ -201,11 +217,11 @@ public sealed class AskService : IAskService
         return s >= 0 && e > s ? raw.Substring(s, e - s + 1) : raw;
     }
 
-    private async Task<string> OpenAiAsync(string apiKey, string model, string prompt, CancellationToken ct)
+    private async Task<string> OpenAiAsync(SecretValue apiKey, string model, string prompt, CancellationToken ct)
     {
         using var http = _http.CreateClient();
-        http.DefaultRequestHeaders.Authorization = new("Bearer", apiKey);
-        using var resp = await http.PostAsync("https://api.openai.com/v1/chat/completions",
+        http.DefaultRequestHeaders.Authorization = new("Bearer", apiKey.Reveal());
+        using var resp = await http.PostAsync(OpenAiBaseUrl(_settings.Startup.LlmBaseUrl) + "/v1/chat/completions",
             new StringContent(System.Text.Json.JsonSerializer.Serialize(new
             {
                 model,
@@ -228,10 +244,10 @@ public sealed class AskService : IAskService
         return j.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "";
     }
 
-    private async Task<string> AnthropicAsync(string apiKey, string model, string prompt, CancellationToken ct)
+    private async Task<string> AnthropicAsync(SecretValue apiKey, string model, string prompt, CancellationToken ct)
     {
         using var http = _http.CreateClient();
-        http.DefaultRequestHeaders.TryAddWithoutValidation("x-api-key", apiKey);
+        http.DefaultRequestHeaders.TryAddWithoutValidation("x-api-key", apiKey.Reveal());
         http.DefaultRequestHeaders.TryAddWithoutValidation("anthropic-version", "2023-06-01");
         using var resp = await http.PostAsync("https://api.anthropic.com/v1/messages",
             new StringContent(System.Text.Json.JsonSerializer.Serialize(new
@@ -255,10 +271,12 @@ public sealed class AskService : IAskService
         return j.GetProperty("content")[0].GetProperty("text").GetString() ?? "";
     }
 
-    private async Task<string> GeminiAsync(string apiKey, string model, string prompt, CancellationToken ct)
+    private async Task<string> GeminiAsync(SecretValue apiKey, string model, string prompt, CancellationToken ct)
     {
         using var http = _http.CreateClient();
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}";
+        // The key goes in a header, never the URL: request URLs are logged by HttpClient.
+        http.DefaultRequestHeaders.TryAddWithoutValidation("x-goog-api-key", apiKey.Reveal());
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(model)}:generateContent";
         using var resp = await http.PostAsync(url,
             new StringContent(System.Text.Json.JsonSerializer.Serialize(new
             {
@@ -279,6 +297,23 @@ public sealed class AskService : IAskService
         }
         var j = await resp.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(cancellationToken: ct);
         return j.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString() ?? "";
+    }
+
+    public const string DefaultOpenAiBaseUrl = "https://api.openai.com";
+
+    /// <summary>
+    /// Base URL of the OpenAI-compatible chat endpoint: <c>LLM_BASE_URL</c>
+    /// from the startup configuration (scheme + host[:port], no path) or
+    /// api.openai.com. A value that is not an absolute http(s) URL is ignored
+    /// rather than trusted.
+    /// </summary>
+    public static string OpenAiBaseUrl(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return DefaultOpenAiBaseUrl;
+        return Uri.TryCreate(raw.Trim(), UriKind.Absolute, out var uri)
+               && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)
+            ? uri.GetLeftPart(UriPartial.Authority)
+            : DefaultOpenAiBaseUrl;
     }
 
     /// <summary>

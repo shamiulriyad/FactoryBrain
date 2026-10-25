@@ -4,6 +4,7 @@ using FactoryBrain.Domain.Enums;
 using FactoryBrain.Application.Dtos.Agents;
 using FactoryBrain.Application.Dtos.Vision;
 using FactoryBrain.Application.Abstractions.Interfaces;
+using FactoryBrain.Application.Settings;
 using Microsoft.EntityFrameworkCore;
 
 namespace FactoryBrain.Infrastructure.Services;
@@ -12,20 +13,24 @@ namespace FactoryBrain.Infrastructure.Services;
 /// Mirrors <c>src/app/api/agents/[agentId]/run/route.ts</c>. Demo path
 /// produces a deterministic Insight + a secondary energy Insight when the
 /// maintenance or manager agent scores above 0.3 on the duty tool.
+/// Agent runs don't call a language model yet (audit D5); when the effective
+/// LLM settings are live the response says so instead of implying otherwise.
 /// </summary>
 public sealed class AgentRunService : IAgentRunService
 {
     private readonly FactoryBrainDbContext _db;
     private readonly IFloorAlertService _alerts;
     private readonly ISensorService _sensors;
-    private readonly IConfiguration _cfg;
-    private readonly IHttpClientFactory _http;
+    private readonly IAiSettingsProvider _settings;
     private readonly ILogger<AgentRunService> _log;
+
+    public const string ModelNotUsedWarning =
+        "Agent runs are rule-based demo runs: the configured language model is not used for agent findings yet.";
 
     public AgentRunService(
         FactoryBrainDbContext db, IFloorAlertService alerts, ISensorService sensors,
-        IConfiguration cfg, IHttpClientFactory http, ILogger<AgentRunService> log)
-    { _db = db; _alerts = alerts; _sensors = sensors; _cfg = cfg; _http = http; _log = log; }
+        IAiSettingsProvider settings, ILogger<AgentRunService> log)
+    { _db = db; _alerts = alerts; _sensors = sensors; _settings = settings; _log = log; }
 
     public async Task<AgentRunResponse> RunAsync(string agentId, CancellationToken ct)
     {
@@ -34,6 +39,7 @@ public sealed class AgentRunService : IAgentRunService
 
         var persist = await PersistRunAsync(agent, warning: null, source: "demo", ct);
         var energy  = await MaybeRaiseEnergyInsightAsync(agent, ct);
+        var llm     = (await _settings.GetAsync(ct)).Llm;
 
         return new AgentRunResponse(
             Source: "demo",
@@ -44,7 +50,7 @@ public sealed class AgentRunService : IAgentRunService
             FloorAlertId: persist.FloorAlertId,
             ActivityEventId: persist.ActivityEventId,
             EnergyInsight: energy,
-            Warning: null
+            Warning: llm.IsLive ? ModelNotUsedWarning : null
         );
     }
 

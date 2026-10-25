@@ -15,6 +15,13 @@ namespace FactoryBrain.Api.Middleware;
 /// <c>[AdminToken]</c> attribute, so the two paths are byte-identical
 /// for callers using only <c>X-Admin-Token</c>.
 /// </summary>
+/// <remarks>
+/// RETIRED. Not registered in <c>Program.cs</c> and not applied to any
+/// action. Kept only because this remediation milestone does not delete
+/// tracked files; marked obsolete-as-error so it cannot be wired back in.
+/// Delete in a follow-up.
+/// </remarks>
+[Obsolete("Retired: admin access is the Admin role policy (AuthPolicies.Admin). The shared X-Admin-Token path and its Development bypass must not be re-enabled.", error: true)]
 public sealed class AdminTokenVerifier
 {
     /// <summary>Outcome of the legacy token check.</summary>

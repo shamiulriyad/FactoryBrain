@@ -23,8 +23,26 @@ public record AskAnswerResponse(
     AskRecommendation Recommendation,
     DateTime CreatedAt,
     double Confidence,
-    IReadOnlyList<AskRagHit> RagHits
+    IReadOnlyList<AskRagHit> RagHits,
+    /// <summary>
+    /// How this answer was produced. <c>live</c>: a language model answered
+    /// from the retrieved passages. <c>demo</c>: no model was configured or
+    /// the model call failed; the text is a fixed template over the
+    /// retrieved passages, not a generated answer. <c>no_source</c>: nothing
+    /// relevant was retrieved, so no model was called. Clients must only
+    /// present an answer as live when this is <c>live</c>.
+    /// </summary>
+    string Mode,
+    /// <summary>Why the answer is not live when a model was configured (e.g. the provider call failed).</summary>
+    string? Warning
 );
+
+public static class AskModes
+{
+    public const string Live     = "live";
+    public const string Demo     = "demo";
+    public const string NoSource = "no_source";
+}
 
 public record AskAnalyzedDomain(string Domain, int Count, Dictionary<string, object>? Filter);
 

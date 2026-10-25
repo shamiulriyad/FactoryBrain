@@ -85,20 +85,28 @@ export function WorkerMascot({ size = 220 }: { size?: number }) {
           transition={reduce ? undefined : { duration: 2.4, repeat: Infinity, ease: "linear" }}
         />
 
-        {/* Cloth as a soft wave */}
-        <motion.path
+        {/* Cloth as a soft wave. Native SVG <animate>: framer-motion 11
+            can't interpolate `d` between path strings and writes
+            d="undefined" (a console error and a flickering cloth). */}
+        <path
           d="M82 118 C 96 114, 110 122, 124 116"
           fill="none"
           stroke="#F3E6C8"
           strokeWidth="4"
           strokeLinecap="round"
-          animate={reduce ? undefined : { d: [
-            "M82 118 C 96 114, 110 122, 124 116",
-            "M82 118 C 96 122, 110 114, 124 120",
-            "M82 118 C 96 114, 110 122, 124 116"
-          ] }}
-          transition={reduce ? undefined : { duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
-        />
+        >
+          {!reduce && (
+            <animate
+              attributeName="d"
+              values="M82 118 C 96 114, 110 122, 124 116;M82 118 C 96 122, 110 114, 124 120;M82 118 C 96 114, 110 122, 124 116"
+              dur="3.2s"
+              repeatCount="indefinite"
+              calcMode="spline"
+              keyTimes="0;0.5;1"
+              keySplines="0.42 0 0.58 1;0.42 0 0.58 1"
+            />
+          )}
+        </path>
 
         {/* Operator */}
         <motion.g

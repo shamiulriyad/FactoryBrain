@@ -8,5 +8,7 @@ public enum Stage
     Done,
     Logged,
     Rejected,
-    Failed
+    Failed,
+    /// <summary>Authorised by a human reviewer; not yet executed. Appended so stored integer values are unchanged.</summary>
+    Approved
 }

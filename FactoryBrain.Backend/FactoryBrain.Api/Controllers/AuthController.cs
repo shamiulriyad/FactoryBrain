@@ -34,18 +34,88 @@ namespace FactoryBrain.Api.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _auth;
+    private readonly IAccountService _accounts;
     private readonly ITokenService _tokens;
     private readonly IHostEnvironment _env;
     private readonly ILogger<AuthController> _log;
 
     public AuthController(
         IAuthService auth,
+        IAccountService accounts,
         ITokenService tokens,
         IHostEnvironment env,
         ILogger<AuthController> log)
     {
-        _auth = auth; _tokens = tokens; _env = env; _log = log;
+        _auth = auth; _accounts = accounts; _tokens = tokens; _env = env; _log = log;
     }
+
+    /// <summary>GET /api/auth/options — what the sign-in page may offer (no secrets).</summary>
+    [HttpGet("options")]
+    [AllowAnonymous]
+    public IActionResult Options() => Ok(new AuthOptionsResponse(
+        _accounts.SelfRegistrationEnabled, PasswordReset: true, FactoryBrain.Application.Validation.PasswordRules.MinLength));
+
+    /// <summary>
+    /// POST /api/auth/register — self-service sign-up. The account is always
+    /// a <c>Viewer</c> (an Admin grants more in Settings → Users). On success
+    /// the user is signed in, exactly like login. 403 when
+    /// <c>ALLOW_SELF_REGISTRATION=false</c>; 409 when the email is taken.
+    /// </summary>
+    [HttpPost("register")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Account)]
+    public async Task<IActionResult> Register([FromBody] RegisterRequest body, CancellationToken ct)
+    {
+        var result = await _accounts.RegisterAsync(body.Email, body.Password, TraceId(), ct);
+        switch (result.Outcome)
+        {
+            case RegisterOutcome.Disabled:
+                return Problem(statusCode: StatusCodes.Status403Forbidden, title: "Sign-up is disabled",
+                    detail: "Accounts are created by an administrator.");
+            case RegisterOutcome.EmailTaken:
+                return Problem(statusCode: StatusCodes.Status409Conflict, title: "Email already registered",
+                    detail: "An account with this email already exists. Sign in, or reset the password.");
+        }
+        var login = result.Login!;
+        if (login.Kind != AuthOutcome.Success) return UnauthorizedProblem("Invalid email or password.");
+        StampRefreshCookie(login.RefreshTokenRaw!);
+        return StatusCode(StatusCodes.Status201Created, new AuthResponse(login.AccessToken!, login.ExpiresInSeconds, login.User!));
+    }
+
+    /// <summary>
+    /// POST /api/auth/forgot-password — always 202 with the same body, whether
+    /// or not the email has an account (no account discovery). When it does, a
+    /// one-time link valid for 30 minutes is emailed in the background.
+    /// </summary>
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Account)]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest body, CancellationToken ct)
+    {
+        await _accounts.RequestPasswordResetAsync(body.Email, TraceId(), ct);
+        Response.Headers["Cache-Control"] = "no-store";
+        return Accepted(new { message = "If an account exists for that email, a reset link has been sent. It is valid for 30 minutes." });
+    }
+
+    /// <summary>
+    /// POST /api/auth/reset-password — sets a new password with the token from
+    /// the emailed link. The link works once; every other session of the user
+    /// is signed out. 400 with one generic message for any bad/old/used link.
+    /// </summary>
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Account)]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest body, CancellationToken ct)
+    {
+        var outcome = await _accounts.ResetPasswordAsync(body.Token, body.Password, TraceId(), ct);
+        Response.Headers["Cache-Control"] = "no-store";
+        return outcome == ResetOutcome.Reset
+            ? Ok(new { message = "Your password has been changed. Sign in with the new password." })
+            : Problem(statusCode: StatusCodes.Status400BadRequest, title: "Reset link invalid or expired",
+                detail: "This reset link is invalid, has expired, or was already used. Ask for a new one.");
+    }
+
+    private string TraceId() => Activity.Current?.Id ?? HttpContext.TraceIdentifier;
 
     /// <summary>
     /// POST /api/auth/login. Body is validated by the global
@@ -55,7 +125,8 @@ public class AuthController : ControllerBase
     /// return 401 with byte-identical bodies.
     /// </summary>
     [HttpPost("login")]
-    [EnableRateLimiting("login")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Login)]
     public async Task<IActionResult> Login([FromBody] LoginRequest body, CancellationToken ct)
     {
         var result = await _auth.LoginAsync(body.Email, body.Password, ct);
@@ -76,6 +147,7 @@ public class AuthController : ControllerBase
     /// 401 + clears the cookie.
     /// </summary>
     [HttpPost("refresh")]
+    [AllowAnonymous]
     public async Task<IActionResult> Refresh(CancellationToken ct)
     {
         if (!Request.Cookies.TryGetValue(AuthCookieSettings.CookieName, out var presented)
@@ -108,6 +180,7 @@ public class AuthController : ControllerBase
     /// to special-case it.
     /// </summary>
     [HttpPost("logout")]
+    [AllowAnonymous]
     public async Task<IActionResult> Logout(CancellationToken ct)
     {
         if (Request.Cookies.TryGetValue(AuthCookieSettings.CookieName, out var presented)

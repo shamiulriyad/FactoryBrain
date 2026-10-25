@@ -15,6 +15,7 @@ import { ErrorState, SimulatedPill } from "@/components/ui/Status";
 import { useT } from "@/lib/useT";
 import { formatRelative } from "@/lib/format";
 import type { FloorAlertT } from "@/services/sensors.schemas";
+import { apiFetch } from "@/lib/auth";
 
 type Severity = FloorAlertT["severity"];
 
@@ -33,7 +34,7 @@ export function FloorAlertsPanel() {
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch("/api/floor-alerts", { cache: "no-store", signal });
+      const res = await apiFetch("/api/floor-alerts", { cache: "no-store", signal });
       if (!res.ok) throw new Error(`list_${res.status}`);
       const data = (await res.json()) as { alerts: FloorAlertT[] };
       setAlerts(data.alerts ?? []);
@@ -62,7 +63,7 @@ export function FloorAlertsPanel() {
   const markRead = useCallback(async (id: string, read: boolean) => {
     setPendingId(id);
     try {
-      const res = await fetch(`/api/floor-alerts/${encodeURIComponent(id)}`, {
+      const res = await apiFetch(`/api/floor-alerts/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ read })

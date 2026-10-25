@@ -1,66 +1,83 @@
 using FactoryBrain.Application.Dtos.Settings;
 using FactoryBrain.Api.Middleware;
+using FactoryBrain.Application.Abstractions;
 using FactoryBrain.Application.Abstractions.Interfaces;
+using FactoryBrain.Infrastructure.Rag;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FactoryBrain.Api.Controllers;
 
+/// <summary>
+/// LLM and embedding settings. Reads are open to any signed-in user and never
+/// include a key; writes are Admin-only, persisted in the database (keys
+/// encrypted), audited, and take effect from the next request.
+/// <list type="bullet">
+///   <item><c>GET/POST /api/settings/llm</c></item>
+///   <item><c>GET /api/settings/embedding</c>, <c>POST /api/settings/embedding/plan</c>,
+///   <c>POST /api/settings/embedding</c> (a provider / model / dimension change
+///   needs the <c>planId</c> of a reviewed plan as <c>confirmPlanId</c>).</item>
+/// </list>
+/// </summary>
 [ApiController]
 [Route("api/settings")]
 public class SettingsController : ControllerBase
 {
-    private readonly ILlmSettingsService _svc;
+    private readonly ILlmSettingsService _llm;
+    private readonly EmbeddingReindexService _embedding;
 
-    public SettingsController(ILlmSettingsService svc)
-    { _svc = svc; }
+    public SettingsController(ILlmSettingsService llm, EmbeddingReindexService embedding)
+    { _llm = llm; _embedding = embedding; }
 
-    // Step 48b — GET/POST /api/settings/llm are served by THIS controller.
-    // The Next.js rewrite in `next.config.mjs` forwards every /api/:path*
-    // request to http://localhost:5000/api/:path* (the ASP.NET Core host),
-    // so this is the actual endpoint the smoke probe (`frontend/scripts/smoke.mjs`
-    // assertNoStore) hits. The matching legacy route handler at
-    // `src/_legacy_api/settings/llm/route.ts` is intentionally unreachable
-    // (the `_legacy_api` underscore prefix prevents Next.js from mounting
-    // it as an App Router route).
-    //
-    // Every response — 200 Ok, 400 BadRequest, and any future error path —
-    // must set `Cache-Control: no-store` so the secret-bearing LLM status
-    // is never stored by browsers, CDNs, or the Next.js data cache. We
-    // stamp the header on HttpResponse.Headers up front, BEFORE reading the
-    // service state or running validation, so the header is present on
-    // every code path that returns from this controller. The middleware
-    // `NoStoreMiddleware` already covers request-level failures (e.g. an
-    // invalid JSON body that short-circuits before this method runs), but
-    // we keep the explicit stamp here so the route is self-documenting and
-    // doesn't rely on pipeline ordering. The response body and status
-    // codes are unchanged.
+    // Every response from this controller is stamped no-store up front, so
+    // settings status is never cached by browsers, CDNs or the Next.js data
+    // cache (NoStoreMiddleware covers failures that short-circuit earlier).
     private void StampNoStore()
         => Response.Headers["Cache-Control"] = "no-store";
 
     [HttpGet("llm")]
-    public IActionResult Get()
+    public async Task<IActionResult> Get(CancellationToken ct)
     {
         StampNoStore();
-        return Ok(_svc.ReadStatus());
+        return Ok(await _llm.ReadStatusAsync(ct));
     }
 
     [HttpPost("llm")]
-    [AdminToken]
-    [Authorize(Policy = AuthPolicies.AdminOrLegacyToken)]
-    public IActionResult Post([FromBody] LlmSettingsRequest body)
+    [Authorize(Policy = AuthPolicies.Admin)]
+    public async Task<IActionResult> Post([FromBody] LlmSettingsRequest body, CancellationToken ct)
     {
         StampNoStore();
-        // Step 51: body validation runs in the global FluentValidationFilter
-        // (registered in Program.cs); on failure it short-circuits with a
-        // 400 ValidationProblemDetails (RFC 7807 with an errors map) before
-        // this method runs. The controller's catch (ArgumentException ex)
-        // still emits the canonical {error: "invalid_provider"} envelope for
-        // the runtime check below — both shapes coexist on this route.
-        try { return Ok(_svc.Update(body)); }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
+        // Body validation runs in the global FluentValidationFilter first
+        // (400 ValidationProblemDetails). The service re-checks the provider
+        // and answers with the canonical {error: "invalid_provider"} envelope.
+        var result = await _llm.UpdateAsync(body, SettingsResults.Actor(User), SettingsResults.TraceId(HttpContext), ct);
+        if (result.Outcome == SettingsWriteOutcome.Invalid && result.Errors?.ContainsKey("provider") == true)
+            return BadRequest(new { error = "invalid_provider" });
+        return SettingsResults.ToResult(this, result);
+    }
+
+    [HttpGet("embedding")]
+    public async Task<IActionResult> GetEmbedding(CancellationToken ct)
+    {
+        StampNoStore();
+        return Ok(await _embedding.StatusAsync(ct));
+    }
+
+    /// <summary>What a change would do — documents, chunks, dimensions, cost. Makes no provider call.</summary>
+    [HttpPost("embedding/plan")]
+    [Authorize(Policy = AuthPolicies.Admin)]
+    public async Task<IActionResult> PlanEmbedding([FromBody] EmbeddingPlanRequest? body, CancellationToken ct)
+    {
+        StampNoStore();
+        return SettingsResults.ToResult(this, await _embedding.PlanAsync(body, ct));
+    }
+
+    [HttpPost("embedding")]
+    [Authorize(Policy = AuthPolicies.Admin)]
+    public async Task<IActionResult> PostEmbedding([FromBody] EmbeddingSettingsRequest body, CancellationToken ct)
+    {
+        StampNoStore();
+        return SettingsResults.ToResult(this,
+            await _embedding.UpdateSettingsAsync(body, SettingsResults.Actor(User), SettingsResults.TraceId(HttpContext), ct));
     }
 }

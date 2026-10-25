@@ -1,401 +1,250 @@
 "use client";
 
-// /app/qc — dedicated QC defects & rework page.
-//
-// Real GET /api/qc/defects API (no mock-only component state). Renders
-// the same panel as the Overview slot, plus a full operations table for
-// every (operation × line) cell so QA leads can drill down past the
-// top-5. Flag issue still POSTs /api/qc/flag, which persists via
-// insightService.upsertCustom() and surfaces in /app/insights.
-//
-// Demo data only — Simulated chip stays visible.
+// /app/qc — QC defects & rework from GET /api/qc/defects. "Flag issue"
+// POSTs /api/qc/flag (Operator), which stores an insight on the server.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Flag, RefreshCw } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
-import { ErrorState, SkeletonRows, SimulatedPill } from "@/components/ui/Status";
+import { Badge } from "@/components/ui/Badge";
+import { Callout } from "@/components/ui/Callout";
+import { Modal } from "@/components/ui/Modal";
+import { Field, TextArea } from "@/components/ui/Field";
+import { ErrorState, SkeletonRows } from "@/components/ui/Status";
 import { useToast } from "@/components/ui/Toast";
 import { useT } from "@/lib/useT";
 import { cn } from "@/lib/cn";
 import { formatRelative } from "@/lib/format";
 import { qcOperationLabel, qcRateColor, QC_RATE_HIGH_THRESHOLD, QC_RATE_MEDIUM_THRESHOLD } from "@/lib/qc";
 import { useFactoryBrainLiveStore } from "@/store/factoryBrain.live.store";
-import type {
-  QcResponse,
-  QcOperationStats,
-  QcTopOperation
-} from "@/services/qc.defects.server";
+import { useResource, announceDataChanged } from "@/lib/useResource";
+import { apiJson, errorMessage } from "@/lib/api";
+import { canOperate, useAuthStore } from "@/lib/auth";
+import type { QcResponse, QcOperationStats } from "@/services/qc.defects.server";
+import type { QcFlagRequest, QcFlagResponse } from "@/services/contracts";
 
 type SortKey = "operation" | "line" | "defect" | "rework";
+type FlagTarget = { operation: string; lineId: string; defectRatePct: number; reworkRatePct: number };
+const NOTE_MAX = 280;
 
-const rateColor = qcRateColor;
-
-function rateBg(rate: number): string {
-  if (rate >= QC_RATE_HIGH_THRESHOLD) return "bg-risk-high/15 border-risk-high/30 text-[var(--risk-high)]";
-  if (rate >= QC_RATE_MEDIUM_THRESHOLD) return "bg-risk-medium/15 border-risk-medium/30 text-[var(--risk-medium)]";
-  return "bg-risk-low/15 border-risk-low/30 text-[var(--risk-low)]";
+function rateTone(rate: number): "danger" | "warning" | "success" {
+  if (rate >= QC_RATE_HIGH_THRESHOLD) return "danger";
+  if (rate >= QC_RATE_MEDIUM_THRESHOLD) return "warning";
+  return "success";
 }
-
-function defectRatePct(c: QcOperationStats): number {
-  return c.totals.inspected > 0 ? (c.totals.defects / c.totals.inspected) * 100 : 0;
-}
-function reworkRatePct(c: QcOperationStats): number {
-  return c.totals.inspected > 0 ? (c.totals.rework / c.totals.inspected) * 100 : 0;
-}
-
-const operationLabel = qcOperationLabel;
+const defectRatePct = (c: QcOperationStats) => (c.totals.inspected > 0 ? (c.totals.defects / c.totals.inspected) * 100 : 0);
+const reworkRatePct = (c: QcOperationStats) => (c.totals.inspected > 0 ? (c.totals.rework / c.totals.inspected) * 100 : 0);
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export default function QcPage() {
   const { t, locale } = useT();
   const toast = useToast();
-
-  const [data, setData] = useState<QcResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const operator = canOperate(useAuthStore((s) => s.user));
+  const qc = useResource<QcResponse>("/api/qc/defects");
   const [sortKey, setSortKey] = useState<SortKey>("defect");
-  const [flagging, setFlagging] = useState<string | null>(null);
+  const [target, setTarget] = useState<FlagTarget | null>(null);
+  const [note, setNote] = useState("");
+  const [flagging, setFlagging] = useState(false);
+  const [flagError, setFlagError] = useState<string | null>(null);
 
+  // Refresh when the overview's sensor snapshot moves the simulation.
   const simTick = useFactoryBrainLiveStore((s) => s.snapshot?.tick);
-  const inflight = useRef<AbortController | null>(null);
-
-  const refresh = useCallback(async () => {
-    if (inflight.current) inflight.current.abort();
-    const ctrl = new AbortController();
-    inflight.current = ctrl;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/qc/defects", {
-        method: "GET",
-        cache: "no-store",
-        signal: ctrl.signal
-      });
-      if (!res.ok) throw new Error(`qc_${res.status}`);
-      setData((await res.json()) as QcResponse);
-    } catch (e) {
-      if ((e as Error).name !== "AbortError") {
-        setError((e as Error).message ?? "qc_failed");
-      }
-    } finally {
-      if (inflight.current === ctrl) inflight.current = null;
-      setLoading(false);
-    }
-  }, []);
-
+  const lastTick = useRef(simTick);
   useEffect(() => {
-    void refresh();
-    return () => {
-      if (inflight.current) inflight.current.abort();
-    };
-  }, [refresh]);
-
-  useEffect(() => {
-    if (simTick === undefined) return;
-    void refresh();
+    if (simTick === undefined || simTick === lastTick.current) return;
+    lastTick.current = simTick;
+    void qc.reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [simTick]);
 
+  const data = qc.data;
   const cells = useMemo(() => {
     if (!data) return [];
-    const list = [...data.operations];
-    list.sort((a, b) => {
+    return [...data.operations].sort((a, b) => {
       if (sortKey === "operation") return a.operation.localeCompare(b.operation);
       if (sortKey === "line") return a.lineId.localeCompare(b.lineId);
       if (sortKey === "defect") return defectRatePct(b) - defectRatePct(a);
       return reworkRatePct(b) - reworkRatePct(a);
     });
-    return list;
   }, [data, sortKey]);
 
-  const flagIssue = useCallback(
-    async (row: QcTopOperation | QcOperationStats) => {
-      const key = `${row.operation}|${row.lineId}`;
-      setFlagging(key);
-      try {
-        const res = await fetch("/api/qc/flag", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            operation: row.operation,
-            lineId: row.lineId,
-            defectRatePct:
-              "defectRatePct" in row ? row.defectRatePct : defectRatePct(row as QcOperationStats),
-            reworkRatePct:
-              "reworkRatePct" in row ? row.reworkRatePct : reworkRatePct(row as QcOperationStats)
-          }),
-          cache: "no-store"
-        });
-        if (!res.ok) throw new Error(`flag_${res.status}`);
-        toast.push({
-          title: t("qc.flagToastTitle") as string,
-          description: `${operationLabel(row.operation)} · ${row.lineId} · ${t("qc.flagToastHref") as string}`,
-          ttlMs: 5000
-        });
-      } catch (e) {
-        toast.push({
-          title: t("qc.flagFailedTitle") as string,
-          description: (e as Error).message ?? "flag_failed",
-          ttlMs: 4000
-        });
-      } finally {
-        setFlagging(null);
-      }
-    },
-    [t, toast]
-  );
+  function openFlag(row: FlagTarget) {
+    setTarget(row);
+    setNote("");
+    setFlagError(null);
+  }
 
-  const headerRight = (
-    <div className="flex items-center gap-2">
-      {data?.meta?.simulated && <SimulatedPill label={t("qc.simulatedChip") as string} testId="qc-page-simulated-pill" />}
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={refresh}
-        disabled={loading}
-        aria-label={t("qc.refreshAria")}
-      >
-        <RefreshCw size={14} className={cn(loading && "animate-spin")} />
+  async function submitFlag() {
+    if (!target || flagging) return;
+    setFlagging(true);
+    setFlagError(null);
+    const body: QcFlagRequest = {
+      operation: target.operation,
+      lineId: target.lineId,
+      defectRatePct: Math.min(100, round2(target.defectRatePct)),
+      reworkRatePct: Math.min(100, round2(target.reworkRatePct)),
+      ...(note.trim() ? { note: note.trim() } : {})
+    };
+    try {
+      const res = await apiJson<QcFlagResponse>("/api/qc/flag", { method: "POST", body });
+      toast.push({ title: t("qc.flagToastTitle"), description: `${qcOperationLabel(target.operation)} · ${target.lineId} · insight ${res.insightId}` });
+      announceDataChanged();
+      setTarget(null);
+    } catch (e) {
+      setFlagError(errorMessage(e));
+    } finally {
+      setFlagging(false);
+    }
+  }
+
+  const FlagButton = ({ row, testId, iconOnly }: { row: FlagTarget; testId: string; iconOnly?: boolean }) =>
+    operator ? (
+      <Button variant="secondary" size="sm" onClick={() => openFlag(row)} data-testid={testId} aria-label={t("qc.flagAria", { op: row.operation, line: row.lineId })}>
+        <Flag size={12} /> {!iconOnly && t("qc.flagIssue")}
       </Button>
-    </div>
-  );
-
-  // --- Render -------------------------------------------------------------
-
-  const tableBody = (() => {
-    if (error && !data) {
-      return (
-        <ErrorState
-          title={t("qc.loadFailed") as string}
-          body={t("qc.loadFailedBody") as string}
-          detail={error}
-          retryLabel={t("qc.retry") as string}
-          onRetry={refresh}
-        />
-      );
-    }
-    if (loading && !data) {
-      return <SkeletonRows rows={8} />;
-    }
-    if (!data) return null;
-
-    return (
-      <div data-testid="qc-page-table" data-simulated={data.meta.simulated ? "true" : "false"}>
-        {/* Top-5 by defect + rework quick view */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
-          <Panel title={t("qc.topDefect")} subtitle={t("qc.topDefectSubtitle")}>
-            <ul role="list" className="space-y-2">
-              {data.topByDefectRate.map((row) => {
-                const key = `${row.operation}|${row.lineId}`;
-                const flagBusy = flagging === key;
-                return (
-                  <li
-                    key={`d-${key}`}
-                    className="surface-2 p-3 rounded-md border border-border-subtle flex items-center justify-between gap-2"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-body text-fg-primary truncate">
-                        {operationLabel(row.operation)} · {row.lineId}
-                      </p>
-                      <p className={cn("text-caption tabular-nums", rateColor(row.defectRatePct))}>
-                        {t("qc.defectPct", { pct: row.defectRatePct.toFixed(2) })}
-                      </p>
-                    </div>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => void flagIssue(row)}
-                      disabled={flagBusy}
-                      data-testid={`qc-flag-top-defect-${row.operation}-${row.lineId}`}
-                    >
-                      <Flag size={12} /> {t("qc.flagIssue")}
-                    </Button>
-                  </li>
-                );
-              })}
-            </ul>
-          </Panel>
-          <Panel title={t("qc.topRework")} subtitle={t("qc.topReworkSubtitle")}>
-            <ul role="list" className="space-y-2">
-              {data.topByReworkRate.map((row) => {
-                const key = `${row.operation}|${row.lineId}`;
-                const flagBusy = flagging === key;
-                return (
-                  <li
-                    key={`r-${key}`}
-                    className="surface-2 p-3 rounded-md border border-border-subtle flex items-center justify-between gap-2"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-body text-fg-primary truncate">
-                        {operationLabel(row.operation)} · {row.lineId}
-                      </p>
-                      <p className={cn("text-caption tabular-nums", rateColor(row.reworkRatePct))}>
-                        {t("qc.reworkPct", { pct: row.reworkRatePct.toFixed(2) })}
-                      </p>
-                    </div>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => void flagIssue(row)}
-                      disabled={flagBusy}
-                      data-testid={`qc-flag-top-rework-${row.operation}-${row.lineId}`}
-                    >
-                      <Flag size={12} /> {t("qc.flagIssue")}
-                    </Button>
-                  </li>
-                );
-              })}
-            </ul>
-          </Panel>
-        </div>
-
-        {/* Full grid */}
-        <Panel
-          title={t("qc.fullGrid")}
-          subtitle={t("qc.fullGridSubtitle")}
-          right={
-            <div className="flex items-center gap-1">
-              <span className="mono-pill text-fg-tertiary mr-1 hidden sm:inline">{t("qc.sortBy")}</span>
-              <div className="inline-flex surface-2 rounded-md border border-border-subtle p-0.5">
-                {(["operation", "line", "defect", "rework"] as SortKey[]).map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => setSortKey(k)}
-                    className={cn(
-                      "h-7 px-2 rounded-sm text-caption mono-pill",
-                      sortKey === k
-                        ? "bg-accent text-[var(--accent-fg-on-bg)]"
-                        : "text-fg-secondary"
-                    )}
-                    aria-pressed={sortKey === k}
-                  >
-                    {k === "operation"
-                      ? t("qc.colOp")
-                      : k === "line"
-                      ? t("qc.colLine")
-                      : k === "defect"
-                      ? t("qc.colDefect")
-                      : t("qc.colRework")}
-                  </button>
-                ))}
-              </div>
-            </div>
-          }
-        >
-          <div className="overflow-x-auto">
-            <table className="w-full text-caption" data-testid="qc-full-grid">
-              <thead>
-                <tr className="text-fg-tertiary">
-                  <th className="text-left font-medium py-2 pr-3">{t("qc.colOp")}</th>
-                  <th className="text-left font-medium py-2 pr-3">{t("qc.colLine")}</th>
-                  <th className="text-left font-medium py-2 pr-3">{t("qc.colInspected")}</th>
-                  <th className="text-right font-medium py-2 pr-3">{t("qc.colDefects")}</th>
-                  <th className="text-right font-medium py-2 pr-3">{t("qc.colMajor")}</th>
-                  <th className="text-right font-medium py-2 pr-3">{t("qc.colRework")}</th>
-                  <th className="text-right font-medium py-2 pr-3">{t("qc.colDefectRate")}</th>
-                  <th className="text-right font-medium py-2">{t("qc.colReworkRate")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cells.map((c) => {
-                  const key = `${c.operation}|${c.lineId}`;
-                  const dRate = defectRatePct(c);
-                  const rRate = reworkRatePct(c);
-                  const flagBusy = flagging === key;
-                  return (
-                    <tr
-                      key={key}
-                      className="border-t border-border-subtle hover:bg-surface-2/60"
-                      data-testid={`qc-grid-row-${c.operation}-${c.lineId}`}
-                    >
-                      <td className="py-2 pr-3 align-middle text-body text-fg-primary">
-                        {operationLabel(c.operation)}
-                      </td>
-                      <td className="py-2 pr-3 align-middle mono-pill text-fg-tertiary">
-                        {c.lineId}
-                      </td>
-                      <td className="py-2 pr-3 align-middle tabular-nums text-fg-secondary">
-                        {c.totals.inspected.toLocaleString(locale)}
-                      </td>
-                      <td className="py-2 pr-3 align-middle tabular-nums text-fg-secondary text-right">
-                        {c.totals.defects.toLocaleString(locale)}
-                      </td>
-                      <td className="py-2 pr-3 align-middle tabular-nums text-fg-secondary text-right">
-                        {c.totals.major.toLocaleString(locale)}
-                      </td>
-                      <td className="py-2 pr-3 align-middle tabular-nums text-fg-secondary text-right">
-                        {c.totals.rework.toLocaleString(locale)}
-                      </td>
-                      <td className="py-2 pr-3 align-middle text-right">
-                        <span
-                          className={cn(
-                            "mono-pill inline-flex items-center h-6 px-2 rounded-sm border",
-                            rateBg(dRate)
-                          )}
-                        >
-                          {dRate.toFixed(2)}%
-                        </span>
-                      </td>
-                      <td className="py-2 align-middle text-right">
-                        <span
-                          className={cn(
-                            "mono-pill inline-flex items-center h-6 px-2 rounded-sm border",
-                            rateBg(rRate)
-                          )}
-                        >
-                          {rRate.toFixed(2)}%
-                        </span>
-                      </td>
-                      <td className="py-2 align-middle text-right">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() =>
-                            void flagIssue({
-                              operation: c.operation,
-                              lineId: c.lineId,
-                              defectRatePct: dRate,
-                              reworkRatePct: rRate
-                            })
-                          }
-                          disabled={flagBusy}
-                          data-testid={`qc-flag-grid-${c.operation}-${c.lineId}`}
-                          aria-label={t("qc.flagAria", { op: c.operation, line: c.lineId })}
-                        >
-                          <Flag size={12} />
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-3 text-caption text-fg-tertiary">
-            {data.meta.notes}
-          </p>
-          {data.meta.generatedAt && (
-            <p className="mt-1 text-caption text-fg-tertiary">
-              {t("qc.generated", { rel: formatRelative(data.meta.generatedAt, locale as "en" | "bn") })}
-            </p>
-          )}
-        </Panel>
-      </div>
-    );
-  })();
+    ) : null;
 
   return (
-    <div className="px-6 md:px-8 py-6 max-w-5xl mx-auto" data-tour="qc">
-      <div className="flex items-end justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-display font-semibold tracking-tight">{t("qc.cardTitle")}</h1>
-          <p className="mt-1 text-caption text-fg-tertiary">{t("qc.pageSubtitle")}</p>
-        </div>
-        {headerRight}
+    <div className="page" data-tour="qc">
+      <PageHeader
+        eyebrow="Operations"
+        title={t("qc.cardTitle")}
+        description={t("qc.pageSubtitle")}
+        meta={data?.meta.simulated ? <span title={data.meta.source} data-testid="qc-page-simulated-pill"><Badge tone="accent" dot>{t("qc.simulatedChip")}</Badge></span> : null}
+        actions={
+          <Button variant="secondary" size="sm" onClick={() => void qc.reload()} disabled={qc.refreshing} aria-label={t("qc.refreshAria")}>
+            <RefreshCw size={13} className={cn(qc.refreshing && "animate-spin")} /> Refresh
+          </Button>
+        }
+      />
+
+      {!operator && <Callout tone="info" className="mt-5">Flagging an issue needs the Operator or Admin role.</Callout>}
+
+      <div className="mt-5">
+        {qc.error && !data ? (
+          <div className="surface">
+            <ErrorState title={t("qc.loadFailed")} body={t("qc.loadFailedBody")} detail={errorMessage(qc.error)} retryLabel={t("qc.retry")} onRetry={() => void qc.reload()} />
+          </div>
+        ) : qc.loading ? (
+          <SkeletonRows rows={8} />
+        ) : data ? (
+          <div data-testid="qc-page-table" data-simulated={data.meta.simulated ? "true" : "false"} className="space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {(
+                [
+                  { key: "defect", title: t("qc.topDefect"), subtitle: t("qc.topDefectSubtitle"), rows: data.topByDefectRate, rate: (r: (typeof data.topByDefectRate)[number]) => r.defectRatePct, label: (p: string) => t("qc.defectPct", { pct: p }) },
+                  { key: "rework", title: t("qc.topRework"), subtitle: t("qc.topReworkSubtitle"), rows: data.topByReworkRate, rate: (r: (typeof data.topByReworkRate)[number]) => r.reworkRatePct, label: (p: string) => t("qc.reworkPct", { pct: p }) }
+                ] as const
+              ).map((list) => (
+                <Panel key={list.key} title={list.title} subtitle={list.subtitle}>
+                  <ul className="space-y-2">
+                    {list.rows.map((row) => (
+                      <li key={`${list.key}-${row.operation}-${row.lineId}`} className="surface-2 p-3 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-body text-fg-primary truncate">{qcOperationLabel(row.operation)} <span className="font-mono text-[12px] text-fg-tertiary">· {row.lineId}</span></p>
+                          <p className={cn("text-caption tabular-nums font-medium", qcRateColor(list.rate(row)))}>{list.label(list.rate(row).toFixed(2))}</p>
+                        </div>
+                        <FlagButton row={row} testId={`qc-flag-top-${list.key}-${row.operation}-${row.lineId}`} />
+                      </li>
+                    ))}
+                  </ul>
+                </Panel>
+              ))}
+            </div>
+
+            <Panel
+              title={t("qc.fullGrid")}
+              subtitle={t("qc.fullGridSubtitle")}
+              flush
+              right={
+                <div className="inline-flex rounded-[var(--radius-control)] border border-border-subtle p-0.5 bg-surface-2" role="group" aria-label={t("qc.sortBy")}>
+                  {(["operation", "line", "defect", "rework"] as SortKey[]).map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setSortKey(k)}
+                      aria-pressed={sortKey === k}
+                      className={cn("h-7 px-2.5 rounded-md text-caption", sortKey === k ? "bg-[var(--bg-surface)] text-fg-primary shadow-sm" : "text-fg-secondary hover:text-fg-primary")}
+                    >
+                      {k === "operation" ? t("qc.colOp") : k === "line" ? t("qc.colLine") : k === "defect" ? t("qc.colDefect") : t("qc.colRework")}
+                    </button>
+                  ))}
+                </div>
+              }
+            >
+              <div className="overflow-x-auto">
+                <table className="data-table" data-testid="qc-full-grid">
+                  <thead>
+                    <tr>
+                      <th>{t("qc.colOp")}</th>
+                      <th>{t("qc.colLine")}</th>
+                      <th className="num">{t("qc.colInspected")}</th>
+                      <th className="num">{t("qc.colDefects")}</th>
+                      <th className="num">{t("qc.colMajor")}</th>
+                      <th className="num">{t("qc.colRework")}</th>
+                      <th className="num">{t("qc.colDefectRate")}</th>
+                      <th className="num">{t("qc.colReworkRate")}</th>
+                      {operator && <th><span className="sr-only">Actions</span></th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cells.map((c) => {
+                      const d = defectRatePct(c);
+                      const r = reworkRatePct(c);
+                      return (
+                        <tr key={`${c.operation}|${c.lineId}`} data-testid={`qc-grid-row-${c.operation}-${c.lineId}`}>
+                          <td className="text-fg-primary font-medium">{qcOperationLabel(c.operation)}</td>
+                          <td className="font-mono text-[12px]">{c.lineId}</td>
+                          <td className="num">{c.totals.inspected.toLocaleString(locale)}</td>
+                          <td className="num">{c.totals.defects.toLocaleString(locale)}</td>
+                          <td className="num">{c.totals.major.toLocaleString(locale)}</td>
+                          <td className="num">{c.totals.rework.toLocaleString(locale)}</td>
+                          <td className="num"><Badge tone={rateTone(d)}>{d.toFixed(2)}%</Badge></td>
+                          <td className="num"><Badge tone={rateTone(r)}>{r.toFixed(2)}%</Badge></td>
+                          {operator && (
+                            <td className="num">
+                              <FlagButton row={{ operation: c.operation, lineId: c.lineId, defectRatePct: d, reworkRatePct: r }} testId={`qc-flag-grid-${c.operation}-${c.lineId}`} iconOnly />
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="px-4 py-3 border-t border-border-subtle text-caption text-fg-tertiary">
+                {data.meta.notes}
+                {data.meta.generatedAt && ` · ${t("qc.generated", { rel: formatRelative(data.meta.generatedAt, locale) })}`}
+              </p>
+            </Panel>
+          </div>
+        ) : null}
       </div>
 
-      <div className="mt-6">{tableBody}</div>
+      <Modal
+        open={!!target}
+        onClose={() => !flagging && setTarget(null)}
+        locked={flagging}
+        title={t("qc.flagIssue")}
+        description={target ? `${qcOperationLabel(target.operation)} · ${target.lineId} · defect ${target.defectRatePct.toFixed(2)}% · rework ${target.reworkRatePct.toFixed(2)}%` : undefined}
+        testId="qc-flag-dialog"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setTarget(null)} disabled={flagging}>Cancel</Button>
+            <Button variant="primary" onClick={() => void submitFlag()} disabled={flagging || note.length > NOTE_MAX} data-testid="qc-flag-submit">
+              <Flag size={13} /> {flagging ? "Flagging…" : "Flag for review"}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-caption text-fg-secondary mb-3">Creates an insight on the server for the QA team to review.</p>
+        <Field label="Note (optional)" hint={`${note.length}/${NOTE_MAX}`} error={note.length > NOTE_MAX ? `At most ${NOTE_MAX} characters.` : null}>
+          {(p) => <TextArea id={p.id} aria-describedby={p.describedBy} rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What should QA look at?" />}
+        </Field>
+        {flagError && <Callout tone="danger" className="mt-3" title={t("qc.flagFailedTitle")}>{flagError}</Callout>}
+      </Modal>
     </div>
   );
 }

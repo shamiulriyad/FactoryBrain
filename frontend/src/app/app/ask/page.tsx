@@ -1,543 +1,427 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
+  AlertTriangle,
   ArrowUp,
-  Loader2,
-  Database,
+  CheckCircle2,
+  Clock,
+  Copy,
   FileText,
   Lightbulb,
-  AlertTriangle,
-  CheckCircle2,
-  Copy,
+  Loader2,
   RefreshCw,
-  BookmarkPlus,
-  Sparkles,
-  X,
-  Clock,
   RotateCcw,
-  UserCircle2
+  Search,
+  SlidersHorizontal,
+  Trash2
 } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
 import { useT } from "@/lib/useT";
-import { askService } from "@/services/ask.service";
-import { evidenceService } from "@/services/evidence.service";
-import { riskService } from "@/services/risk.service";
-import { insightService } from "@/services/insight.service";
-import { activityService } from "@/services/activity.service";
-import { agentService } from "@/services/agent.service";
-import { useBusinessStore } from "@/store/business.store";
-import { Panel } from "@/components/ui/Panel";
 import { Button } from "@/components/ui/Button";
-import { RiskPill } from "@/components/ui/StatusPill";
-import { EvidenceBlock } from "@/components/evidence/EvidenceBlock";
-import { Tooltip } from "@/components/ui/Tooltip";
-import { motionTokens } from "@/lib/motion";
-import { cn } from "@/lib/cn";
+import { Badge, RISK_TONE } from "@/components/ui/Badge";
+import { Callout } from "@/components/ui/Callout";
+import { FilterSelect } from "@/components/ui/Field";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { AgentAvatar, AGENT_PALETTE, AGENT_GLYPH, type AgentGlyph } from "@/components/agents/AgentAvatar";
-import type { StreamChunk, AskAnswer, RiskTier } from "@/services/types";
+import { EvidenceBlock } from "@/components/evidence/EvidenceBlock";
+import { cn } from "@/lib/cn";
 import { useAskStore, type AskRecord } from "@/store/ask.store";
+import { useAuthStore } from "@/lib/auth";
+import { apiJson, errorMessage, isApiError } from "@/lib/api";
+import { useResource } from "@/lib/useResource";
+import { askModeLabel, resolveAskMode, shouldShowConfidence, type AskMode } from "@/lib/askMode";
+import { RAG_CATEGORIES, RAG_DEPARTMENTS, type AskRagHit, type AskRequest, type LlmStatus } from "@/services/contracts";
+import type { AskAnswer } from "@/services/types";
 
-type Block = {
-  type: "analyzed" | "finding" | "factors" | "evidence" | "recommendation" | "done";
-  data: any;
-};
+type Answer = AskAnswer & { ragHits?: AskRagHit[] };
+type Block = AskRecord["blocks"][number];
+type Department = (typeof RAG_DEPARTMENTS)[number];
+type Category = (typeof RAG_CATEGORIES)[number];
+
+const MAX_QUERY = 2000;
+const SUGGESTIONS_EN = [
+  "Needle breakage procedure",
+  "AQL 1.5 sampling plan for normal inspection",
+  "Which line is at risk of missing today's target and why?",
+  "How do I calibrate the buttonhole machine?"
+];
+const SUGGESTIONS_BN = ["সুই ভাঙলে কী করতে হবে?", "এই সপ্তাহে কোন মেশিনে রক্ষণাবেক্ষণ দরকার?"];
+
+/** Turn an API answer into the blocks the page (and the history) renders. */
+function toBlocks(json: Answer, mode: AskMode): Block[] {
+  return [
+    { type: "analyzed", data: json.analyzed ?? [] },
+    { type: "finding", data: { en: json.finding, bn: json.findingBn || json.finding } },
+    ...(json.factors?.length ? [{ type: "factors" as const, data: json.factors }] : []),
+    ...(json.citations?.length ? [{ type: "citations" as const, data: json.citations }] : []),
+    ...(json.evidence?.length ? [{ type: "evidence" as const, data: json.evidence }] : []),
+    { type: "recommendation", data: json.recommendation },
+    { type: "done", data: { confidence: shouldShowConfidence(mode) ? json.confidence : null, ragHits: json.ragHits ?? [] } }
+  ];
+}
 
 export default function AskPage() {
   const { t, locale } = useT();
-  const router = useRouter();
+  const search = useSearchParams();
+  const user = useAuthStore((s) => s.user);
   const [query, setQuery] = useState("");
-  const [streaming, setStreaming] = useState(false);
+  const [asked, setAsked] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [blocks, setBlocks] = useState<Block[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [source, setSource] = useState<"demo" | "live">("demo");
+  const [error, setError] = useState<{ title: string; body: string } | null>(null);
+  const [source, setSource] = useState<AskMode>("demo");
   const [notice, setNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [agentNote, setAgentNote] = useState<{ agentId: string; agentName: string } | null>(null);
+  const [department, setDepartment] = useState("");
+  const [category, setCategory] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
-  const currentIdRef = useRef<string | null>(null);
-  const policy = riskService.read();
-  const history = useAskStore((s) => s.history);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const llm = useResource<LlmStatus>("/api/settings/llm");
+
+  // History is kept on this device only, and only the signed-in user's own.
+  const allHistory = useAskStore((s) => s.history);
   const pushHistory = useAskStore((s) => s.push);
-  const selectedAgentId = useBusinessStore((s) => s.selectedAgentId);
-  const setSelectedAgent = useBusinessStore((s) => s.setSelectedAgent);
-  const agents = useMemo(() => agentService.list(), []);
+  const removeHistory = useAskStore((s) => s.remove);
+  const history = useMemo(() => allHistory.filter((r) => r.userId === user?.id), [allHistory, user?.id]);
 
-  const suggestions = askService.suggestions();
-  const half = Math.ceil(suggestions.length / 2);
-  const enSuggestions = suggestions.slice(0, half);
-  const bnSuggestions = suggestions.slice(half);
-  const selectedAgent = selectedAgentId ? agentService.get(selectedAgentId) ?? null : null;
-  const selectedPalette = selectedAgent ? AGENT_PALETTE[selectedAgent.glyph as AgentGlyph] : null;
-  const search = useSearchParams();
-
-  // Prefill from Overview energy-duty / JUDGES deep links (?q=...).
   useEffect(() => {
     const q = search?.get("q");
-    if (q && !query) setQuery(q);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (q) setQuery(q.slice(0, MAX_QUERY));
   }, [search]);
 
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: "smooth" });
-  }, [blocks.length]);
+  }, [blocks.length, loading]);
 
   async function submit(q?: string) {
     const finalQ = (q ?? query).trim();
-    if (!finalQ || streaming) return;
+    if (!finalQ || loading) return;
     setQuery(finalQ);
+    setAsked(finalQ);
     setBlocks([]);
     setError(null);
     setNotice(null);
-    setStreaming(true);
-    const id = `ask-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    currentIdRef.current = id;
-    try {
-      const pack = askService.buildContextPack(finalQ, selectedAgentId);
-      const res = await fetch("/api/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: finalQ, agentId: selectedAgentId ?? undefined })
-      });
-      if (!res.ok) throw new Error(`ask failed ${res.status}`);
-      const contentType = res.headers.get("content-type") ?? "";
-      if (contentType.includes("event-stream")) {
-        const reader = res.body!.getReader();
-        const decoder = new TextDecoder();
-        let buf = "";
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const events = buf.split("\n\n");
-          buf = events.pop() ?? "";
-          for (const ev of events) {
-            if (ev.startsWith("event: end")) continue;
-            if (ev.startsWith("event: notice")) {
-              const dataLine = ev.split("\n").find((l) => l.startsWith("data: "));
-              if (dataLine) {
-                try {
-                  const n = JSON.parse(dataLine.slice(6));
-                  setNotice(n.warning ?? "Live model unavailable, showing demo answer.");
-                } catch {/* ignore */}
-              }
-              continue;
-            }
-            if (ev.startsWith("event: agent")) {
-              const dataLine = ev.split("\n").find((l) => l.startsWith("data: "));
-              if (dataLine) {
-                try {
-                  const n = JSON.parse(dataLine.slice(6));
-                  setAgentNote({ agentId: n.agentId, agentName: n.agentName });
-                } catch {/* ignore */}
-              }
-              continue;
-            }
-            const dataLine = ev.split("\n").find((l) => l.startsWith("data: "));
-            if (!dataLine) continue;
-            try {
-              const chunk: StreamChunk = JSON.parse(dataLine.slice(6));
-              applyChunk(chunk);
-            } catch {
-              // ignore
-            }
-          }
-        }
-        // The mock SSE always means demo source.
-        setSource("demo");
-      } else {
-        // JSON — live slice response shape (AskAnswer)
-        const json = (await res.json()) as AskAnswer;
-        setSource("live");
-        setBlocks([
-          { type: "analyzed", data: json.analyzed ?? [] },
-          { type: "finding", data: { en: json.finding, bn: json.findingBn || json.finding } },
-          ...(json.factors?.length ? [{ type: "factors" as const, data: json.factors }] : []),
-          ...(json.evidence?.length ? [{ type: "evidence" as const, data: json.evidence }] : []),
-          { type: "recommendation", data: json.recommendation },
-          { type: "done", data: { confidence: json.confidence } }
-        ]);
-      }
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setStreaming(false);
-      // Persist to history.
-      setBlocks((latest) => {
-        const record: AskRecord = {
-          id,
-          query: finalQ,
-          locale,
-          source,
-          blocks: latest,
-          isoDate: new Date().toISOString()
-        };
-        pushHistory(record);
-        return latest;
-      });
-      currentIdRef.current = null;
+    setLoading(true);
+    const body: AskRequest = { query: finalQ };
+    if (department || category) {
+      body.filter = {
+        ...(department ? { department: department as Department } : {}),
+        ...(category ? { category: category as Category } : {})
+      };
     }
-  }
-
-  function applyChunk(chunk: StreamChunk) {
-    if (chunk.type === "block") {
-      const payload = chunk.payload;
-      if (payload.kind === "analyzed") {
-        setBlocks((arr) => [...arr, { type: "analyzed", data: payload.items }]);
-      } else if (payload.kind === "finding") {
-        setBlocks((arr) => [...arr, { type: "finding", data: { en: payload.en, bn: payload.bn } }]);
-      }
-    } else if (chunk.type === "factor") {
-      setBlocks((arr) => [...arr, { type: "factors", data: chunk.payload }]);
-    } else if (chunk.type === "evidence") {
-      setBlocks((arr) => [...arr, { type: "evidence", data: chunk.payload }]);
-    } else if (chunk.type === "recommendation") {
-      setBlocks((arr) => [...arr, { type: "recommendation", data: chunk.payload }]);
-    } else if (chunk.type === "done") {
-      setBlocks((arr) => [...arr, { type: "done", data: chunk.payload }]);
+    try {
+      const json = await apiJson<Answer>("/api/ask", { method: "POST", body, timeoutMs: 90_000 });
+      // Only the API's explicit `mode` decides whether this is shown as live.
+      const mode = resolveAskMode(json);
+      const next = toBlocks(json, mode);
+      setSource(mode);
+      setBlocks(next);
+      if (json.warning) setNotice(json.warning);
+      pushHistory({
+        id: json.taskId || `ask-${Date.now().toString(36)}`,
+        userId: user?.id,
+        query: finalQ,
+        locale,
+        source: mode,
+        blocks: next,
+        isoDate: new Date().toISOString()
+      });
+    } catch (e) {
+      if (isApiError(e) && e.kind === "rate_limited") setError({ title: "Too many questions", body: e.message });
+      else if (isApiError(e) && e.kind === "validation") setError({ title: "Question not accepted", body: e.message });
+      else if (isApiError(e) && (e.kind === "unavailable" || e.kind === "server")) setError({ title: "The answer service is unavailable", body: `${e.message} Your question was not answered; try again shortly.` });
+      else setError({ title: "No answer", body: errorMessage(e) });
+    } finally {
+      setLoading(false);
     }
   }
 
   function clear() {
     setBlocks([]);
     setQuery("");
+    setAsked(null);
     setError(null);
     setNotice(null);
-    setAgentNote(null);
+    inputRef.current?.focus();
   }
 
   function copyAnswer() {
     const text = blocks
-      .filter((b) => b.type === "finding" || b.type === "recommendation")
       .map((b) => {
         if (b.type === "finding") return locale === "bn" ? b.data.bn : b.data.en;
-        if (b.type === "recommendation") {
-          return `[${b.data.riskTier}] ${locale === "bn" ? b.data.titleBn : b.data.title} — ${locale === "bn" ? b.data.actionBn : b.data.action}`;
-        }
+        if (b.type === "recommendation") return `[${b.data.riskTier}] ${locale === "bn" ? b.data.titleBn : b.data.title} — ${locale === "bn" ? b.data.actionBn : b.data.action}`;
+        if (b.type === "citations") return "Sources:\n" + b.data.map((c: { title: string }) => `- ${c.title}`).join("\n");
         return "";
       })
+      .filter(Boolean)
       .join("\n\n");
-    if (!text) return;
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(() => {
+    if (!text || !navigator.clipboard) return;
+    navigator.clipboard.writeText(text).then(
+      () => {
         setCopied(true);
         setTimeout(() => setCopied(false), 1600);
-      });
-    }
-  }
-
-  function saveAsInsight() {
-    if (!blocks.length || !query) return;
-    const finding = blocks.find((b) => b.type === "finding");
-    const rec = blocks.find((b) => b.type === "recommendation");
-    if (!rec) return;
-    const id = `ins-ask-${Date.now().toString(36)}`;
-    insightService.upsertCustom?.({
-      id,
-      agentId: selectedAgentId ?? "manager-agent",
-      agentLabel: selectedAgentId ? (agentService.get(selectedAgentId)?.name ?? "Manager Orchestrator") : "Manager Orchestrator",
-      title: query,
-      titleBn: query,
-      finding: finding?.data?.en ?? "",
-      findingBn: finding?.data?.bn ?? "",
-      recommendation: rec.data,
-      confidence: 0.7
-    });
-    activityService.push({
-      actor: "user",
-      actorLabel: "You",
-      verb: "saved an answer as an insight",
-      verbBn: "উত্তর অন্তর্দৃষ্টি হিসেবে সংরক্ষণ",
-      target: query,
-      targetBn: query,
-      isoDate: new Date().toISOString()
-    });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1800);
+      },
+      () => undefined
+    );
   }
 
   function loadFromHistory(rec: AskRecord) {
     setQuery(rec.query);
+    setAsked(rec.query);
     setBlocks(rec.blocks);
     setSource(rec.source);
     setError(null);
     setNotice(null);
   }
 
+  const done = blocks.some((b) => b.type === "done");
+  const filterCount = (department ? 1 : 0) + (category ? 1 : 0);
+
   return (
     <div className="flex flex-col h-full" data-tour="ask">
-      <div className="px-6 md:px-8 py-5 max-w-3xl mx-auto w-full flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-display font-semibold tracking-tight">{t("ask.title")}</h1>
-          {selectedAgent && (
-            <p
-              className="mt-1 text-caption inline-flex items-center gap-1.5"
-              style={{ color: selectedPalette?.strong }}
-            >
-              <UserCircle2 size={12} />
-              Asking {locale === "bn" ? selectedAgent.nameBn : selectedAgent.name}
+      <div className="border-b border-border-subtle bg-[var(--bg-surface)]">
+        <div className="max-w-3xl mx-auto w-full px-4 md:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-[20px] leading-[28px] font-semibold tracking-tight">{t("ask.title")}</h1>
+            <p className="text-caption text-fg-tertiary">
+              Answers come from the documents in the{" "}
+              <Link href="/app/knowledge" className="text-accent hover:underline">knowledge base</Link>.{" "}
+              {llm.data ? (llm.data.mode === "live" ? `A language model (${llm.data.provider}) writes the answer from the retrieved passages.` : "No language model is configured, so answers are a fixed template over the retrieved passages.") : null}
             </p>
-          )}
-        </div>
-        <SourceChip source={source} />
-      </div>
-
-      {/* Agent selector pills */}
-      <div className="px-6 md:px-8 max-w-3xl mx-auto w-full">
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1">
-          <AgentPill
-            active={selectedAgentId === null}
-            onClick={() => setSelectedAgent(null)}
-            label="None"
-            sublabel="Brain decides"
-          />
-          {agents.map((a) => {
-            const palette = AGENT_PALETTE[a.glyph as AgentGlyph];
-            return (
-              <AgentPill
-                key={a.id}
-                active={selectedAgentId === a.id}
-                onClick={() => setSelectedAgent(a.id)}
-                label={locale === "bn" ? a.nameBn : a.name}
-                sublabel={palette.label}
-                agentId={a.id}
-                color={palette.strong}
-              />
-            );
-          })}
-        </div>
-      </div>
-
-      <div ref={scrollerRef} className="flex-1 overflow-y-auto px-6 md:px-8 pb-40 max-w-3xl mx-auto w-full">
-        {blocks.length === 0 && !streaming && (
-          <div className="mt-6">
-            <p className="text-caption text-fg-tertiary">{t("ask.suggestions")}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {enSuggestions.map((s) => (
-                <SuggestionChip key={s} onClick={() => submit(s)}>{s}</SuggestionChip>
-              ))}
-            </div>
-            <p className="mt-6 text-caption text-fg-tertiary">বাংলায়</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {bnSuggestions.map((s) => (
-                <SuggestionChip key={s} onClick={() => submit(s)}>{s}</SuggestionChip>
-              ))}
-            </div>
-
-            {history.length > 0 && (
-              <section className="mt-8">
-                <p className="text-caption text-fg-tertiary inline-flex items-center gap-1.5">
-                  <Clock size={12} /> {t("ask.history")}
-                </p>
-                <ul className="mt-2 space-y-1.5">
-                  {history.slice(0, 6).map((r) => (
-                    <li key={r.id}>
-                      <button
-                        type="button"
-                        onClick={() => loadFromHistory(r)}
-                        className="w-full text-left px-3 py-2 rounded-md border border-border-subtle bg-surface-2 hover:border-border-strong transition-colors"
-                      >
-                        <p className="text-body text-fg-primary line-clamp-1">{r.query}</p>
-                        <p className="text-caption text-fg-tertiary inline-flex items-center gap-1.5 mt-0.5">
-                          <span className="mono-pill">{r.source}</span>
-                          {new Date(r.isoDate).toLocaleString(locale === "bn" ? "bn-BD" : "en-GB")}
-                        </p>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
           </div>
-        )}
+          {(asked || done) && <SourceChip source={source} />}
+        </div>
+      </div>
 
-        <div className="mt-4 space-y-4">
-          {query && (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex justify-end"
-            >
-              <div className="max-w-[80%] rounded-md bg-surface-2 border border-border-subtle px-3 py-2 text-body text-fg-primary">
-                {query}
+      <div ref={scrollerRef} className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto w-full px-4 md:px-6 py-5 pb-8">
+          {!asked && !loading && (
+            <div>
+              <p className="eyebrow">{t("ask.suggestions")}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {[...SUGGESTIONS_EN, ...SUGGESTIONS_BN].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => void submit(s)}
+                    className="h-9 px-3 rounded-full border border-border-subtle bg-[var(--bg-surface)] text-caption text-fg-secondary hover:text-fg-primary hover:border-border-strong transition-colors"
+                  >
+                    {s}
+                  </button>
+                ))}
               </div>
-            </motion.div>
-          )}
 
-          {notice && (
-            <div className="surface-2 p-2 text-caption text-fg-tertiary inline-flex items-center gap-1.5">
-              <Sparkles size={12} /> {notice}
+              <Callout tone="info" className="mt-6">
+                Each question is answered on its own: the assistant doesn&apos;t remember earlier questions. Sources and scores below every answer come straight from the API&apos;s retrieval.
+              </Callout>
+
+              {history.length > 0 && (
+                <section className="mt-8">
+                  <div className="flex items-center justify-between">
+                    <p className="eyebrow inline-flex items-center gap-1.5"><Clock size={12} /> Recent questions on this device</p>
+                  </div>
+                  <ul className="mt-2 space-y-1.5">
+                    {history.slice(0, 8).map((r) => (
+                      <li key={r.id} className="group flex items-stretch gap-1">
+                        <button
+                          type="button"
+                          onClick={() => loadFromHistory(r)}
+                          className="flex-1 min-w-0 text-left px-3 py-2 rounded-[var(--radius-control)] border border-border-subtle bg-[var(--bg-surface)] hover:border-border-strong transition-colors"
+                        >
+                          <p className="text-body text-fg-primary line-clamp-1">{r.query}</p>
+                          <p className="text-caption text-fg-tertiary mt-0.5">
+                            {askModeLabel(r.source).label} · {new Date(r.isoDate).toLocaleString(locale === "bn" ? "bn-BD" : "en-GB")}
+                          </p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeHistory(r.id)}
+                          aria-label={`Remove "${r.query}" from history`}
+                          className="px-2 rounded-[var(--radius-control)] text-fg-tertiary hover:text-[var(--risk-high)] hover:bg-surface-2"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
             </div>
           )}
 
-          <AnimatePresence>
+          {asked && (
+            <div className="flex justify-end">
+              <div className="max-w-[85%] rounded-2xl rounded-br-md bg-[var(--accent-soft)] border border-[var(--accent-border)] px-4 py-2.5 text-body text-fg-primary whitespace-pre-wrap">
+                {asked}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-4 space-y-3">
+            {notice && (
+              <Callout tone="warning" testId="ask-notice" title="Shown in demo mode">{notice}</Callout>
+            )}
+
             {blocks.map((b, idx) => (
-              <motion.div
-                key={idx}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: motionTokens.duration.base / 1000, ease: motionTokens.ease.out }}
-              >
-                {renderBlock(b, locale)}
-              </motion.div>
+              <div key={idx}>{renderBlock(b, locale, t)}</div>
             ))}
-          </AnimatePresence>
 
-          {streaming && blocks.length > 0 && blocks[blocks.length - 1].type !== "done" && (
-            <div className="surface-2 p-4 space-y-2 max-w-prose" aria-live="polite">
-              <div className="flex items-center gap-2 text-caption text-fg-tertiary">
-                <Loader2 size={12} className="animate-spin" /> {t("ask.streamingThinking")}
-              </div>
-              <Skeleton className="h-3 w-[80%]" />
-              <Skeleton className="h-3 w-[68%]" />
-              <Skeleton className="h-3 w-[55%]" />
-            </div>
-          )}
-
-          {streaming && blocks.length === 0 && (
-            <div className="surface-2 p-4 space-y-3 max-w-prose" aria-live="polite">
-              <div className="flex items-center gap-2 text-caption text-fg-tertiary">
-                <Loader2 size={12} className="animate-spin" /> {t("ask.streamingThinking")}
-              </div>
-              <div className="space-y-2">
+            {loading && (
+              <div className="surface p-4 space-y-3" role="status" aria-live="polite">
+                <div className="flex items-center gap-2 text-caption text-fg-tertiary">
+                  <Loader2 size={13} className="animate-spin" /> Searching the knowledge base and preparing an answer…
+                </div>
                 <Skeleton className="h-3 w-[88%]" />
                 <Skeleton className="h-3 w-[72%]" />
-                <Skeleton className="h-3 w-[60%]" />
-                <Skeleton className="h-3 w-[40%]" />
+                <Skeleton className="h-3 w-[56%]" />
               </div>
-            </div>
-          )}
+            )}
 
-          {error && (
-            <div className="surface-2 p-3 text-caption text-risk-high">{error}</div>
-          )}
+            {error && (
+              <Callout tone="danger" title={error.title} action={asked ? <Button size="sm" onClick={() => void submit(asked)}>Retry</Button> : undefined}>
+                {error.body}
+              </Callout>
+            )}
+          </div>
 
-          {agentNote && (
-            <div
-              className="surface-2 p-2.5 text-caption inline-flex items-center gap-2"
-              style={{ borderLeft: `3px solid ${AGENT_PALETTE[AGENT_GLYPH[agentNote.agentId] as AgentGlyph]?.strong ?? "var(--accent)"}` }}
-            >
-              <Sparkles size={12} style={{ color: AGENT_PALETTE[AGENT_GLYPH[agentNote.agentId] as AgentGlyph]?.strong }} />
-              Answer routed via <strong className="font-medium">{agentNote.agentName}</strong>
+          {done && (
+            <div className="mt-4 flex items-center gap-2 flex-wrap">
+              <Button variant="secondary" size="sm" onClick={copyAnswer}>
+                {copied ? <CheckCircle2 size={13} className="text-[var(--risk-low)]" /> : <Copy size={13} />}
+                {copied ? t("ask.copied") : t("ask.copy")}
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => void submit(asked ?? query)} disabled={loading}>
+                <RefreshCw size={13} /> Ask again
+              </Button>
+              <Button variant="ghost" size="sm" onClick={clear}>
+                <RotateCcw size={13} /> {t("ask.newQuestion")}
+              </Button>
             </div>
           )}
         </div>
-
-        {blocks.some((b) => b.type === "done") && (
-          <div className="mt-4 flex items-center gap-2 flex-wrap">
-            <Button variant="secondary" size="sm" onClick={copyAnswer}>
-              {copied ? <CheckCircle2 size={12} className="text-risk-low" /> : <Copy size={12} />}
-              {copied ? t("ask.copied") : t("ask.copy")}
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => submit(query)}
-              disabled={streaming || !query}
-            >
-              <RefreshCw size={12} /> {t("ask.regenerate")}
-            </Button>
-            <Button variant="secondary" size="sm" onClick={saveAsInsight}>
-              <BookmarkPlus size={12} /> {saved ? "Saved" : t("ask.saveToInsights")}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={clear}>
-              <RotateCcw size={12} /> {t("ask.newQuestion")}
-            </Button>
-          </div>
-        )}
       </div>
 
-      <div className="sticky bottom-0 bg-gradient-to-t from-canvas via-canvas/95 to-transparent pt-6 pb-4 px-6 md:px-8">
+      <div className="border-t border-border-subtle bg-[var(--bg-surface)] px-4 md:px-6 pt-3 pb-4">
         <div className="max-w-3xl mx-auto">
+          {showFilters && (
+            <div className="mb-2 flex flex-wrap items-center gap-3" data-testid="ask-filters">
+              <FilterSelect label="Department" value={department} onChange={setDepartment}>
+                <option value="">Any</option>
+                {RAG_DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+              </FilterSelect>
+              <FilterSelect label="Category" value={category} onChange={setCategory}>
+                <option value="">Any</option>
+                {RAG_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </FilterSelect>
+              {filterCount > 0 && (
+                <button type="button" className="text-caption text-accent hover:underline" onClick={() => { setDepartment(""); setCategory(""); }}>
+                  Clear filters
+                </button>
+              )}
+            </div>
+          )}
           <form
-            onSubmit={(e) => { e.preventDefault(); submit(); }}
-            className="glass flex items-center gap-2 px-3 py-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submit();
+            }}
+            className="flex items-end gap-2 rounded-[var(--radius-card)] border border-border-strong bg-[var(--bg-surface)] px-2 py-2 focus-within:border-[var(--accent)] focus-within:shadow-[0_0_0_3px_var(--accent-soft)]"
           >
+            <button
+              type="button"
+              onClick={() => setShowFilters((v) => !v)}
+              aria-pressed={showFilters}
+              aria-label="Search filters"
+              title="Limit retrieval to a department or category"
+              className={cn("relative size-9 shrink-0 rounded-md inline-flex items-center justify-center", showFilters || filterCount ? "text-accent bg-[var(--accent-soft)]" : "text-fg-tertiary hover:text-fg-primary hover:bg-surface-2")}
+            >
+              <SlidersHorizontal size={16} />
+              {filterCount > 0 && <span className="absolute -top-1 -right-1 size-4 rounded-full bg-accent text-[10px] leading-4 text-[var(--accent-fg-on-bg)] font-semibold">{filterCount}</span>}
+            </button>
+            <label htmlFor="ask-input" className="sr-only">Your question</label>
             <textarea
+              id="ask-input"
+              ref={inputRef}
               value={query}
+              maxLength={MAX_QUERY}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  submit();
+                  void submit();
                 }
               }}
               placeholder={locale === "bn" ? t("ask.placeholderBn") : t("ask.placeholder")}
+              data-testid="ask-input"
               rows={1}
-              className="flex-1 resize-none bg-transparent border-0 outline-none text-body text-fg-primary placeholder:text-fg-tertiary max-h-32"
+              className="flex-1 resize-none bg-transparent border-0 outline-none text-body text-fg-primary placeholder:text-fg-tertiary max-h-40 py-2"
             />
-            <Button variant="primary" size="sm" type="submit" disabled={streaming || !query.trim()}>
-              <ArrowUp size={14} />
+            <Button variant="primary" size="md" type="submit" disabled={loading || !query.trim()} aria-label={t("ask.sendLabel")}>
+              {loading ? <Loader2 size={15} className="animate-spin" /> : <ArrowUp size={15} />}
             </Button>
           </form>
-          <p className="mt-2 text-caption text-fg-tertiary text-center">{t("common.banglaHint")}</p>
+          <p className="mt-1.5 text-caption text-fg-tertiary flex justify-between gap-3">
+            <span>{t("common.banglaHint")}</span>
+            {query.length > MAX_QUERY * 0.8 && <span>{query.length}/{MAX_QUERY}</span>}
+          </p>
         </div>
       </div>
     </div>
   );
 }
 
-function SourceChip({ source }: { source: "demo" | "live" }) {
-  const isLive = source === "live";
+function SourceChip({ source }: { source: AskMode }) {
+  const { label, title, isLive } = askModeLabel(source);
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 h-7 px-2 rounded-md border text-caption",
+        "inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border text-caption font-medium",
         isLive
-          ? "bg-risk-low/10 border-risk-low/30 text-risk-low"
-          : "bg-surface-2 border-border-subtle text-fg-tertiary"
+          ? "bg-[var(--risk-low-soft)] border-[var(--risk-low-border)] text-[var(--risk-low)]"
+          : source === "no_source"
+          ? "bg-[var(--risk-medium-soft)] border-[var(--risk-medium-border)] text-[var(--risk-medium)]"
+          : "bg-surface-2 border-border-subtle text-fg-secondary"
       )}
-      title={isLive ? "Connected to a live model" : "Deterministic demo answer"}
+      title={title}
+      data-testid="ask-source-chip"
+      data-mode={source}
     >
-      <span className={cn("size-1.5 rounded-full", isLive ? "bg-risk-low" : "bg-fg-tertiary")} />
-      {isLive ? "Live" : "Demo"}
+      <span className={cn("size-1.5 rounded-full", isLive ? "bg-[var(--risk-low)]" : "bg-current")} aria-hidden />
+      {label}
     </span>
   );
 }
 
-function renderBlock(block: Block, locale: "en" | "bn") {
+function renderBlock(block: Block, locale: "en" | "bn", t: (k: string, p?: Record<string, string | number>) => string) {
   switch (block.type) {
     case "analyzed":
+      if (!block.data?.length) return null;
       return (
-        <div className="surface-2 p-3">
-          <div className="flex items-center gap-2 text-caption text-fg-tertiary">
-            <Database size={12} /> Analyzed
-          </div>
-          <ul className="mt-2 flex flex-wrap gap-2">
-            {block.data.map((it: any, i: number) => (
-              <li key={i} className="mono-pill text-fg-secondary border border-border-subtle bg-surface px-2 py-1 rounded-sm">
-                {it.domain} · {it.count} records{it.filter ? ` · ${Object.entries(it.filter).map(([k, v]) => `${k}:${v}`).join(", ")}` : ""}
-              </li>
-            ))}
-          </ul>
+        <div className="flex flex-wrap items-center gap-1.5 text-caption text-fg-tertiary">
+          <Search size={12} /> Searched:
+          {block.data.map((it: { domain: string; count: number }, i: number) => (
+            <span key={i} className="badge">{it.domain} · {it.count}</span>
+          ))}
         </div>
       );
     case "finding":
       return (
-        <div className="glass p-4">
-          <div className="flex items-center gap-2 text-caption text-fg-tertiary">
-            <FileText size={12} /> Finding
-          </div>
-          <p className="mt-2 text-body text-fg-primary leading-6">
-            {locale === "bn" ? block.data.bn : block.data.en}
-          </p>
+        <div className="surface p-4" data-testid="ask-finding">
+          <p className="eyebrow flex items-center gap-1.5"><FileText size={12} /> {t("ask.finding")}</p>
+          <p className="mt-2 text-body text-fg-primary leading-6 whitespace-pre-wrap">{locale === "bn" ? block.data.bn : block.data.en}</p>
         </div>
       );
     case "factors":
       return (
-        <div className="surface p-3">
-          <div className="flex items-center gap-2 text-caption text-fg-tertiary">
-            <Lightbulb size={12} /> Contributing factors
-          </div>
+        <div className="surface p-4">
+          <p className="eyebrow flex items-center gap-1.5"><Lightbulb size={12} /> {t("ask.factors")}</p>
           <ul className="mt-2 space-y-1.5">
-            {block.data.map((f: any, i: number) => (
-              <li key={i} className="flex items-center justify-between text-body">
+            {block.data.map((f: { label: string; labelBn: string; magnitude: string; magnitudeBn: string }, i: number) => (
+              <li key={i} className="flex items-center justify-between gap-3 text-body">
                 <span className="text-fg-secondary">{locale === "bn" ? f.labelBn : f.label}</span>
-                <span className="mono-pill text-fg-primary">{locale === "bn" ? f.magnitudeBn : f.magnitude}</span>
+                <span className="text-fg-primary font-medium">{locale === "bn" ? f.magnitudeBn : f.magnitude}</span>
               </li>
             ))}
           </ul>
@@ -545,89 +429,70 @@ function renderBlock(block: Block, locale: "en" | "bn") {
       );
     case "evidence":
       return <EvidenceBlock refs={block.data} />;
+    case "citations":
+      return (
+        <div className="surface p-4" data-testid="ask-citations">
+          <p className="eyebrow flex items-center gap-1.5"><FileText size={12} /> Sources ({block.data.length})</p>
+          <ol className="mt-3 space-y-3">
+            {block.data.map((c: { id: string; title: string; snippet: string; confidence: number; source: string; url: string }, i: number) => (
+              <li key={c.id} className="flex gap-3">
+                <span className="mt-0.5 size-5 shrink-0 rounded-full bg-surface-2 border border-border-subtle text-[11px] font-semibold flex items-center justify-center text-fg-secondary">{i + 1}</span>
+                <div className="min-w-0">
+                  <p className="text-body text-fg-primary font-medium">
+                    {c.url ? <a href={c.url} target="_blank" rel="noreferrer noopener" className="hover:underline">{c.title}</a> : c.title}
+                  </p>
+                  <p className="mt-0.5 text-caption text-fg-secondary leading-5">{c.snippet}</p>
+                  <p className="mt-1 text-[11px] text-fg-tertiary">{c.source} · match {Math.round((c.confidence ?? 0) * 100)}%</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      );
     case "recommendation":
       return (
-        <div className="glass p-4">
+        <div className="surface p-4 border-l-[3px] border-l-[var(--accent)]">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-caption text-fg-tertiary">
-              <AlertTriangle size={12} /> Recommended action
-            </div>
-            <RiskPill tier={block.data.riskTier} label={block.data.riskTier.toUpperCase()} />
+            <p className="eyebrow flex items-center gap-1.5"><AlertTriangle size={12} /> {t("ask.recommendedAction")}</p>
+            <Badge tone={RISK_TONE[block.data.riskTier as "low" | "medium" | "high"] ?? "neutral"}>{String(block.data.riskTier).toUpperCase()}</Badge>
           </div>
-          <p className="mt-2 text-title text-fg-primary">{locale === "bn" ? block.data.titleBn : block.data.title}</p>
-          <p className="mt-1.5 text-caption text-fg-secondary">{locale === "bn" ? block.data.actionBn : block.data.action}</p>
+          <p className="mt-2 text-body font-semibold text-fg-primary">{locale === "bn" ? block.data.titleBn : block.data.title}</p>
+          <p className="mt-1 text-caption text-fg-secondary">{locale === "bn" ? block.data.actionBn : block.data.action}</p>
         </div>
       );
-    case "done":
+    case "done": {
+      const hits: AskRagHit[] = block.data.ragHits ?? [];
       return (
-        <div className="flex items-center gap-2 text-caption text-fg-tertiary">
-          <CheckCircle2 size={12} className="text-risk-low" /> Confidence {Math.round(block.data.confidence * 100)}%
+        <div className="space-y-2">
+          <p className="flex items-center gap-2 text-caption text-fg-tertiary">
+            <CheckCircle2 size={13} className="text-[var(--risk-low)]" />
+            {typeof block.data.confidence === "number" ? `Confidence ${Math.round(block.data.confidence * 100)}%` : "Not a generated answer: no confidence score"}
+          </p>
+          {hits.length > 0 && (
+            <details className="surface-2 px-3 py-2" data-testid="ask-retrieval">
+              <summary className="cursor-pointer text-caption text-fg-secondary select-none">Retrieval details · {hits.length} passages</summary>
+              <div className="mt-2 overflow-x-auto">
+                <table className="data-table">
+                  <thead><tr><th>Passage</th><th className="num">Hybrid</th><th className="num">Vector</th><th className="num">BM25</th></tr></thead>
+                  <tbody>
+                    {hits.map((h) => (
+                      <tr key={h.id}>
+                        <td className="max-w-[320px]">
+                          <span className="block text-fg-primary truncate">{h.title}</span>
+                          <span className="block text-[11px] text-fg-tertiary">{h.department} · {h.category}</span>
+                        </td>
+                        <td className="num">{h.hybridScore.toFixed(3)}</td>
+                        <td className="num">{h.denseScore.toFixed(3)}</td>
+                        <td className="num">{h.bm25Score.toFixed(3)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          )}
         </div>
       );
+    }
   }
-}
-
-function SuggestionChip({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "h-8 px-3 rounded-md border border-border-subtle bg-surface-2 text-caption text-fg-secondary",
-        "hover:text-fg-primary hover:border-border-strong transition-colors"
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-function AgentPill({
-  active,
-  onClick,
-  label,
-  sublabel,
-  agentId,
-  color
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  sublabel: string;
-  agentId?: string;
-  color?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "inline-flex items-center gap-2 h-9 pl-1.5 pr-3 rounded-full border text-caption transition-colors whitespace-nowrap",
-        active
-          ? "bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] border-transparent"
-          : "bg-surface-2 border-border-subtle text-fg-secondary hover:text-fg-primary hover:border-border-strong"
-      )}
-      style={
-        active && color
-          ? { boxShadow: `0 0 0 2px ${color}55` }
-          : undefined
-      }
-    >
-      {agentId ? (
-        <AgentAvatar agentId={agentId} size={22} framed={false} />
-      ) : (
-        <span
-          className="inline-flex items-center justify-center size-7 rounded-full border border-border-subtle bg-surface"
-          aria-hidden
-        >
-          <UserCircle2 size={14} className="text-fg-tertiary" />
-        </span>
-      )}
-      <span className="flex flex-col items-start leading-tight">
-        <span className="font-medium">{label}</span>
-        <span className={cn("text-[10px]", active ? "opacity-80" : "text-fg-tertiary")}>{sublabel}</span>
-      </span>
-    </button>
-  );
 }

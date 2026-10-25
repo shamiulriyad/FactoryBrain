@@ -15,7 +15,8 @@
 #
 # Environment the container reads at startup:
 #   FACTORYBRAIN_DB   — Postgres connection string
-#   ADMIN_API_TOKEN   — gates POST /api/{settings/llm,rag/reindex,rag/ingest}
+#   JWT_SIGNING_KEY   — HS256 key (≥ 32 bytes), required outside Development
+#   SEED_ADMIN_*      — first Admin account; admin routes need the Admin role
 #   RAG_EMBEDDING_*   — provider/model/dims/key for the embedding service
 #   LLM_API_KEY etc.  — used by AskService for live calls
 #
@@ -38,6 +39,9 @@ COPY FactoryBrain.Backend/FactoryBrain.Domain/FactoryBrain.Domain.csproj Factory
 COPY FactoryBrain.Backend/FactoryBrain.Application/FactoryBrain.Application.csproj FactoryBrain.Backend/FactoryBrain.Application/
 COPY FactoryBrain.Backend/FactoryBrain.Infrastructure/FactoryBrain.Infrastructure.csproj FactoryBrain.Backend/FactoryBrain.Infrastructure/
 COPY FactoryBrain.Backend/FactoryBrain.Api/FactoryBrain.Api.csproj FactoryBrain.Backend/FactoryBrain.Api/
+# The solution also lists the integration-test project; restore needs its
+# project file even though only the API is published.
+COPY FactoryBrain.Backend/FactoryBrain.Api.Tests/FactoryBrain.Api.Tests.csproj FactoryBrain.Backend/FactoryBrain.Api.Tests/
 RUN dotnet restore "FactoryBrain.Backend/FactoryBrain.Backend.sln"
 
 # Now copy the rest of the API source and publish. We exclude

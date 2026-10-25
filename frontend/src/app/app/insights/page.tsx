@@ -1,5 +1,6 @@
 "use client";
 
+import { DemoDataBanner } from "@/components/ui/Callout";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -87,7 +88,8 @@ export default function InsightsPage() {
   }
 
   return (
-    <div className="px-6 md:px-8 py-6 max-w-6xl mx-auto" data-tour="insights">
+    <div className="page" data-tour="insights">
+      <DemoDataBanner className="mb-5" what="These insights are a sample dataset generated in your browser. The API stores insights from agent runs, QC flags and vision analyses, but has no endpoint to list them yet — see Approvals for the server-side items that need a decision." />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-display font-semibold tracking-tight">{t("insights.title")}</h1>

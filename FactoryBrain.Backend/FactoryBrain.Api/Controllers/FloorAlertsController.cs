@@ -1,5 +1,7 @@
 using FactoryBrain.Application.Dtos.FloorAlerts;
 using FactoryBrain.Application.Abstractions.Interfaces;
+using FactoryBrain.Api.Middleware;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FactoryBrain.Api.Controllers;
@@ -22,6 +24,7 @@ public class FloorAlertsController : ControllerBase
     // ValidationProblemDetails (RFC 7807 with an errors map) before this
     // method runs. We only handle the routing/path concerns here.
     [HttpPatch("{id}")]
+    [Authorize(Policy = AuthPolicies.Operator)]
     public async Task<IActionResult> Patch([FromRoute] string id, [FromBody] FloorAlertPatchRequest body, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(id)) return BadRequest(new { error = "missing_id" });

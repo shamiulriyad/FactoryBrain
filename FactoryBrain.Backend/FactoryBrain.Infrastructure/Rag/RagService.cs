@@ -6,6 +6,7 @@ using FactoryBrain.Infrastructure.Configuration;
 using FactoryBrain.Application.Abstractions;
 using FactoryBrain.Application.Abstractions.Interfaces;
 using FactoryBrain.Application.Rag;
+using FactoryBrain.Application.Settings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Pgvector;
@@ -22,6 +23,7 @@ public sealed class RagService : IRagService
     private readonly EmbeddingProviderResolver _resolver;
     private readonly ILogger<RagService> _log;
     private readonly IOptions<RagConfig> _ragCfg;
+    private readonly IAiSettingsProvider _settings;
 
     public RagService(
         FactoryBrainDbContext db,
@@ -31,15 +33,16 @@ public sealed class RagService : IRagService
         EmbeddingColumnAdmin admin,
         EmbeddingProviderResolver resolver,
         ILogger<RagService> log,
-        IOptions<RagConfig> ragCfg)
+        IOptions<RagConfig> ragCfg,
+        IAiSettingsProvider settings)
     {
         _db = db; _chunker = chunker; _embed = embed; _scorer = scorer;
-        _admin = admin; _resolver = resolver; _log = log; _ragCfg = ragCfg;
+        _admin = admin; _resolver = resolver; _log = log; _ragCfg = ragCfg; _settings = settings;
     }
 
     public async Task<List<DocumentChunk>> ChunkAsync(
         string docId, string title, string body, IEnumerable<string> tags,
-        string department, string category, CancellationToken ct = default)
+        string department, string category, CancellationToken ct = default, bool embed = true)
     {
         await Task.Yield(); // yield to scheduler; the body is CPU-bound embedding work
         var tagList = tags.ToList();
@@ -57,7 +60,7 @@ public sealed class RagService : IRagService
                 Tags = tagList,
                 Text = pieces[i],
                 Ordinal = i,
-                Embedding = _embed.Embed($"{title} {pieces[i]}")
+                Embedding = embed ? _embed.Embed($"{title} {pieces[i]}") : null
             });
         }
         return chunks;
@@ -69,12 +72,14 @@ public sealed class RagService : IRagService
     {
         if (string.IsNullOrWhiteSpace(query)) return Array.Empty<AskRagHit>();
 
+        // Refresh the settings asynchronously once per request; the resolver's
+        // synchronous reads below then use this fresh copy.
+        await _settings.GetAsync(ct);
         var cfg = _ragCfg.Value;
 
-        // Step 47: read provider-mix weights from RagConfig, with an env-var
-        // override that an operator can flip in Development without a
-        // restart (EnvReloader re-reads RAG_HYBRID_* on every probe tick).
-        // The env vars take precedence over the appsettings defaults.
+        // Step 47: read provider-mix weights from RagConfig, with an
+        // RAG_HYBRID_* env-var override (retrieval tuning only, not provider
+        // settings). The env vars take precedence over the appsettings defaults.
         bool degraded = _resolver.IsDegraded;
         double providerBm25W = degraded ? cfg.LocalBm25Weight : cfg.HostedBm25Weight;
         double providerVecW  = degraded ? cfg.LocalVectorWeight : cfg.HostedVectorWeight;
@@ -105,15 +110,29 @@ public sealed class RagService : IRagService
         int? liveDim = null;
         if (!skipVectorScore)
         {
-            qVec = ((float[])_embed.Embed(query).ToArray());
-            qVecLen = qVec.Length;
+            // Check the column first: when it can't hold the configured
+            // embedder's vectors, embedding the query would be a wasted (and
+            // for hosted providers, paid) call.
             liveDim = _admin.TryProbeLiveColumnDim();
-            if (liveDim is null || liveDim.Value != qVecLen.Value)
+            var configuredDims = _resolver.Resolve().Configured.Dims;
+            if (liveDim is null || liveDim.Value != configuredDims)
             {
                 _log.LogWarning(
-                    "Vector score skipped at query time: active embedder dims={ActiveDims} but live column dim={LiveDim}. Ranking by BM25 only.",
-                    qVecLen, liveDim);
+                    "Vector score skipped at query time: configured embedder dims={ConfiguredDims} but live column dim={LiveDim}. Ranking by BM25 only until an Admin-confirmed reindex.",
+                    configuredDims, liveDim);
                 skipVectorScore = true;
+            }
+            else
+            {
+                qVec = ((float[])_embed.Embed(query).ToArray());
+                qVecLen = qVec.Length;
+                if (qVecLen.Value != liveDim.Value)
+                {
+                    _log.LogWarning(
+                        "Vector score skipped at query time: active embedder dims={ActiveDims} but live column dim={LiveDim}. Ranking by BM25 only.",
+                        qVecLen, liveDim);
+                    skipVectorScore = true;
+                }
             }
         }
 
@@ -322,25 +341,7 @@ public sealed class RagService : IRagService
     }
 
     /// <summary>
-    /// Re-embed every chunk across every <see cref="ManualDocument"/> whose
-    /// stored provider / model / dims differ from the active embedder.
-    /// Delegates to <see cref="EmbeddingColumnAdmin.ReindexChangedDocsAsync"/>
-    /// so the controller, the startup pipeline and this method all share
-    /// one reindex implementation.
-    /// </summary>
-    public async Task<ReindexReport> ReindexAsync(CancellationToken ct = default)
-    {
-        var outcome = await _admin.ReindexChangedDocsAsync(ct).ConfigureAwait(false);
-        return new ReindexReport(
-            outcome.Documents,
-            outcome.Chunks,
-            outcome.Configured.Provider,
-            outcome.Configured.Model,
-            outcome.Configured.Dims);
-    }
-
-    /// <summary>
-    /// Decide whether a startup reindex is required — true when the
+    /// Decide whether a reindex is due — true when the
     /// currently-configured embedder differs from the metadata stored on
     /// any <see cref="ManualDocument"/> row. Returns false in degraded
     /// mode: the actual reindex path is a no-op there, so this method
@@ -371,7 +372,7 @@ public sealed class RagService : IRagService
     /// are still stored, but with <c>Embedding = null</c> and
     /// <c>EmbeddingProvider = "pending"</c>. This keeps the corpus
     /// discoverable by BM25 even when no embedder is reachable; the next
-    /// non-degraded startup reindex (or POST /api/rag/reindex) walks
+    /// Admin-confirmed reindex (POST /api/rag/reindex) walks
     /// these rows via <see cref="EmbeddingColumnAdmin.LoadDocsNeedingReindexAsync"/>
     /// and embeds them. The method returns
     /// <c>embedded = false</c> + a <c>warning</c> string in that case so
@@ -380,7 +381,9 @@ public sealed class RagService : IRagService
     /// </summary>
     public async Task<IngestOutcome> IngestAsync(IngestInput input, CancellationToken ct = default)
     {
-        var r = _resolver.Resolve();
+        await _settings.GetAsync(ct);
+        var current = _resolver.CurrentSettings();
+        var r = _resolver.ResolveFor(current);
         var cfg = r.Configured;
 
         // Chunk with the title bleed so a query that matches the title
@@ -463,6 +466,17 @@ public sealed class RagService : IRagService
                 Embedding = vec,
                 CreatedAt = DateTime.UtcNow
             });
+        }
+
+        // A hosted call that failed inside the fallback wrapper returns a
+        // local-hash vector instead of throwing. Those vectors must not be
+        // stored under the hosted provider's name, so a configuration that
+        // went degraded during this ingest stores every chunk as pending.
+        if (embedded && current.IsHosted && _resolver.ResolveFor(current).Degraded)
+        {
+            embedded = false;
+            foreach (var c in chunks) c.Embedding = null;
+            warning = "embedding provider became unavailable mid-ingest; chunks stored as pending";
         }
 
         // When embedding was lost mid-batch we fall back to storing the

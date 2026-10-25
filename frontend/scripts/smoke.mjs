@@ -146,9 +146,16 @@ async function main() {
   // 6. Live sensor + floor-alert wiring (improve batch)
   const overview = await read("src/app/app/page.tsx");
   assert(overview.includes("/api/sensors/ingest"), "overview wires /api/sensors/ingest");
-  assert(overview.includes("Simulate tick"), "overview has Simulate tick control");
+  assert(
+    /<Button[\s\S]{0,400}data-testid="simulate-tick"[\s\S]{0,400}t\("overview\.demoPathSimulate"\)/.test(overview),
+    "overview renders the Simulate tick button (data-testid=simulate-tick, label t(\"overview.demoPathSimulate\"))"
+  );
+  assert(/demoPathSimulate:\s*"Simulate tick"/.test(en), "i18n en: overview.demoPathSimulate is \"Simulate tick\"");
+  assert(/demoPathSimulate:\s*"[^"]+"/.test(bn), "i18n bn: overview.demoPathSimulate is translated");
+  assert(/onClick=\{\(\) => void advanceSensors\(\)\}/.test(overview), "Simulate tick button triggers the ingest POST (advanceSensors)");
+  assert(overview.includes('"/api/sensors/snapshot"'), "overview polls the read-only /api/sensors/snapshot");
   const activity = await read("src/app/app/activity/page.tsx");
-  assert(activity.includes("FloorAlertsPanel"), "activity mounts FloorAlertsPanel");
+  assert(activity.includes('"/api/floor-alerts"') && activity.includes("markAlertRead"), "activity lists /api/floor-alerts and acknowledges through the API");
   const latestRoute = await read("src/_legacy_api/sensors/latest/route.ts");
   assert(latestRoute.includes("listLatestReadings"), "latest reads server ingest buffer");
   assert(!latestRoute.includes("useSensorsStore"), "latest does not import client sensors store");
@@ -192,11 +199,10 @@ async function main() {
   const briefCard = await read("src/components/overview/BriefCard.tsx");
   assert(briefCard.includes('export function BriefCard'), "BriefCard: component exported");
   assert(briefCard.includes('"/api/brief/morning"'), "BriefCard: fetches /api/brief/morning");
-  assert(briefCard.includes("useFactoryBrainLiveStore"), "BriefCard: subscribes to live tick store");
-  assert(briefCard.includes("DemoChip"), "BriefCard: uses DemoChip for simulated label");
-  assert(briefCard.includes("/app/brain?node="), "BriefCard: deep-links top bottleneck to /app/brain?node=");
+  assert(briefCard.includes("tick") && briefCard.includes("brief.reload()"), "BriefCard: re-reads the brief when the simulation tick moves");
+  assert(briefCard.includes('t("brief.simulatedChip")') && briefCard.includes("meta.simulated"), "BriefCard: shows the simulated label from meta.simulated");
   assert(briefCard.includes("/app/approvals"), "BriefCard: deep-links pending approvals to /app/approvals");
-  assert(briefCard.includes("/app/insights"), "BriefCard: deep-links risks to /app/insights");
+  assert(!briefCard.includes("/app/insights"), "BriefCard: no link into the browser-only demo insights");
   assert(briefCard.includes('data-testid="brief-card"'), "BriefCard: smoke-visible testid present");
   assert(briefCard.includes("bulletsBn"), "BriefCard: locale switches to BN bullets");
   assert(overview.includes("<BriefCard"), "overview: mounts <BriefCard />");
@@ -251,8 +257,9 @@ async function main() {
   const qcSummary = await read("src/components/overview/QcSummary.tsx");
   assert(qcSummary.includes("export function QcSummary"), "QcSummary: component exported");
   assert(qcSummary.includes('"/api/qc/defects"'), "QcSummary: fetches real /api/qc/defects (not mock state)");
-  assert(qcSummary.includes("useFactoryBrainLiveStore"), "QcSummary: subscribes to live tick store");
-  assert(qcSummary.includes('data-testid="qc-summary"'), "QcSummary: smoke-visible testid present");
+  assert(qcSummary.includes("pollMs"), "QcSummary: refreshes on a poll");
+  assert(!qcSummary.includes("Silently swallow"), "QcSummary: shows load errors instead of swallowing them");
+  assert(qcSummary.includes('testId="qc-summary"'), "QcSummary: smoke-visible testid present (Panel testId)");
   assert(qcSummary.includes('href="/app/qc"'), "QcSummary: deep-links to /app/qc");
 
   const qcPage = await read("src/app/app/qc/page.tsx");
@@ -266,7 +273,7 @@ async function main() {
   assert(overview.includes("<LineBoardPanel"), "overview: still mounts <LineBoardPanel />");
 
   // Sidebar gains a QC link in the Operations group.
-  const qcSidebar = await read("src/components/layout/Sidebar.tsx");
+  const qcSidebar = await read("src/components/layout/nav.ts");
   assert(qcSidebar.includes('"/app/qc"'), "sidebar: /app/qc link present");
   assert(qcSidebar.includes("ClipboardCheck") || qcSidebar.includes("ScanLine"), "sidebar: QC item has icon");
   assert(qcSidebar.includes("operations"), "sidebar: still has Operations group");
@@ -358,13 +365,14 @@ async function main() {
   // LineBoardPanel — wiring + i18n keys.
   const lineBoardPanel = await read("src/components/overview/LineBoardPanel.tsx");
   assert(lineBoardPanel.includes('export function LineBoardPanel'), "LineBoardPanel: component exported");
-  assert(lineBoardPanel.includes('"/api/line-board"'), "LineBoardPanel: fetches /api/line-board");
-  assert(lineBoardPanel.includes("useFactoryBrainLiveStore"), "LineBoardPanel: subscribes to live tick store");
+  assert(overview.includes('"/api/line-board"'), "overview: fetches /api/line-board for the LineBoardPanel");
+  assert(overview.includes('"/api/line-board/refresh"'), "overview: Operators can advance the board (POST /api/line-board/refresh)");
+  assert(overview.includes("board.reload()") && overview.includes("tick"), "overview: re-reads the board when the snapshot tick moves");
   assert(lineBoardPanel.includes('data-testid="line-board"'), "LineBoardPanel: smoke-visible testid present");
   assert(lineBoardPanel.includes('Simulated'), "LineBoardPanel: keeps simulated label visible");
   const overviewPage = await read("src/app/app/page.tsx");
   assert(overviewPage.includes("<LineBoardPanel"), "overview: mounts <LineBoardPanel />");
-  assert(overviewPage.includes("judge-walkthrough"), "overview: keeps demo path strip");
+  assert(!overviewPage.includes("metricService") && !overviewPage.includes("insightService"), "overview: no browser-generated business metrics or insights");
   for (const k of [
     "lineBoard:",
     "lineBoardSubtitle:",
@@ -395,15 +403,21 @@ async function main() {
   // Frontend polish checks (Builder)
   const bizStore = await read("src/store/business.store.ts");
   assert(bizStore.includes("visionRepair: true"), "visionRepair defaults on for judges");
-  const sidebar = await read("src/components/layout/Sidebar.tsx");
-  assert(sidebar.includes("/app/vision"), "sidebar links to Vision under Intelligence");
+  const navConfig = await read("src/components/layout/nav.ts");
+  assert(navConfig.includes("/app/vision"), "navigation links to Vision under Intelligence");
+  assert(/href: "\/app\/audit"[^}]*role: "Admin"/.test(navConfig), "navigation: the audit log is declared Admin-only");
   const overviewUi = await read("src/app/app/page.tsx");
-  assert(overviewUi.includes("judge-walkthrough"), "overview has demo path strip");
-  assert(overviewUi.includes("/app/ask?q="), "energy duty links to Ask with q=");
+  assert(!overviewUi.includes("factoryTools"), "overview: no browser-simulated energy recommendation presented as live");
   const visionPage = await read("src/app/app/vision/page.tsx");
-  assert(visionPage.includes("SAMPLE_FILES.map"), "vision uses sample grid picker");
+  assert(visionPage.includes("allowedSampleFiles"), "vision picks from the API's allowed sample list");
   const agentsPage = await read("src/app/app/agents/page.tsx");
-  assert(agentsPage.includes("agents-run-banner"), "agents shows post-run banner");
+  assert(agentsPage.includes('"/api/agents"') && agentsPage.includes("RunResult"), "agents: server roster and the real run result");
+  const kbPage = await read("src/app/app/knowledge/page.tsx");
+  assert(kbPage.includes('"/api/rag/ingest"') && kbPage.includes('"/api/rag/reindex/plan"') && kbPage.includes("confirmPlanId"), "knowledge base: ingest + plan-confirmed reindex");
+  const auditPage = await read("src/app/app/audit/page.tsx");
+  assert(auditPage.includes("/api/audit?") && auditPage.includes('RequireRole role="Admin"'), "audit page: Admin-gated view of GET /api/audit");
+  const evidence = await read("src/components/evidence/EvidenceBlock.tsx");
+  assert(!evidence.includes("evidenceService"), "EvidenceBlock: never expands API evidence with local records");
 
   // 9. LLM settings route — file-shape contract.
   // ---------------------------------------------------------------------
@@ -430,437 +444,170 @@ async function main() {
   assert(/\.env\.local/.test(gitignore), ".gitignore lists .env.local");
   assert(/\.env\*\.local/.test(gitignore), ".gitignore lists .env*.local");
 
-  // 10. LLM settings route — runtime contract.
+  // 10. Ask Live/Demo labelling — behaviour of src/lib/askMode.ts, imported
+  // directly (Node strips the TypeScript types). Only an explicit
+  // mode:"live" from the API may ever render as Live.
   // ---------------------------------------------------------------------
-  // Boot `next start` against the build dir, hit GET to confirm the
-  // response shape never carries an apiKey or LLM_API_KEY string, POST a
-  // clearly fake key, then GET again and confirm `configured` flips true
-  // while the fake key still does not appear anywhere in the body.
-  await runSettingsLlmRuntimeCheck();
+  const askMode = await import(url.pathToFileURL(path.join(root, "src/lib/askMode.ts")).href);
+  assert(askMode.resolveAskMode({ mode: "live" }) === "live", "askMode: mode live → live");
+  assert(askMode.resolveAskMode({ mode: "demo" }) === "demo", "askMode: mode demo → demo");
+  assert(askMode.resolveAskMode({ mode: "no_source" }) === "no_source", "askMode: mode no_source → no_source");
+  for (const [label, value] of [["missing", {}], ["null", null], ["unknown", { mode: "LIVE" }], ["truthy", { mode: true }], ["old shape", { finding: "x", confidence: 0.7 }]]) {
+    assert(askMode.resolveAskMode(value) === "demo", `askMode: ${label} mode is never live`);
+  }
+  assert(askMode.askModeLabel("live").label === "Live" && askMode.askModeLabel("live").isLive, "askMode: live label");
+  assert(askMode.askModeLabel("demo").label === "Demo" && !askMode.askModeLabel("demo").isLive, "askMode: demo label");
+  assert(!askMode.askModeLabel("no_source").isLive, "askMode: no_source is not live");
+  assert(askMode.shouldShowConfidence("live") && !askMode.shouldShowConfidence("demo") && !askMode.shouldShowConfidence("no_source"),
+    "askMode: confidence shown only for live answers");
+  assert(!/setSource\("live"\)/.test(askPage), "ask page never hard-codes a live source");
+  assert(askPage.includes("resolveAskMode(json)"), "ask page derives the chip from the API's mode");
+  assert(askPage.includes('data-testid="ask-citations"'), "ask page renders citations");
+
+  // 11. Approvals are server-side: the UI reads and decides through the API.
+  // ---------------------------------------------------------------------
+  const approvalsPage = await read("src/app/app/approvals/page.tsx");
+  const approvalsApi = await read("src/services/approvals.api.ts");
+  assert(!approvalsPage.includes("approval.service"), "approvals page no longer uses the browser-memory approval.service");
+  assert(approvalsPage.includes("decideApproval(") && approvalsPage.includes("fetchApprovals("), "approvals page reads and decides through the API");
+  assert(approvalsApi.includes("/api/approvals?status=") && approvalsApi.includes("/api/approvals/${encodeURIComponent(id)}/${decision}"),
+    "approvals.api calls GET /api/approvals and POST /api/approvals/{id}/approve|reject");
+  for (const f of ["src/app/app/page.tsx", "src/components/layout/Sidebar.tsx"]) {
+    assert(!(await read(f)).includes("approvalService."), `${f} uses the server approval queue`);
+  }
+
+  // 12. Admin pass-through proxy — runtime contract against a fake backend.
+  await runAdminProxyRuntimeCheck();
 
   console.log("\nAll smoke checks passed.");
 }
 
-async function runSettingsLlmRuntimeCheck() {
-  // Skip cleanly if the production build isn't present yet.
+async function runAdminProxyRuntimeCheck() {
+  // Runtime contract of the admin pass-through routes (src/lib/adminProxy.ts)
+  // and the /api/* rewrite, against a FAKE local backend. The real .NET API
+  // and any database are never contacted: `next start` gets explicit
+  // DOTNET_API_URL / NEXT_PUBLIC_API_URL values, and real process env wins
+  // over the repo-root .env that next.config.mjs loads.
+  //
+  // Replaces the old settings/llm runtime check, which assumed Next.js
+  // handled settings itself and that anonymous writes were accepted.
   const buildDir = path.join(root, ".next");
   try {
     await fs.access(path.join(buildDir, "BUILD_ID"));
   } catch {
-    console.log("skip: runtime settings/llm check (no .next/BUILD_ID — build first)");
+    console.log("skip: admin proxy runtime check (no .next/BUILD_ID — build first)");
     return;
   }
 
+  const http = await import("node:http");
+  const seen = [];
+  const backend = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      seen.push({ method: req.method, url: req.url, headers: req.headers, body });
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "public, max-age=3600"); // the proxy must override this
+      res.setHeader("Set-Cookie", "backend_cookie=1; Path=/");   // …and must not pass this through
+      res.end(JSON.stringify({ configured: false, provider: null, model: null, mode: "demo", persistence: "process" }));
+    });
+  });
+  await new Promise((r) => backend.listen(0, "127.0.0.1", r));
+  const backendUrl = `http://127.0.0.1:${backend.address().port}`;
+
   const port = 4173;
   const base = `http://127.0.0.1:${port}`;
+  const LEGACY_TOKEN = "smoke-legacy-admin-token-must-never-be-forwarded";
   const FAKE_KEY = "smoke-fake-key-DO-NOT-USE-0123456789abcdef";
-
-  // If a previous smoke run aborted before cleanup ran (e.g. an assertion
-  // failed mid-test), there can be a stale `next start` bound to the test
-  // port that retains `LLM_PROVIDER=openai` in its process memory. Kill
-  // any pre-existing listener so the new server starts from a clean slate.
   await killListenersOnPort(port);
 
-  // The dev-mode route upserts to .env.local. Back up and remove any
-  // existing copy so the test starts clean and we can restore it after.
-  const envLocal = path.join(root, ".env.local");
-  const hadEnvLocal = await fs.stat(envLocal).then(() => true).catch(() => false);
-  let backup = null;
-  if (hadEnvLocal) {
-    backup = await fs.readFile(envLocal, "utf8");
-    await fs.unlink(envLocal);
-  }
-
-  // Start `next start`. We force NODE_ENV=production so the route hits
-  // the "process-only" branch (no file writes). Stdout/stderr are
-  // discarded — never let the key land in build logs.
-  // detached:true + process.kill(-pid) lets us reap the entire process
-  // group (npx → sh → next-server) even if smoke aborts mid-test.
-  const server = spawn("npx", ["next", "start", "-p", String(port)], {
+  // Run Next's CLI with this Node binary directly (no npx / shell), so it
+  // starts and stops the same way on Windows, macOS and Linux.
+  const nextCli = path.join(root, "node_modules", "next", "dist", "bin", "next");
+  const server = spawn(process.execPath, [nextCli, "start", "-p", String(port), "-H", "127.0.0.1"], {
     cwd: root,
-    detached: true,
-    env: { ...process.env, NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1" },
+    env: {
+      ...process.env,
+      NODE_ENV: "production",
+      NEXT_TELEMETRY_DISABLED: "1",
+      DOTNET_API_URL: backendUrl,
+      NEXT_PUBLIC_API_URL: backendUrl,
+      ADMIN_API_TOKEN: LEGACY_TOKEN // present on purpose: the proxy must ignore it
+    },
     stdio: ["ignore", "ignore", "ignore"]
   });
 
-  async function cleanup() {
-    try { process.kill(-server.pid, "SIGTERM"); } catch {}
-    await new Promise((r) => setTimeout(r, 250));
-    try { process.kill(-server.pid, "SIGKILL"); } catch {}
-    if (hadEnvLocal && backup !== null) {
-      await fs.writeFile(envLocal, backup);
-    } else if (!hadEnvLocal) {
-      // No original file existed; if a test .env.local was created in
-      // dev mode elsewhere, wipe it. Here we also make sure we don't
-      // leave any test-spawned .env.local behind.
-      await fs.unlink(envLocal).catch(() => {});
-    }
-  }
+  const lastSeen = () => seen[seen.length - 1];
+  const header = (h, name) => (h ? h[name] : undefined);
 
   try {
     await waitForServer(base);
-    const headers = { "Content-Type": "application/json" };
+    seen.length = 0; // ignore readiness probes
 
-    // Reset /api/settings/llm to a known-clean baseline so this run is
-    // deterministic regardless of any state the .NET process accumulated
-    // from a previous smoke run.
-    await fetch(base + "/api/settings/llm", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ clearAll: true }),
+    // 1. A signed-in caller's bearer token is forwarded verbatim; cookies,
+    //    the legacy admin token and any other credential are not.
+    let res = await fetch(base + "/api/settings/llm", {
+      headers: { Authorization: "Bearer smoke-user-token", Cookie: "fb_refresh=smoke-refresh-cookie" },
       cache: "no-store"
     });
+    assert(res.status === 200, "admin proxy: GET /api/settings/llm reaches the backend");
+    assertNoStore(res, "admin proxy GET");
+    assert(!res.headers.get("set-cookie"), "admin proxy: backend Set-Cookie is not passed through");
+    let s = lastSeen();
+    assert(s && s.url === "/api/settings/llm", "admin proxy: forwards to the backend path");
+    assert(header(s.headers, "authorization") === "Bearer smoke-user-token", "admin proxy: forwards the caller's bearer token");
+    assert(header(s.headers, "x-admin-token") === undefined, "admin proxy: never adds X-Admin-Token (even with ADMIN_API_TOKEN set)");
+    assert(header(s.headers, "cookie") === undefined, "admin proxy: does not forward cookies");
+    assert(!JSON.stringify(s.headers).includes(LEGACY_TOKEN), "admin proxy: legacy token appears in no forwarded header");
 
-    // Hit GET /api/settings/llm FIRST and explicitly assert the runtime
-    // contract: response JSON has no apiKey, no LLM_API_KEY, and no
-    // key-shaped string field. This is the runtime-only companion to the
-    // static file-level checks in section 9 and is intentionally separate
-    // from the broader assertNoSecret() below.
-    const probeRaw = await fetch(base + "/api/settings/llm", { cache: "no-store" });
-    assertNoStore(probeRaw, "settings/llm GET (probe)");
-    const probeJson = await probeRaw.json();
-    assertNoLeakedKey(probeJson, "GET /api/settings/llm (probe)");
-
-    // Initial GET — neither key nor env var name should appear, status is
-    // demo mode with no provider / model, persistence flag is one of the
-    // three valid options. Also assert Cache-Control: no-store so the
-    // status never gets cached by intermediaries.
-    const initialRaw = await fetch(base + "/api/settings/llm", { cache: "no-store" });
-    assertNoStore(initialRaw, "settings/llm GET (initial)");
-    const initial = await initialRaw.json();
-    assertNoSecret(initial, FAKE_KEY, "GET (initial)");
-    assertNoLeakedKey(initial, "GET /api/settings/llm (initial)");
-    assert(initial.configured === false, "settings/llm: initial configured === false (no env)");
-    assert(initial.mode === "demo", "settings/llm: initial mode === demo");
-    assert(initial.provider === null, "settings/llm: initial provider === null");
-    assert(initial.model === null, "settings/llm: initial model === null");
-    assert(["env.local", "process", "vercel_only"].includes(initial.persistence), `settings/llm: persistence ∈ {env.local,process,vercel_only}, got ${initial.persistence}`);
-    assert(!("apiKey" in initial), "settings/llm: GET response has no apiKey key");
-    assert(!("LLM_API_KEY" in initial), "settings/llm: GET response has no LLM_API_KEY key");
-
-    // POST a clearly fake key.
-    const fakeBody = JSON.stringify({ provider: "openai", apiKey: FAKE_KEY, model: "gpt-6-luna" });
-    const postRes = await fetch(base + "/api/settings/llm", { method: "POST", headers, body: fakeBody });
-    assertNoStore(postRes, "settings/llm POST");
-    const postText = await postRes.text();
-    assert(postRes.status === 200, `POST settings/llm returned 200 (got ${postRes.status})`);
-    assert(!postText.includes(FAKE_KEY), "POST response text does not contain the fake key");
-    // The route's notice string in production mode legitimately mentions
-    // the env-var name as guidance. We assert on the parsed JSON shape —
-    // never any apiKey-shaped field or value.
-    const postParsed = JSON.parse(postText);
-    assertNoSecret(postParsed, FAKE_KEY, "POST response");
-    assertNoLeakedKey(postParsed, "POST /api/settings/llm response");
-    assert(postParsed.configured === true, "POST sets configured: true after fake key saved");
-
-    // GET again — status should now show configured=true, and still
-    // never echo the key. Also assert the env-var name isn't returned.
-    const afterRaw = await fetch(base + "/api/settings/llm", { cache: "no-store" });
-    assertNoStore(afterRaw, "settings/llm GET (after POST)");
-    const after = await afterRaw.json();
-    assertNoSecret(after, FAKE_KEY, "GET (after POST)");
-    assertNoLeakedKey(after, "GET /api/settings/llm (after POST)");
-    assert(after.configured === true, "GET after POST reports configured: true");
-    assert(after.mode === "live", "GET after POST reports mode: live");
-    assert(after.provider === "openai", "GET after POST reports provider: openai");
-    assert(after.model === "gpt-6-luna", "GET after POST reports model: gpt-6-luna");
-
-    // Clear the key and confirm GET goes back to configured:false.
-    const clearRes = await fetch(base + "/api/settings/llm", {
-      method: "POST", headers, body: JSON.stringify({ provider: "openai", clearKey: true })
-    });
-    assert(clearRes.status === 200, "POST clearKey returned 200");
-    const clearedRaw = await fetch(base + "/api/settings/llm", { cache: "no-store" });
-    assertNoStore(clearedRaw, "settings/llm GET (after clear)");
-    const cleared = await clearedRaw.json();
-    assert(cleared.configured === false, "GET after clearKey reports configured: false");
-    assert(cleared.mode === "demo", "GET after clearKey reports mode: demo");
-    assertNoSecret(cleared, FAKE_KEY, "GET (after clear)");
-    assertNoLeakedKey(cleared, "GET /api/settings/llm (after clear)");
-
-    // Line-board (improve batch) — runtime contract against the same server.
-    const boardRaw = await fetch(base + "/api/line-board", { cache: "no-store" });
-    assertNoStore(boardRaw, "line-board GET");
-    const board = await boardRaw.json();
-    assert(board && Array.isArray(board.rows), "line-board: rows is an array");
-    assert(board.rows.length === 6, "line-board: returns 6 rows (line-1..line-6)");
-    assert(board.meta && board.meta.simulated === true, "line-board: meta.simulated is true");
-    assert(typeof board.meta.source === "string" && /Simulated/.test(board.meta.source), "line-board: meta.source mentions Simulated");
-    assert(typeof board.meta.notes === "string" && board.meta.notes.length > 0, "line-board: meta.notes is a non-empty string");
-    assert(typeof board.meta.tick === "number" && board.meta.tick >= 0, "line-board: meta.tick is a non-negative number");
-    assert(typeof board.meta.updatedAt === "string" && board.meta.updatedAt.length > 0, "line-board: meta.updatedAt is set");
-    const seenLineIds = new Set();
-    for (const r of board.rows) {
-      for (const k of ["lineId", "name", "efficiencyPct", "sahTarget", "sahActual", "wipBundles", "bottleneck", "nptMinutes", "updatedAt"]) {
-        assert(r[k] !== undefined, `line-board row ${r.lineId || "?"}: has ${k}`);
-      }
-      assert(typeof r.lineId === "string" && /^line-\d+$/.test(r.lineId), `line-board row: lineId matches line-N, got ${r.lineId}`);
-      assert(!seenLineIds.has(r.lineId), `line-board row: lineId ${r.lineId} appears once`);
-      seenLineIds.add(r.lineId);
-      assert(typeof r.name === "string" && r.name.length > 0, `line-board row ${r.lineId}: name is a non-empty string`);
-      assert(["green", "amber", "red"].includes(r.bottleneck), `line-board row ${r.lineId}: bottleneck ∈ green/amber/red`);
-      assert(r.efficiencyPct >= 0 && r.efficiencyPct <= 100, `line-board row ${r.lineId}: efficiencyPct in 0..100`);
-      assert(Number.isInteger(r.sahTarget) && r.sahTarget >= 0 && r.sahTarget <= 100, `line-board row ${r.lineId}: sahTarget is integer 0..100`);
-      assert(Number.isInteger(r.sahActual) && r.sahActual >= 0 && r.sahActual <= 100, `line-board row ${r.lineId}: sahActual is integer 0..100`);
-      assert(r.sahActual === r.efficiencyPct, `line-board row ${r.lineId}: sahActual mirrors efficiencyPct`);
-      assert(Number.isInteger(r.wipBundles) && r.wipBundles >= 0, `line-board row ${r.lineId}: wipBundles is integer ≥ 0`);
-      assert(Number.isInteger(r.nptMinutes) && r.nptMinutes >= 0, `line-board row ${r.lineId}: nptMinutes is integer ≥ 0`);
-      assert(/^\d{4}-\d{2}-\d{2}T/.test(r.updatedAt), `line-board row ${r.lineId}: updatedAt is ISO 8601`);
-    }
-    assert(seenLineIds.size === 6, `line-board: covers all 6 unique lineIds, got ${seenLineIds.size}`);
-
-    // Determinism — two consecutive GETs return identical rows (only
-    // meta.updatedAt + per-row updatedAt are allowed to differ).
-    const board2 = await getJson(base + "/api/line-board");
-    const stripLineBoardTimestamps = (b) => ({
-      ...b,
-      meta: { ...b.meta, updatedAt: "X" },
-      rows: b.rows.map((r) => ({ ...r, updatedAt: "X" }))
-    });
-    assert(
-      JSON.stringify(stripLineBoardTimestamps(board)) === JSON.stringify(stripLineBoardTimestamps(board2)),
-      "line-board: rows + meta are deterministic (only updatedAt may differ)"
-    );
-
-    // Refresh should advance tick and return a fresh board.
-    const tickBefore = board.meta.tick;
-    const refreshRes = await fetch(base + "/api/line-board/refresh", { method: "POST", headers });
-    assertNoStore(refreshRes, "line-board/refresh POST");
-    assert(refreshRes.status === 200, "POST /api/line-board/refresh returned 200");
-    const refreshed = await refreshRes.json();
-    assert(refreshed.meta.tick > tickBefore, `line-board/refresh: tick advances (${tickBefore} → ${refreshed.meta.tick})`);
-    assert(refreshed.meta.simulated === true, "line-board/refresh: meta.simulated is true");
-    assert(refreshed.rows.length === 6, "line-board/refresh: still 6 rows");
-
-    // Invalid body returns 400.
-    const badRes = await fetch(base + "/api/line-board/refresh", {
-      method: "POST", headers, body: JSON.stringify({ tick: "nope" })
-    });
-    assert(badRes.status === 400, "POST /api/line-board/refresh with bad body returns 400");
-
-    // Re-read line-board AFTER refresh so we have the current tick value
-    // to compare against the brief we fetch below (the brief uses the same
-    // shared sim-state as line-board, so its tick must match the *current*
-    // tick, not the pre-refresh one captured at the top of this test).
-    const boardPostRefreshRaw = await fetch(base + "/api/line-board", { cache: "no-store" });
-    assertNoStore(boardPostRefreshRaw, "line-board GET (post-refresh)");
-    const boardPostRefresh = await boardPostRefreshRaw.json();
-    assert(boardPostRefresh.meta.tick === refreshed.meta.tick, `line-board post-refresh tick (${boardPostRefresh.meta.tick}) matches refresh tick (${refreshed.meta.tick})`);
-
-    // Brief — runtime contract + determinism (same inputs → identical JSON).
-    // Give Next a generous grace period to compile the freshly-added route.
-    let brief1 = null;
-    let lastStatus = 0;
-    let lastHeaders = null;
-    const briefDeadline = Date.now() + 30_000;
-    while (Date.now() < briefDeadline) {
-      try {
-        const r = await fetch(base + "/api/brief/morning", { cache: "no-store" });
-        lastStatus = r.status;
-        lastHeaders = r.headers;
-        if (r.status === 200) {
-          brief1 = await r.json();
-          break;
-        }
-        // Drain the body so the connection is reusable, but don't parse it.
-        try { await r.text(); } catch {}
-      } catch {}
-      await new Promise((r2) => setTimeout(r2, 500));
-    }
-    assert(brief1 !== null, `brief: GET /api/brief/morning returned 200 within grace period (last status ${lastStatus})`);
-    assert(
-      lastHeaders && /no-store/i.test(lastHeaders.get("cache-control") ?? ""),
-      "brief: GET /api/brief/morning sets Cache-Control: no-store"
-    );
-    assert(typeof brief1.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(brief1.date), "brief: date is YYYY-MM-DD");
-    assert(Array.isArray(brief1.bulletsEn) && brief1.bulletsEn.length >= 1, "brief: bulletsEn is a non-empty array");
-    assert(Array.isArray(brief1.bulletsBn) && brief1.bulletsBn.length >= 1, "brief: bulletsBn is a non-empty array");
-    assert(brief1.bulletsEn.length === brief1.bulletsBn.length, "brief: bulletsEn and bulletsBn have same length");
-    for (const s of brief1.bulletsEn) assert(typeof s === "string" && s.length > 0, "brief: every bulletsEn entry is a non-empty string");
-    for (const s of brief1.bulletsBn) assert(typeof s === "string" && s.length > 0, "brief: every bulletsBn entry is a non-empty string");
-    assert(Number.isInteger(brief1.riskCount) && brief1.riskCount >= 0, "brief: riskCount is a non-negative integer");
-    assert(Number.isInteger(brief1.pendingApprovals) && brief1.pendingApprovals >= 0, "brief: pendingApprovals is a non-negative integer");
-    if (brief1.topBottleneckLineId !== undefined) {
-      assert(typeof brief1.topBottleneckLineId === "string" && /^line-\d+$/.test(brief1.topBottleneckLineId), "brief: topBottleneckLineId is a line id");
-      // Cross-route consistency: the brief's top bottleneck must reference a
-      // row that actually exists in the line-board response.
-      const inBoard = boardPostRefresh.rows.find((r) => r.lineId === brief1.topBottleneckLineId);
-      assert(!!inBoard, `brief: topBottleneckLineId ${brief1.topBottleneckLineId} is present in /api/line-board rows`);
-      if (inBoard) {
-        // The header bullet must mention the same line id.
-        const headerMentionsLine = brief1.bulletsEn[0].includes(inBoard.lineId);
-        assert(headerMentionsLine, `brief: header bullet references top bottleneck ${inBoard.lineId}`);
-      }
-    }
-    assert(brief1.meta && brief1.meta.simulated === true, "brief: meta.simulated is true");
-    assert(typeof brief1.meta.source === "string" && /Simulated/.test(brief1.meta.source), "brief: meta.source mentions Simulated");
-    assert(typeof brief1.meta.notes === "string" && brief1.meta.notes.length > 0, "brief: meta.notes is a non-empty string");
-    assert(Number.isInteger(brief1.meta.tick) && brief1.meta.tick >= 0, "brief: meta.tick is a non-negative integer");
-    assert(typeof brief1.meta.generatedAt === "string" && brief1.meta.generatedAt.length > 0, "brief: meta.generatedAt is set");
-    assert(
-      brief1.meta.tick === boardPostRefresh.meta.tick,
-      `brief: meta.tick matches /api/line-board meta.tick (${brief1.meta.tick} vs ${boardPostRefresh.meta.tick})`
-    );
-
-    // Determinism — two consecutive GETs return identical content (only
-    // meta.generatedAt is allowed to differ; bullets/insights/counts are stable).
-    const brief2Raw = await fetch(base + "/api/brief/morning", { cache: "no-store" });
-    assertNoStore(brief2Raw, "brief GET (determinism)");
-    const brief2 = await brief2Raw.json();
-    const { generatedAt: _g1, ...brief1Stripped } = brief1.meta;
-    const { generatedAt: _g2, ...brief2Stripped } = brief2.meta;
-    const stable1 = { ...brief1, meta: brief1Stripped };
-    const stable2 = { ...brief2, meta: brief2Stripped };
-    assert(JSON.stringify(stable1) === JSON.stringify(stable2), "brief: content is deterministic across calls (only generatedAt may differ)");
-
-    // QC defects — runtime contract + determinism.
-    let qc1 = null;
-    let qcLastStatus = 0;
-    let qcLastHeaders = null;
-    const qcDeadline = Date.now() + 30_000;
-    while (Date.now() < qcDeadline) {
-      try {
-        const r = await fetch(base + "/api/qc/defects", { cache: "no-store" });
-        qcLastStatus = r.status;
-        qcLastHeaders = r.headers;
-        if (r.status === 200) {
-          qc1 = await r.json();
-          break;
-        }
-        try { await r.text(); } catch {}
-      } catch {}
-      await new Promise((r2) => setTimeout(r2, 500));
-    }
-    assert(qc1 !== null, `qc: GET /api/qc/defects returned 200 within grace period (last status ${qcLastStatus})`);
-    assert(
-      qcLastHeaders && /no-store/i.test(qcLastHeaders.get("cache-control") ?? ""),
-      "qc: GET /api/qc/defects sets Cache-Control: no-store"
-    );
-    assert(Array.isArray(qc1.operations) && qc1.operations.length === 36, `qc: operations has 36 cells (6 ops × 6 lines), got ${qc1.operations?.length}`);
-    const qcSeenLineIds = new Set();
-    const qcSeenOps = new Set();
-    for (const op of qc1.operations) {
-      qcSeenLineIds.add(op.lineId);
-      qcSeenOps.add(op.operation);
-      assert(op.weeks.length === 8, `qc op ${op.operation}/${op.lineId}: 8 weekly buckets`);
-      for (const w of op.weeks) {
-        assert(/^\d{4}-\d{2}-\d{2}$/.test(w.weekStart), `qc op ${op.operation}/${op.lineId}: weekStart is YYYY-MM-DD`);
-        assert(w.defects <= w.inspected, `qc op ${op.operation}/${op.lineId}/${w.weekStart}: defects ≤ inspected`);
-        assert(w.major + w.minor === w.defects, `qc op ${op.operation}/${op.lineId}/${w.weekStart}: major+minor === defects`);
-        assert(w.rework <= w.defects, `qc op ${op.operation}/${op.lineId}/${w.weekStart}: rework ≤ defects`);
-      }
-      // Per-cell totals must equal the sum of weekly buckets.
-      const tInspected = op.weeks.reduce((a, w) => a + w.inspected, 0);
-      const tDefects = op.weeks.reduce((a, w) => a + w.defects, 0);
-      const tMajor = op.weeks.reduce((a, w) => a + w.major, 0);
-      const tMinor = op.weeks.reduce((a, w) => a + w.minor, 0);
-      const tRework = op.weeks.reduce((a, w) => a + w.rework, 0);
-      assert(op.totals.inspected === tInspected, `qc op ${op.operation}/${op.lineId}: totals.inspected === Σ weeks.inspected`);
-      assert(op.totals.defects === tDefects, `qc op ${op.operation}/${op.lineId}: totals.defects === Σ weeks.defects`);
-      assert(op.totals.major === tMajor, `qc op ${op.operation}/${op.lineId}: totals.major === Σ weeks.major`);
-      assert(op.totals.minor === tMinor, `qc op ${op.operation}/${op.lineId}: totals.minor === Σ weeks.minor`);
-      assert(op.totals.rework === tRework, `qc op ${op.operation}/${op.lineId}: totals.rework === Σ weeks.rework`);
-    }
-    assert(qcSeenLineIds.size === 6, `qc: covers all 6 lines, got ${qcSeenLineIds.size}`);
-    assert(qcSeenOps.size === 6, `qc: covers all 6 operations, got ${qcSeenOps.size}`);
-    // Cross-route consistency: every QC lineId exists in line-board rows.
-    for (const lid of qcSeenLineIds) {
-      assert(seenLineIds.has(lid), `qc: lineId ${lid} also exists in /api/line-board rows`);
-    }
-    assert(qc1.topByDefectRate.length === 5, "qc: topByDefectRate has 5 entries");
-    assert(qc1.topByReworkRate.length === 5, "qc: topByReworkRate has 5 entries");
-    for (const t of qc1.topByDefectRate) {
-      assert(t.defectRatePct >= 0 && t.defectRatePct <= 100, `qc top defect ${t.operation}/${t.lineId}: defectRatePct ∈ 0..100`);
-      assert(t.reworkRatePct >= 0 && t.reworkRatePct <= 100, `qc top defect ${t.operation}/${t.lineId}: reworkRatePct ∈ 0..100`);
-      // Each top-row must reference a (op, line) that exists in operations.
-      assert(
-        qc1.operations.some((o) => o.operation === t.operation && o.lineId === t.lineId),
-        `qc top defect ${t.operation}/${t.lineId} exists in operations grid`
-      );
-    }
-    for (const t of qc1.topByReworkRate) {
-      assert(t.reworkRatePct >= 0 && t.reworkRatePct <= 100, `qc top rework ${t.operation}/${t.lineId}: reworkRatePct ∈ 0..100`);
-      assert(t.defectRatePct >= 0 && t.defectRatePct <= 100, `qc top rework ${t.operation}/${t.lineId}: defectRatePct ∈ 0..100`);
-      assert(
-        qc1.operations.some((o) => o.operation === t.operation && o.lineId === t.lineId),
-        `qc top rework ${t.operation}/${t.lineId} exists in operations grid`
-      );
-    }
-    assert(qc1.meta.simulated === true, "qc: meta.simulated is true");
-    assert(/Simulated/i.test(qc1.meta.source), "qc: meta.source mentions Simulated");
-    assert(typeof qc1.meta.defectSource === "string" && qc1.meta.defectSource.length > 0, "qc: meta.defectSource is set");
-    assert(typeof qc1.meta.notes === "string" && qc1.meta.notes.length > 0, "qc: meta.notes is a non-empty string");
-    assert(typeof qc1.meta.generatedAt === "string" && qc1.meta.generatedAt.length > 0, "qc: meta.generatedAt is set");
-
-    // Determinism — content stable across two calls (only meta.generatedAt may differ).
-    const qc2Raw = await fetch(base + "/api/qc/defects", { cache: "no-store" });
-    assertNoStore(qc2Raw, "qc GET (determinism)");
-    const qc2 = await qc2Raw.json();
-    const { generatedAt: _qg1, ...qc1Stripped } = qc1.meta;
-    const { generatedAt: _qg2, ...qc2Stripped } = qc2.meta;
-    const qcStable1 = { ...qc1, meta: qc1Stripped };
-    const qcStable2 = { ...qc2, meta: qc2Stripped };
-    assert(JSON.stringify(qcStable1) === JSON.stringify(qcStable2), "qc: content is deterministic across calls (only generatedAt may differ)");
-
-    // QC flag — runtime contract. Flagging a top operation should persist an
-    // Insight via insightService.upsertCustom(); the new insight id should
-    // appear in /api/insights-style queries (we use brief/morning as the
-    // public mirror — but the real test is that the flag response shape
-    // matches FlagResponseSchema). We also exercise a 400 path on bad body.
-    const flagBad = await fetch(base + "/api/qc/flag", {
+    // 2. An anonymous POST carries no credential at all; the body is
+    //    forwarded intact and the posted key never comes back.
+    res = await fetch(base + "/api/settings/llm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ operation: "INVALID", lineId: "line-1" }),
+      body: JSON.stringify({ provider: "openai", apiKey: FAKE_KEY }),
       cache: "no-store"
     });
-    assert(flagBad.status === 400, `qc/flag: invalid body returns 400, got ${flagBad.status}`);
+    assertNoStore(res, "admin proxy POST");
+    s = lastSeen();
+    assert(s.method === "POST" && JSON.parse(s.body).apiKey === FAKE_KEY, "admin proxy: forwards the POST body unchanged");
+    assert(header(s.headers, "authorization") === undefined, "admin proxy: anonymous request gets no Authorization added");
+    assert(header(s.headers, "x-admin-token") === undefined, "admin proxy: anonymous request gets no X-Admin-Token");
+    assert(!(await res.text()).includes(FAKE_KEY), "admin proxy: response never echoes the posted key");
 
-    const flagPick = qc1.topByDefectRate[0];
-    const flagRes = await fetch(base + "/api/qc/flag", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        operation: flagPick.operation,
-        lineId: flagPick.lineId,
-        defectRatePct: flagPick.defectRatePct,
-        reworkRatePct: flagPick.reworkRatePct
-      }),
-      cache: "no-store"
-    });
-    assert(flagRes.status === 200, `qc/flag: POST returned 200, got ${flagRes.status}`);
-    const flagJson = await flagRes.json();
-    assert(typeof flagJson.insightId === "string" && flagJson.insightId.length > 0, "qc/flag: response insightId present");
-    assert(typeof flagJson.flaggedAt === "string" && flagJson.flaggedAt.length > 0, "qc/flag: response flaggedAt present");
-    assert(/^qc-flag-/.test(flagJson.insightId), `qc/flag: insightId has expected prefix, got ${flagJson.insightId}`);
-    const flagText = JSON.stringify(flagJson);
-    assert(!flagText.includes(FAKE_KEY), "qc/flag: response does not contain any leftover secret");
-    assert(!flagText.includes("apiKey"), "qc/flag: response does not contain the substring 'apiKey'");
+    // 3. Non-bearer or oversized Authorization values are dropped.
+    for (const [label, value] of [["basic", "Basic dXNlcjpwYXNz"], ["oversized", "Bearer " + "x".repeat(9000)]]) {
+      await fetch(base + "/api/rag/reindex", { method: "POST", headers: { Authorization: value }, cache: "no-store" });
+      s = lastSeen();
+      assert(s.url === "/api/rag/reindex" && header(s.headers, "authorization") === undefined,
+        `admin proxy: ${label} Authorization header is not forwarded`);
+    }
 
-    // Idempotence — repeating the same flag with the same (op, line) returns
-    // the same insight id (not a new one). This is the contract the dataset
-    // provides via insightService.upsertCustom.
-    const flagRes2 = await fetch(base + "/api/qc/flag", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        operation: flagPick.operation,
-        lineId: flagPick.lineId,
-        defectRatePct: flagPick.defectRatePct,
-        reworkRatePct: flagPick.reworkRatePct
-      }),
-      cache: "no-store"
-    });
-    const flagJson2 = await flagRes2.json();
-    assert(flagJson2.insightId === flagJson.insightId, "qc/flag: repeated flag is idempotent (same insightId)");
+    // 4. The generic /api/* rewrite. Next.js resolves rewrites() at BUILD
+    //    time into routes-manifest.json, so its target is fixed by the build
+    //    environment (it ignores this run's env); check the manifest rather
+    //    than sending a request to whatever backend the build baked in.
+    const manifest = JSON.parse(await fs.readFile(path.join(buildDir, "routes-manifest.json"), "utf8"));
+    // A plain-array rewrites() config is stored as an array; the object form
+    // as { beforeFiles, afterFiles, fallback }.
+    const rewriteList = Array.isArray(manifest.rewrites)
+      ? manifest.rewrites
+      : [].concat(manifest.rewrites?.beforeFiles ?? [], manifest.rewrites?.afterFiles ?? [], manifest.rewrites?.fallback ?? []);
+    const rw = rewriteList.find((r) => r.source === "/api/:path*");
+    assert(rw && /^https?:\/\/[^/]+\/api\/:path\*$/.test(rw.destination), "rewrite: /api/:path* → <backend>/api/:path* is in the build manifest");
+    assert(!seen.some((r) => r.url === "/api/auth/refresh"), "rewrite: no auth traffic hit the fake backend unprompted");
 
-    // After flagging, brief/morning's riskCount should reflect the new
-    // suggested-stage insight (we can't assert a strict delta because the
-    // brief uses its own derivation, but the risk insight exists). We
-    // assert the flag did not break brief stability (determinism holds).
-    const briefPostFlag = await getJson(base + "/api/brief/morning");
-    assert(briefPostFlag && Array.isArray(briefPostFlag.bulletsEn), "brief still returns valid payload after flag");
+    // 5. Backend down: a stable 502 envelope, no-store, no internals.
+    await new Promise((r) => backend.close(() => r()));
+    res = await fetch(base + "/api/settings/llm", { cache: "no-store" });
+    assert(res.status === 502, "admin proxy: unreachable backend → 502");
+    assertNoStore(res, "admin proxy 502");
+    const down = await res.text();
+    assert(down.includes("BackendUnreachable") && !down.includes("127.0.0.1"), "admin proxy: 502 body is the stable envelope without addresses");
   } finally {
-    await cleanup();
+    try { server.kill(); } catch {}
+    await new Promise((r) => setTimeout(r, 300));
+    try { await new Promise((r) => backend.close(() => r())); } catch {}
   }
 }
 

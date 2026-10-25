@@ -38,6 +38,9 @@ public class FactoryBrainDbContext : DbContext
     public DbSet<InventoryRecord>   Inventory          => Set<InventoryRecord>();
     public DbSet<ActivityEvent>     ActivityEvents     => Set<ActivityEvent>();
     public DbSet<User>               Users              => Set<User>();
+    public DbSet<AuditLogEntry>      AuditLog           => Set<AuditLogEntry>();
+    public DbSet<AiSettingsRecord>   AiSettings         => Set<AiSettingsRecord>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {

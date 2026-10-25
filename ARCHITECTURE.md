@@ -12,6 +12,7 @@ and render on GitHub and in the VS Code Markdown preview.
 - [6. Standalone Python RAG (`rag/`)](#6-standalone-python-rag-rag)
 - [7. Security boundaries](#7-security-boundaries)
 - [8. Frontend pages and the API](#8-frontend-pages-and-the-api)
+- [9. Quality inspection (QC & defect detection)](#9-quality-inspection-qc--defect-detection)
 
 ---
 
@@ -270,7 +271,7 @@ flowchart LR
 |---|---|
 | Login, refresh, logout, current user | `/api/auth/*`. 15-minute access token in the response body (kept in memory by the frontend), 7-day rotating refresh token in an HttpOnly cookie scoped to `/api/auth`. `JWT_SIGNING_KEY` (32+ bytes) is required outside Development |
 | Default access | Fallback authorization policy: every endpoint needs a valid JWT unless it is `[AllowAnonymous]` (`/health`, login, refresh, logout) |
-| Roles | `Operator` policy (Admin or Operator) on operational writes; `Admin` policy on `POST /api/settings/llm`, `/api/rag/ingest`, `/api/rag/reindex`. The full matrix is asserted by `FactoryBrain.Api.Tests/EndpointAccessMatrixTests.cs` |
+| Roles | `Operator` policy (Admin or Operator) on operational writes; `Admin` policy on `POST /api/settings/llm`, `/api/rag/ingest`, `/api/rag/reindex`, the QC defect taxonomy (`POST/PUT /api/qc/categories`). The full matrix is asserted by `FactoryBrain.Api.Tests/EndpointAccessMatrixTests.cs` |
 | Login brute force | Per-IP fixed-window rate limiter (`login` policy) |
 | Simulation abuse | `tick` bounded (validator + at most 60 ticks per request); per-user rate limits on `POST /api/sensors/ingest`, `/api/line-board/refresh` (20/min) and `/api/sensors/live` (120/min) |
 | Input validation | FluentValidation filter on every controller |
@@ -290,15 +291,15 @@ the API's policies are the actual control.
 
 | Page | Endpoints | Writes need |
 |---|---|---|
-| Overview `/app` | `GET /api/sensors/snapshot` (polled), `/api/line-board`, `/api/brief/morning`, `/api/approvals`, `/api/floor-alerts`, `/api/qc/defects`; `POST /api/sensors/ingest`, `/api/line-board/refresh` | Operator |
+| Overview `/app` | `GET /api/sensors/snapshot` (polled), `/api/line-board`, `/api/brief/morning`, `/api/approvals`, `/api/floor-alerts`, `/api/qc/summary?days=7`; `POST /api/sensors/ingest`, `/api/line-board/refresh` | Operator |
 | Approvals | `GET /api/approvals`, `POST /api/approvals/{id}/approve\|reject`, `GET /api/audit?entityType=approval` (detail drawer) | Operator; High risk: Admin |
 | Floor alerts `/app/activity` | `GET /api/floor-alerts`, `PATCH /api/floor-alerts/{id}` | Operator |
-| QC defects | `GET /api/qc/defects`, `POST /api/qc/flag` | Operator |
+| Quality inspections `/app/qc`, `/app/qc/{id}` | `GET /api/qc/inspections` (search, filters, pages), `/api/qc/inspections/{id}`, `/{id}/image`, `/api/qc/summary`, `/api/qc/categories`; `POST /api/qc/inspections/{id}/review`, `/{id}/retry`; `POST/PUT /api/qc/categories` | Operator; taxonomy: Admin |
 | Sensors | `GET /api/sensors/ingest`, `/latest`, `/snapshot`; `POST /api/sensors/ingest` | Operator |
 | Ask | `POST /api/ask` (optional department/category filter), `GET /api/settings/llm` | any role |
 | Knowledge base | `GET /api/rag/documents`, `/api/rag/status`, `/api/settings/embedding`; `POST /api/rag/ingest`; `GET /api/rag/reindex/plan` → `POST /api/rag/reindex {confirmPlanId}` | Admin |
 | Agents | `GET /api/agents`, `POST /api/agents/{id}/run` | Operator |
-| Vision | `GET/POST /api/vision/analyze` | Operator |
+| Inspect a garment `/app/vision` | `GET /api/qc/vision/status`, `/api/qc/categories`, `/api/line-board`; `POST /api/qc/inspections` (multipart, `Idempotency-Key`) | Operator |
 | Audit log | `GET /api/audit` | Admin (page hidden for others) |
 | Settings → AI & models | `GET/POST /api/settings/llm`, `GET/POST /api/settings/embedding`, `POST /api/settings/embedding/plan`, reindex as above | Admin |
 | Settings → Users | `GET /api/users`, `PATCH /api/users/{id}/role` | Admin |
@@ -308,3 +309,111 @@ render a browser-only demo dataset and say so on the page. Documents can't be
 deleted or edited through the API yet, and agent runs are rule-based (the
 configured language model is used by Ask only).
 
+
+---
+
+## 9. Quality inspection (QC & defect detection)
+
+Garment images go through submit → analyse → review, and quality metrics are
+calculated from the reviewed records. The workflow lives in
+`FactoryBrain.Infrastructure/Qc/` and `QcInspectionsController`; the pure
+rules (image sniffing, lifecycle, provider-output normalisation, metrics) are
+in `FactoryBrain.Application/Qc/` and unit-tested.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor O as Operator
+    participant W as /app/vision
+    participant C as QcInspectionsController
+    participant S as QcInspectionService
+    participant F as Image store (files)
+    participant DB as PostgreSQL
+    participant K as QcInspectionWorker
+    participant P as Vision provider
+
+    O->>W: photo + product, stage, line, order, categories
+    W->>C: POST /api/qc/inspections (multipart, Idempotency-Key)
+    C->>S: validate bytes (JPEG/PNG/WebP, size, dimensions) + metadata
+    S->>F: save under a server-generated key
+    S->>DB: qc_inspections (Pending, or Failed "provider_not_configured") + audit
+    C-->>W: 201 inspection
+    K->>DB: claim (UPDATE … FOR UPDATE SKIP LOCKED) → Processing
+    K->>P: image + requested taxonomy
+    alt result
+        P-->>K: labels, confidence, boxes / masks, model, version
+        K->>DB: findings (validated, mapped, ≥ threshold) → Completed + audit
+    else timeout / error / invalid output
+        K->>DB: Failed + code + safe message + audit (retryable)
+    end
+    O->>C: POST /{id}/review {expectedVersion, decisions, additions, outcome}
+    C->>S: xmin check → Reviewed + audit (+ optional approval)
+```
+
+**Lifecycle.** `Pending → Processing → Completed | Failed`, `Failed → Pending`
+(retry), `Completed | Failed | Reviewed → Reviewed` (review, manual review,
+corrected review). A crashed worker's lease is reclaimed after the provider
+timeout + 2 minutes, at most `QC_MAX_ATTEMPTS` times, then marked failed.
+
+**Providers** (`QC_VISION_PROVIDER`, read at startup; see `.env.example`):
+
+| Mode | What runs | Localisation | Confidence |
+|---|---|---|---|
+| `llm` | The vision-capable model of the configured LLM provider (OpenAI, Anthropic, Gemini), key from the AI settings | approximate boxes (`box_2d`) | the model's own estimate, not calibrated |
+| `http` | Your detection model behind `QC_VISION_HTTP_URL` | boxes and polygons, if the model returns them | the model's score |
+| unset | Nothing: inspections are stored as failed with `provider_not_configured`; inspectors can still review them manually | — | — |
+
+No code path produces a prediction a provider did not return. Tests use a
+deterministic detector served by the outbound-HTTP guard (backend) or the e2e
+harness, and its model name says it is a test model.
+
+**`http` contract.** `POST QC_VISION_HTTP_URL` with optional
+`Authorization: Bearer QC_VISION_HTTP_API_KEY`:
+
+```json
+{ "image": { "contentType": "image/jpeg", "base64": "…", "width": 1024, "height": 768 },
+  "productType": "t-shirt", "stage": "end_of_line",
+  "categories": [ { "code": "skipped_stitch", "name": "Skipped stitch", "description": "…" } ] }
+```
+
+Response (coordinates are fractions of width / height, origin top-left;
+`box`, `polygon`, `severity`, `description` optional):
+
+```json
+{ "model": "garment-defects-yolov8", "modelVersion": "2026.10.1", "localization": true,
+  "defects": [ { "label": "skipped_stitch", "confidence": 0.91,
+                 "box": { "x": 0.12, "y": 0.30, "width": 0.08, "height": 0.05 },
+                 "polygon": [[0.12, 0.30], [0.20, 0.30], [0.20, 0.35]],
+                 "severity": "major", "description": "…" } ] }
+```
+
+Anything else is stored as `invalid_output`. Out-of-range values are dropped,
+never repaired: a box outside the image is removed (the defect is kept without
+a location), a confidence outside 0–1 removes the defect, a label matching no
+category is kept as "unmapped" for the inspector to correct or reject.
+
+**Data.** `qc_inspections` (context, storage key, SHA-256, dimensions, status,
+provider / model / version, threshold, review, `xmin` concurrency token,
+per-user unique `Idempotency-Key`), `qc_inspection_findings` (the original
+prediction is never modified; decisions and corrections are separate columns),
+`qc_defect_categories` (seeded once with 13 garment defects, then managed by
+Admins; deactivated, never deleted). Check constraints keep confidence and
+boxes in range at the database level.
+
+**Metrics** (`GET /api/qc/summary`): only reviewed inspections count. A
+verified defect is an inspector-added finding or an accepted / corrected
+prediction. Defective rate = reviewed inspections with ≥ 1 verified defect ÷
+reviewed × 100; DHU = verified defects ÷ reviewed × 100. Days are UTC
+submission days. Every response carries these definitions and the sample sizes.
+
+**Security.** Viewers read; Operators submit, review and retry; Admins manage
+the taxonomy. Images are served only through `GET /api/qc/inspections/{id}/image`
+to signed-in users, with the validated type, `nosniff` and a sandbox CSP.
+Storage keys are re-validated on every read and must resolve inside the store
+root. Provider keys and response bodies are never logged or stored.
+
+**Retired.** `/api/vision/analyze` (four staged files mapped to fixed labels
+and confidences that also queued approvals and floor alerts) now answers
+`410 Gone`. Existing `vision_results` rows are kept. `GET /api/qc/defects` and
+`POST /api/qc/flag` (the seeded weekly operation × line grid) are still served
+for API clients but no longer shown in the UI.

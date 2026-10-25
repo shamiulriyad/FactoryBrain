@@ -10,7 +10,8 @@ const stageStyles: Record<Stage, string> = {
   done: "text-stage-done bg-stage-done/15 border-stage-done/30",
   logged: "text-stage-logged bg-stage-logged/15 border-stage-logged/30",
   rejected: "text-risk-high bg-risk-high/15 border-risk-high/30",
-  failed: "text-risk-high bg-risk-high/15 border-risk-high/30"
+  failed: "text-risk-high bg-risk-high/15 border-risk-high/30",
+  approved: "text-risk-low bg-risk-low/15 border-risk-low/30"
 };
 
 const riskStyles: Record<RiskTier, string> = {

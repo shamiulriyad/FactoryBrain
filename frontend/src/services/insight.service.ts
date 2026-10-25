@@ -19,7 +19,8 @@ export const insightService = {
       done: [],
       logged: [],
       rejected: [],
-      failed: []
+      failed: [],
+      approved: []
     };
     for (const i of dataset.insights) {
       groups[i.stage].push(i);

@@ -11,6 +11,7 @@ and render on GitHub and in the VS Code Markdown preview.
 - [5. Backend RAG](#5-backend-rag)
 - [6. Standalone Python RAG (`rag/`)](#6-standalone-python-rag-rag)
 - [7. Security boundaries](#7-security-boundaries)
+- [8. Frontend pages and the API](#8-frontend-pages-and-the-api)
 
 ---
 
@@ -25,7 +26,7 @@ flowchart LR
         ui["React pages<br/>/app · /app/ask · /app/qc · ..."]
         stores["Zustand stores"]
         rewrite["Rewrite<br/>/api/* → backend"]
-        admin["Admin proxy routes<br/>settings/llm · rag/ingest · rag/reindex<br/>adds X-Admin-Token"]
+        admin["Admin pass-through routes<br/>settings/llm · rag/ingest · rag/reindex<br/>forward the caller's bearer token"]
         ui --- stores
     end
 
@@ -69,13 +70,14 @@ Notes:
 
 - The browser only ever talks to Next.js. Every `/api/*` call is rewritten to the
   .NET backend ([frontend/next.config.mjs](frontend/next.config.mjs)). The three
-  admin routes are real Next.js route handlers, so the server can attach
-  `ADMIN_API_TOKEN` without exposing it to the browser
+  admin routes are Next.js route handlers that forward only the caller's own
+  bearer token; the API decides access
   ([frontend/src/lib/adminProxy.ts](frontend/src/lib/adminProxy.ts)).
 - The backend owns all data and all AI calls. With no LLM key it returns
   deterministic demo answers; with no embedding key RAG uses a local hash vectorizer.
 - The SignalR hub broadcasts `sensorReading`, `lineBoardUpdated` and `floorAlert`,
-  but the frontend does not subscribe yet. Panels poll REST endpoints instead.
+  but the frontend does not subscribe yet. Panels poll read-only REST endpoints
+  instead (`GET /api/sensors/snapshot`, `/api/line-board`, `/api/floor-alerts`).
 - `rag/` is **not connected** to the backend. It is a separate tool with its own
   vector store (Qdrant).
 
@@ -130,7 +132,7 @@ sequenceDiagram
     A->>R: RetrieveAsync(query, filter, topK=4)
     R->>DB: load chunks (vector + text)
     R-->>A: hits ranked by BM25 + cosine
-    alt LLM_PROVIDER and LLM_API_KEY set
+    alt effective LLM settings are live (saved settings, else startup config)
         A->>L: prompt with hits as evidence
         L-->>A: answer
     else no key, or provider fails
@@ -202,10 +204,25 @@ flowchart LR
   `RAG_HYBRID_*` env vars). If the active embedder's dimension does not match
   the stored column, ranking falls back to BM25 only instead of failing.
 - `RagHealthMonitor` re-probes the embedding provider every
-  `RAG_HEALTH_INTERVAL_SECONDS` (default 300) and runs a one-shot reindex when
-  the provider recovers from degraded mode.
+  `RAG_HEALTH_INTERVAL_SECONDS` (default 300). It only probes: it never
+  re-embeds.
 - Index management: `/api/rag/{ingest,reindex,documents,status}`. Ingest and
-  reindex need the admin token.
+  reindex need the Admin role. Reindexing (and any embedding provider / model /
+  dimension change) is plan → confirm → apply: `GET /api/rag/reindex/plan`
+  reports documents, chunks, the vector column before → after and the cost
+  (or that it can't be estimated); `POST /api/rag/reindex {confirmPlanId}`
+  applies it in one transaction. Startup never resizes the column or
+  re-embeds.
+
+### LLM and embedding settings
+
+One `IAiSettingsProvider` decides the LLM and embedding settings for Ask,
+agents and the embedder, per group: runtime override > saved settings
+(`ai_settings` table, once that group has been saved) > startup configuration
+(env, read once) > defaults. Saved API keys are AES-256-GCM encrypted with
+`AI_SETTINGS_ENCRYPTION_KEY`, which never goes in the database. Writes lock the
+single row, are audited, and apply from the next request (other instances:
+within `AI_SETTINGS_REFRESH_SECONDS`). Design: `docs/AI_SETTINGS_DESIGN.md`.
 
 ---
 
@@ -242,21 +259,52 @@ flowchart LR
 ```mermaid
 flowchart LR
     b["Browser"]
-    n["Next.js server<br/>holds ADMIN_API_TOKEN"]
-    api["ASP.NET Core API"]
+    n["Next.js server<br/>rewrite + pass-through, no credentials of its own"]
+    api["ASP.NET Core API<br/>fallback policy: authenticated<br/>Operator / Admin role policies"]
 
-    b -->|"HttpOnly JWT cookie"| n
-    n -->|"cookie forwarded"| api
-    n -->|"X-Admin-Token<br/>admin routes only"| api
+    b -->|"Authorization: Bearer (in-memory access token)<br/>HttpOnly refresh cookie on /api/auth only"| n
+    n -->|"same headers forwarded"| api
 ```
 
 | Control | Where |
 |---|---|
-| Login, refresh, logout, current user | `/api/auth/*`, JWT in an HttpOnly cookie. `JWT_SIGNING_KEY` (32+ bytes) is required in Production |
-| Admin-only routes | `POST /api/settings/llm`, `/api/rag/ingest`, `/api/rag/reindex`, guarded by `ADMIN_API_TOKEN` (`AdminTokenAuthorizationFilter`) |
+| Login, refresh, logout, current user | `/api/auth/*`. 15-minute access token in the response body (kept in memory by the frontend), 7-day rotating refresh token in an HttpOnly cookie scoped to `/api/auth`. `JWT_SIGNING_KEY` (32+ bytes) is required outside Development |
+| Default access | Fallback authorization policy: every endpoint needs a valid JWT unless it is `[AllowAnonymous]` (`/health`, login, refresh, logout) |
+| Roles | `Operator` policy (Admin or Operator) on operational writes; `Admin` policy on `POST /api/settings/llm`, `/api/rag/ingest`, `/api/rag/reindex`. The full matrix is asserted by `FactoryBrain.Api.Tests/EndpointAccessMatrixTests.cs` |
 | Login brute force | Per-IP fixed-window rate limiter (`login` policy) |
+| Simulation abuse | `tick` bounded (validator + at most 60 ticks per request); per-user rate limits on `POST /api/sensors/ingest`, `/api/line-board/refresh` (20/min) and `/api/sensors/live` (120/min) |
 | Input validation | FluentValidation filter on every controller |
 | Error leakage | `GlobalExceptionHandler` returns ProblemDetails with a trace id. The exception message is included only in Development |
 | Python RAG service | Optional `PYRAG_API_KEY`, sent as `X-Rag-Api-Key` |
 
 Known open findings are tracked in [docs/SECURITY_ANALYSIS.md](docs/SECURITY_ANALYSIS.md) (local docs folder).
+
+---
+
+## 8. Frontend pages and the API
+
+Every page under `/app` reads and writes through the API with the signed-in
+user's bearer token (`src/lib/api.ts` → `apiFetch`). Navigation, page access and
+buttons follow the role (`src/components/layout/nav.ts`, `RequireRole`), but
+the API's policies are the actual control.
+
+| Page | Endpoints | Writes need |
+|---|---|---|
+| Overview `/app` | `GET /api/sensors/snapshot` (polled), `/api/line-board`, `/api/brief/morning`, `/api/approvals`, `/api/floor-alerts`, `/api/qc/defects`; `POST /api/sensors/ingest`, `/api/line-board/refresh` | Operator |
+| Approvals | `GET /api/approvals`, `POST /api/approvals/{id}/approve\|reject`, `GET /api/audit?entityType=approval` (detail drawer) | Operator; High risk: Admin |
+| Floor alerts `/app/activity` | `GET /api/floor-alerts`, `PATCH /api/floor-alerts/{id}` | Operator |
+| QC defects | `GET /api/qc/defects`, `POST /api/qc/flag` | Operator |
+| Sensors | `GET /api/sensors/ingest`, `/latest`, `/snapshot`; `POST /api/sensors/ingest` | Operator |
+| Ask | `POST /api/ask` (optional department/category filter), `GET /api/settings/llm` | any role |
+| Knowledge base | `GET /api/rag/documents`, `/api/rag/status`, `/api/settings/embedding`; `POST /api/rag/ingest`; `GET /api/rag/reindex/plan` → `POST /api/rag/reindex {confirmPlanId}` | Admin |
+| Agents | `GET /api/agents`, `POST /api/agents/{id}/run` | Operator |
+| Vision | `GET/POST /api/vision/analyze` | Operator |
+| Audit log | `GET /api/audit` | Admin (page hidden for others) |
+| Settings → AI & models | `GET/POST /api/settings/llm`, `GET/POST /api/settings/embedding`, `POST /api/settings/embedding/plan`, reindex as above | Admin |
+| Settings → Users | `GET /api/users`, `PATCH /api/users/{id}/role` | Admin |
+
+Insights, Factory graph and Integrations have no API behind them yet; they
+render a browser-only demo dataset and say so on the page. Documents can't be
+deleted or edited through the API yet, and agent runs are rule-based (the
+configured language model is used by Ask only).
+

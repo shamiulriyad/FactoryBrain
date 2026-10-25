@@ -30,13 +30,19 @@ public static class DbInitializer
         var rag = scope.ServiceProvider.GetRequiredService<IRagService>();
         var embedder = scope.ServiceProvider.GetRequiredService<IEmbeddingService>();
         var admin = scope.ServiceProvider.GetRequiredService<EmbeddingColumnAdmin>();
+        // The demo corpus is embedded at startup only when that is free (the
+        // local embedder). With a hosted provider configured the chunks are
+        // stored as pending, and an Admin reviews and confirms the paid
+        // reindex (POST /api/rag/reindex). Startup never makes paid calls.
+        var resolver = scope.ServiceProvider.GetRequiredService<EmbeddingProviderResolver>();
+        var embedNow = !resolver.CurrentSettings().IsHosted;
         var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
         var log = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DbInitializer");
 
         await SeedAgentsAsync(db, ct);
         await SeedPoliciesAsync(db, ct);
-        await SeedManualsAsync(db, rag, embedder, admin, ct);
-        await SeedRmgDemoCorpusAsync(db, rag, admin, ct);
+        await SeedManualsAsync(db, rag, embedder, admin, embedNow, ct);
+        await SeedRmgDemoCorpusAsync(db, rag, embedder, admin, embedNow, ct);
         await SeedLineBoardAsync(db, ct);
         await SeedSensorReadingsAsync(db, ct);
         await SeedQcDefectsAsync(db, ct);
@@ -44,6 +50,7 @@ public static class DbInitializer
         await SeedOrdersAndInventoryAsync(db, ct);
         await SeedAdminUserAsync(db, hasher, log, ct);
         await SeedViewerUserAsync(db, hasher, log, ct);
+        await SeedOperatorUserAsync(db, hasher, log, ct);
     }
 
     // --- agents -----------------------------------------------------------
@@ -145,7 +152,7 @@ public static class DbInitializer
 
     // --- manuals + chunks (RAG index) -----------------------------------
     private static async Task SeedManualsAsync(
-        FactoryBrainDbContext db, IRagService rag, IEmbeddingService embedder, EmbeddingColumnAdmin admin, CancellationToken ct)
+        FactoryBrainDbContext db, IRagService rag, IEmbeddingService embedder, EmbeddingColumnAdmin admin, bool embedNow, CancellationToken ct)
     {
         if (await db.ManualDocuments.AnyAsync(ct)) return;
 
@@ -221,7 +228,7 @@ public static class DbInitializer
                 EmbeddingModel    = embedder.ModelId,
                 Dims              = embedder.Dimensions
             };
-            var chunks = await rag.ChunkAsync(docId, s.TitleEn, s.BodyEn, s.Tags, s.Dept, s.Cat, ct);
+            var chunks = await rag.ChunkAsync(docId, s.TitleEn, s.BodyEn, s.Tags, s.Dept, s.Cat, ct, embedNow);
             bool anyChunkMissing = false;
             foreach (var c in chunks)
             {
@@ -265,7 +272,7 @@ public static class DbInitializer
     /// </para>
     /// </summary>
     private static async Task SeedRmgDemoCorpusAsync(
-        FactoryBrainDbContext db, IRagService rag, EmbeddingColumnAdmin admin, CancellationToken ct)
+        FactoryBrainDbContext db, IRagService rag, IEmbeddingService embedder, EmbeddingColumnAdmin admin, bool embedNow, CancellationToken ct)
     {
         var seeds = new[]
         {
@@ -284,7 +291,7 @@ public static class DbInitializer
         {
             if (await db.ManualDocuments.AnyAsync(d => d.Id == seed.Id, ct)) continue;
             var chunks = await rag.ChunkAsync(
-                seed.Id, seed.Title, seed.Body, seed.Tags, seed.Department, seed.Category, ct);
+                seed.Id, seed.Title, seed.Body, seed.Tags, seed.Department, seed.Category, ct, embedNow);
             var doc = new ManualDocument
             {
                 Id = seed.Id,
@@ -303,10 +310,12 @@ public static class DbInitializer
                 // next NeedsReindexAsync check picks up drift. In
                 // degraded mode the chunk's Embedding is null and the
                 // row is marked pending; the next non-degraded reindex
-                // fills the vectors.
-                EmbeddingProvider = seed.ActiveProvider ?? "local",
-                EmbeddingModel    = seed.ActiveModel    ?? "hash-md5",
-                Dims              = seed.ActiveDims
+                // fills the vectors. (These used to default to
+                // local/hash-md5/384 whatever embedder actually ran, so a
+                // hosted-provider seed recorded the wrong metadata.)
+                EmbeddingProvider = seed.ActiveProvider ?? embedder.ProviderId,
+                EmbeddingModel    = seed.ActiveModel    ?? embedder.ModelId,
+                Dims              = seed.ActiveDims     ?? embedder.Dimensions
             };
             bool anyChunkMissing = false;
             foreach (var c in chunks)
@@ -344,7 +353,7 @@ public static class DbInitializer
         string Category,
         string? ActiveProvider = null,
         string? ActiveModel    = null,
-        int     ActiveDims     = 384);
+        int?    ActiveDims     = null);
 
     private static DemoSeed DemoNeedleBreakageSOP() => new(
         Id: "demo-needle-breakage-sop",
@@ -902,54 +911,26 @@ public static class DbInitializer
 
     // --- admin user (idempotent, env-gated) ------------------------------
     /// <summary>
-    /// If both <c>SEED_ADMIN_EMAIL</c> and <c>SEED_ADMIN_PASSWORD</c> are
-    /// set, create an <see cref="User"/> with <c>Role = "Admin"</c> and a
-    /// freshly-hashed password — unless a user with that email already
-    /// exists (so the bootstrap is safe to run on every restart). The
-    /// password is hashed via <see cref="IPasswordHasher"/>; the raw
-    /// value never appears in logs, error messages, or DB columns.
+    /// <c>SEED_ADMIN_EMAIL</c> + <c>SEED_ADMIN_PASSWORD</c>: create that Admin,
+    /// or promote the existing account with that email when the password is
+    /// its own. See <see cref="AdminBootstrap"/>. Safe to run on every restart.
     /// </summary>
-    private static async Task SeedAdminUserAsync(
+    private static Task SeedAdminUserAsync(
         FactoryBrainDbContext db,
         IPasswordHasher hasher,
         ILogger log,
         CancellationToken ct)
-    {
-        var email    = (Environment.GetEnvironmentVariable("SEED_ADMIN_EMAIL")    ?? string.Empty).Trim();
-        var password = (Environment.GetEnvironmentVariable("SEED_ADMIN_PASSWORD") ?? string.Empty);
-        if (email.Length == 0 || password.Length == 0) return; // skip silently
-
-        var normalised = email.ToLowerInvariant();
-        var existing = await db.Users.AnyAsync(u => u.Email == normalised, ct);
-        if (existing) return;
-
-        // Hash against a transient User instance; the hasher only reads
-        // the User reference as a salt-pinning hint and the instance is
-        // discarded after the call.
-        var hashSeed = new User { Email = normalised };
-        var hash = hasher.Hash(hashSeed, password);
-        db.Users.Add(new User
-        {
-            Id            = Guid.NewGuid(),
-            Email         = normalised,
-            PasswordHash  = hash,
-            Role          = "Admin",
-            CreatedAt     = DateTimeOffset.UtcNow,
-        });
-        await db.SaveChangesAsync(ct);
-        // Note: never log the password — only the email + the fact we
-        // created the row.
-        log.LogInformation("Seeded admin user {Email} from SEED_ADMIN_EMAIL.", normalised);
-    }
+        => AdminBootstrap.EnsureAsync(db, hasher,
+            Environment.GetEnvironmentVariable("SEED_ADMIN_EMAIL"),
+            Environment.GetEnvironmentVariable("SEED_ADMIN_PASSWORD"),
+            log, ct);
 
     // --- viewer user (idempotent, env-gated) -----------------------------
     /// <summary>
     /// Same shape as <see cref="SeedAdminUserAsync"/> but for the Viewer
     /// role. Reads <c>SEED_VIEWER_EMAIL</c> + <c>SEED_VIEWER_PASSWORD</c>;
-    /// if either is unset the seeder is a no-op. Used by the batch-52
-    /// verification matrix to exercise the AdminOrLegacyToken policy
-    /// against a non-Admin JWT (which the spec mandates returns 403
-    /// problem details instead of the AdminToken envelope).
+    /// if either is unset the seeder is a no-op. A Viewer can read every
+    /// authenticated endpoint and gets 403 on Operator / Admin actions.
     /// </summary>
     private static async Task SeedViewerUserAsync(
         FactoryBrainDbContext db,
@@ -977,6 +958,38 @@ public static class DbInitializer
         });
         await db.SaveChangesAsync(ct);
         log.LogInformation("Seeded viewer user {Email} from SEED_VIEWER_EMAIL.", normalised);
+    }
+
+    // --- operator user (idempotent, env-gated) ---------------------------
+    /// <summary>
+    /// Same shape as <see cref="SeedViewerUserAsync"/> for the Operator role
+    /// (operational writes: agent runs, QC flags, sensor ingest, approvals
+    /// up to medium risk). Reads <c>SEED_OPERATOR_EMAIL</c> +
+    /// <c>SEED_OPERATOR_PASSWORD</c>; a no-op unless both are set.
+    /// </summary>
+    private static async Task SeedOperatorUserAsync(
+        FactoryBrainDbContext db,
+        IPasswordHasher hasher,
+        ILogger log,
+        CancellationToken ct)
+    {
+        var email    = (Environment.GetEnvironmentVariable("SEED_OPERATOR_EMAIL")    ?? string.Empty).Trim();
+        var password = (Environment.GetEnvironmentVariable("SEED_OPERATOR_PASSWORD") ?? string.Empty);
+        if (email.Length == 0 || password.Length == 0) return; // skip silently
+
+        var normalised = email.ToLowerInvariant();
+        if (await db.Users.AnyAsync(u => u.Email == normalised, ct)) return;
+
+        db.Users.Add(new User
+        {
+            Id            = Guid.NewGuid(),
+            Email         = normalised,
+            PasswordHash  = hasher.Hash(new User { Email = normalised }, password),
+            Role          = "Operator",
+            CreatedAt     = DateTimeOffset.UtcNow,
+        });
+        await db.SaveChangesAsync(ct);
+        log.LogInformation("Seeded operator user {Email} from SEED_OPERATOR_EMAIL.", normalised);
     }
 
     // --- helpers ----------------------------------------------------------

@@ -6,7 +6,7 @@ import type { InventoryRecord } from "./inventory";
 import type { Customer } from "./customers";
 import type { Product } from "./products";
 
-export type InsightStage = "suggested" | "pending_approval" | "executing" | "done" | "logged" | "rejected" | "failed";
+export type InsightStage = "suggested" | "pending_approval" | "executing" | "done" | "logged" | "rejected" | "failed" | "approved";
 
 export type RiskTier = "low" | "medium" | "high";
 

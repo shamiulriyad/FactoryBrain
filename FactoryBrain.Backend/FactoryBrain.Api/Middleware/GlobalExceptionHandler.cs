@@ -67,6 +67,30 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
     {
         var traceId = httpContext.TraceIdentifier;
 
+        // The LLM / embedding settings could not be read. Callers must not
+        // guess (an environment fallback could revive a cleared key), so the
+        // request fails as temporarily unavailable.
+        if (exception is FactoryBrain.Application.Settings.AiSettingsUnavailableException)
+        {
+            _log.LogWarning("AI settings unavailable traceId={TraceId} path={Path}", traceId, httpContext.Request.Path);
+            httpContext.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            httpContext.Response.Headers["Cache-Control"] = "no-store";
+            httpContext.Response.Headers["Retry-After"] = "5";
+            var unavailable = new ProblemDetails
+            {
+                Type     = "https://datatracker.ietf.org/doc/html/rfc9110#section-15.6.4",
+                Title    = "Settings unavailable",
+                Status   = StatusCodes.Status503ServiceUnavailable,
+                Detail   = "The AI settings store could not be read. Try again shortly.",
+                Instance = httpContext.Request.Path,
+            };
+            unavailable.Extensions["error"] = "settings_unavailable";
+            unavailable.Extensions["traceId"] = traceId;
+            await httpContext.Response.WriteAsJsonAsync(unavailable, options: null,
+                contentType: "application/problem+json", cancellationToken: cancellationToken);
+            return true;
+        }
+
         // Always log the full exception with the trace id so the prod
         // envelope can be matched back to the server log. We never log
         // API keys, full connection strings, or request bodies here.

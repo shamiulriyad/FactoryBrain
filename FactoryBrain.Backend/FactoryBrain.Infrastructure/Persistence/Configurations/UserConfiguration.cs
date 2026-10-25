@@ -33,3 +33,20 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         b.HasIndex(x => x.Email).IsUnique();
     }
 }
+
+/// <summary>EF Core mapping for <see cref="PasswordResetToken"/> (table <c>password_reset_tokens</c>).</summary>
+public class PasswordResetTokenConfiguration : IEntityTypeConfiguration<PasswordResetToken>
+{
+    public void Configure(EntityTypeBuilder<PasswordResetToken> b)
+    {
+        b.ToTable("password_reset_tokens");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.TokenHash).IsRequired().HasMaxLength(128);
+        b.Property(x => x.CreatedAt).HasColumnType("timestamptz");
+        b.Property(x => x.ExpiresAt).HasColumnType("timestamptz");
+        b.Property(x => x.UsedAt).HasColumnType("timestamptz");
+        b.HasIndex(x => x.TokenHash).IsUnique();
+        b.HasIndex(x => x.UserId);
+        b.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+    }
+}

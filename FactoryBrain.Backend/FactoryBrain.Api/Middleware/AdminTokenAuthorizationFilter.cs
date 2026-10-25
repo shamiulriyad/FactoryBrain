@@ -34,6 +34,13 @@ namespace FactoryBrain.Api.Middleware;
 /// are NOT decorated with <see cref="AdminTokenAttribute"/> and pass
 /// straight through the pipeline.
 /// </summary>
+/// <remarks>
+/// RETIRED. Not registered in <c>Program.cs</c> and not applied to any
+/// action. Kept only because this remediation milestone does not delete
+/// tracked files; marked obsolete-as-error so it cannot be wired back in.
+/// Delete in a follow-up.
+/// </remarks>
+[Obsolete("Retired: admin access is the Admin role policy (AuthPolicies.Admin). The shared X-Admin-Token path and its Development bypass must not be re-enabled.", error: true)]
 public sealed class AdminTokenAuthorizationFilter : IAsyncAuthorizationFilter
 {
     internal const string HeaderName       = "X-Admin-Token";
@@ -138,6 +145,13 @@ public sealed class AdminTokenAuthorizationFilter : IAsyncAuthorizationFilter
 /// The filter short-circuits the action in non-Development environments,
 /// leaving Development requests untouched.
 /// </summary>
+/// <remarks>
+/// RETIRED. Not registered in <c>Program.cs</c> and not applied to any
+/// action. Kept only because this remediation milestone does not delete
+/// tracked files; marked obsolete-as-error so it cannot be wired back in.
+/// Delete in a follow-up.
+/// </remarks>
+[Obsolete("Retired: admin access is the Admin role policy (AuthPolicies.Admin). The shared X-Admin-Token path and its Development bypass must not be re-enabled.", error: true)]
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
 public sealed class AdminTokenAttribute : ServiceFilterAttribute
 {

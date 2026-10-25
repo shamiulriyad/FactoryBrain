@@ -1,64 +1,62 @@
 "use client";
 
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/cn";
-import {
-  LayoutDashboard,
-  MessageSquareText,
-  Network,
-  Lightbulb,
-  Bot,
-  ShieldCheck,
-  Activity,
-  PlugZap,
-  Settings,
-  ScanLine,
-  ClipboardCheck
-} from "lucide-react";
-import Link from "next/link";
-import { useT } from "@/lib/useT";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { X } from "lucide-react";
+import { Sidebar } from "./Sidebar";
 
-const items = [
-  { href: "/app", icon: LayoutDashboard, key: "nav.overview" },
-  { href: "/app/approvals", icon: ShieldCheck, key: "nav.approvals" },
-  { href: "/app/qc", icon: ClipboardCheck, key: "nav.qc" },
-  { href: "/app/activity", icon: Activity, key: "nav.activity" },
-  { href: "/app/ask", icon: MessageSquareText, key: "nav.ask" },
-  { href: "/app/brain", icon: Network, key: "nav.brain" },
-  { href: "/app/insights", icon: Lightbulb, key: "nav.insights" },
-  { href: "/app/agents", icon: Bot, key: "nav.agents" },
-  { href: "/app/vision", icon: ScanLine, key: "nav.vision" },
-  { href: "/app/integrations", icon: PlugZap, key: "nav.integrations" },
-  { href: "/app/settings", icon: Settings, key: "nav.settings" }
-];
-
-export function MobileShell() {
+/** Slide-in navigation drawer for phones and small tablets (below md). */
+export function MobileNav({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
-  const { t } = useT();
+  const reduceMotion = useReducedMotion();
+
+  // Close after navigating.
+  useEffect(() => {
+    onClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-canvas border-t border-border-subtle overflow-x-auto">
-      <ul className="flex items-stretch min-w-max">
-        {items.map((it) => {
-          const active = pathname === it.href || (it.href !== "/app" && pathname.startsWith(it.href + "/"));
-          const Icon = it.icon;
-          const label = t(it.key) as string;
-          return (
-            <li key={it.href}>
-              <Link
-                href={it.href}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "flex flex-col items-center justify-center gap-0.5 px-3 py-2 min-w-[4.5rem] text-caption",
-                  active ? "text-fg-primary" : "text-fg-tertiary"
-                )}
-              >
-                <Icon size={16} />
-                <span className="max-w-[4.5rem] truncate">{label}</span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="md:hidden fixed inset-0 z-40 bg-[var(--bg-overlay)]"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+        >
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation"
+            className="h-full w-[264px] max-w-[85vw] relative"
+            initial={reduceMotion ? { opacity: 0 } : { x: -280 }}
+            animate={reduceMotion ? { opacity: 1 } : { x: 0 }}
+            exit={reduceMotion ? { opacity: 0 } : { x: -280 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Sidebar onNavigate={onClose} className="w-full" />
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close navigation"
+              className="absolute top-3 -right-11 size-9 rounded-full bg-[var(--bg-surface)] text-fg-primary inline-flex items-center justify-center shadow"
+            >
+              <X size={16} />
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

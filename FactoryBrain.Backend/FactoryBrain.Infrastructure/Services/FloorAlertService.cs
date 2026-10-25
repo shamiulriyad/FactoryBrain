@@ -23,7 +23,7 @@ public sealed class FloorAlertService : IFloorAlertService
             .OrderByDescending(x => x.CreatedAt).ToListAsync(ct);
         return new FloorAlertListResponse(
             Simulated: true,
-            Source: "Simulated — derived from src/data/floorAlerts.store.ts (mirror)",
+            Source: "Stored floor alerts raised by agent runs, vision analyses and the demo seed. Delivery is simulated (channel whatsapp_sim): no message is sent.",
             Count: rows.Count,
             Alerts: rows.Select(Map).ToList()
         );

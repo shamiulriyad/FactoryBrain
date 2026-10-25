@@ -1,223 +1,104 @@
 "use client";
 
-// Morning brief card for /app Overview.
-// Fetches GET /api/brief/morning, renders locale-aware bullets with
-// deep-links (top-bottleneck → /app/brain?node=<lineId>), and shows
-// pending-approval / risk counts that link to /app/approvals and
-// /app/insights. A DemoChip keeps the "Simulated / no LLM" honesty
-// label visible. Auto-refreshes when the shared live-tick store
-// advances (same coupling as LineBoardPanel).
+// Morning brief for /app Overview: GET /api/brief/morning. The brief is a
+// deterministic summary of the line board and approval queue (no language
+// model), and is labelled as such.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowUpRight, RefreshCw } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, RefreshCw, Sunrise } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { Button, DemoChip } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { useT } from "@/lib/useT";
 import { cn } from "@/lib/cn";
 import { formatRelative } from "@/lib/format";
-import { useFactoryBrainLiveStore } from "@/store/factoryBrain.live.store";
-import type { BriefResponse } from "@/services/brief.server";
+import { errorMessage } from "@/lib/api";
+import { useResource } from "@/lib/useResource";
+import type { MorningBrief } from "@/services/contracts";
 
-// --- Helpers ---------------------------------------------------------------
-
-// --- Component -------------------------------------------------------------
-
-export function BriefCard() {
+/** `tick`: the simulation tick; the brief is re-read when it advances. */
+export function BriefCard({ tick }: { tick?: number }) {
   const { t, locale } = useT();
-
-  const [brief, setBrief] = useState<BriefResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Re-fetch when the shared sim tick advances (Simulate tick / polling).
-  const simTick = useFactoryBrainLiveStore((s) => s.snapshot?.tick);
-
-  const inflight = useRef<AbortController | null>(null);
-
-  const refresh = useCallback(async () => {
-    if (inflight.current) inflight.current.abort();
-    const ctrl = new AbortController();
-    inflight.current = ctrl;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/brief/morning", {
-        method: "GET",
-        cache: "no-store",
-        signal: ctrl.signal
-      });
-      if (!res.ok) throw new Error(`brief_${res.status}`);
-      const data = (await res.json()) as BriefResponse;
-      setBrief(data);
-    } catch (e) {
-      if ((e as Error).name !== "AbortError") {
-        setError((e as Error).message ?? "brief_failed");
-      }
-    } finally {
-      if (inflight.current === ctrl) inflight.current = null;
-      setLoading(false);
-    }
-  }, []);
-
+  const brief = useResource<MorningBrief>("/api/brief/morning");
+  const lastTick = useRef(tick);
   useEffect(() => {
-    void refresh();
-    return () => {
-      if (inflight.current) inflight.current.abort();
-    };
-  }, [refresh]);
-
-  useEffect(() => {
-    if (simTick === undefined) return;
-    void refresh();
+    if (tick === undefined || tick === lastTick.current) return;
+    lastTick.current = tick;
+    void brief.reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [simTick]);
-
-  const bullets: string[] = brief
-    ? (locale === "bn" ? brief.bulletsBn : brief.bulletsEn)
-    : [];
-  const topLineId = brief?.topBottleneckLineId;
-  const simulated = brief?.meta?.simulated === true;
-  const dateLabel = brief?.date ?? "";
-  const generatedRel = brief?.meta?.generatedAt
-    ? formatRelative(brief.meta.generatedAt, locale as "en" | "bn")
-    : null;
-
-  const subtitle = generatedRel
-    ? `${dateLabel} · ${generatedRel}`
-    : dateLabel || t("brief.simulatedChip");
-
-  const headerRight = (
-    <div className="flex items-center gap-2">
-      {simulated && <DemoChip>{t("brief.simulatedChip")}</DemoChip>}
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={refresh}
-        disabled={loading}
-        aria-label={t("brief.refreshAria")}
-      >
-        <RefreshCw size={14} className={cn(loading && "animate-spin")} />
-      </Button>
-    </div>
-  );
-
-  // --- Body ---------------------------------------------------------------
-
-  let body: React.ReactNode;
-  if (error && !brief) {
-    body = (
-      <div>
-        <EmptyState
-          icon={<AlertTriangle size={20} />}
-          title={t("brief.loadFailed")}
-          body={t("brief.loadFailedBody")}
-        />
-        <div className="mt-3 flex justify-center">
-          <Button variant="secondary" size="sm" onClick={refresh}>
-            {t("brief.retry")}
-          </Button>
-        </div>
-      </div>
-    );
-  } else if (loading && !brief) {
-    body = (
-      <ul className="space-y-2" aria-hidden>
-        {[0, 1, 2].map((i) => (
-          <li key={i} className="surface-2 h-9 rounded-md border border-border-subtle animate-pulse" />
-        ))}
-      </ul>
-    );
-  } else if (brief) {
-    const risksLabel =
-      brief.riskCount === 1
-        ? t("brief.risksLabelOne", { n: brief.riskCount })
-        : t("brief.risksLabelOther", { n: brief.riskCount });
-    const approvalsLabel =
-      brief.pendingApprovals === 1
-        ? t("brief.approvalsLabelOne", { n: brief.pendingApprovals })
-        : t("brief.approvalsLabelOther", { n: brief.pendingApprovals });
-
-    body = (
-      <div data-testid="brief-card" data-simulated={simulated ? "true" : "false"}>
-        <ul role="list" className="space-y-2">
-          {bullets.map((b, i) => {
-            const isHeader = i === 0;
-            const href = isHeader && topLineId ? `/app/brain?node=${encodeURIComponent(topLineId)}` : null;
-            return (
-              <li key={`${i}-${b.slice(0, 16)}`} className="flex items-start gap-2">
-                <span
-                  className={cn(
-                    "mono-pill shrink-0 mt-0.5 px-1.5 py-0.5 rounded-sm",
-                    isHeader ? "text-[var(--accent-fg-on-bg)] bg-accent" : "text-fg-tertiary bg-surface-2 border border-border-subtle"
-                  )}
-                  aria-hidden
-                >
-                  {i + 1}
-                </span>
-                {href ? (
-                  <Link
-                    href={href}
-                    className="text-body text-fg-primary hover:text-accent inline-flex items-center gap-1 group"
-                    data-testid="brief-bottleneck-link"
-                  >
-                    <span>{b}</span>
-                    <ArrowUpRight size={14} className="opacity-60 group-hover:opacity-100" />
-                  </Link>
-                ) : (
-                  <span className="text-body text-fg-secondary">{b}</span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          {brief.riskCount > 0 && (
-            <Link
-              href="/app/insights"
-              className="inline-flex items-center gap-1 h-6 px-2 rounded-sm border border-border-subtle bg-surface-2 text-caption text-fg-secondary hover:text-accent mono-pill"
-              data-testid="brief-risks-link"
-            >
-              <span className="size-1 rounded-full bg-[var(--risk-medium)]" aria-hidden />
-              {risksLabel}
-            </Link>
-          )}
-          {brief.pendingApprovals > 0 && (
-            <Link
-              href="/app/approvals"
-              className="inline-flex items-center gap-1 h-6 px-2 rounded-sm border border-border-subtle bg-surface-2 text-caption text-fg-secondary hover:text-accent mono-pill"
-              data-testid="brief-approvals-link"
-            >
-              <span className="size-1 rounded-full bg-accent" aria-hidden />
-              {approvalsLabel}
-            </Link>
-          )}
-          {!topLineId && (
-            <span
-              className="inline-flex items-center gap-1 h-6 px-2 rounded-sm border border-border-subtle bg-surface-2 text-caption text-fg-tertiary mono-pill"
-              data-testid="brief-all-green"
-            >
-              <span className="size-1 rounded-full bg-[var(--risk-low)]" aria-hidden />
-              {t("brief.allOnTarget")}
-            </span>
-          )}
-        </div>
-      </div>
-    );
-  } else {
-    body = null;
-  }
+  }, [tick]);
+  const b = brief.data;
+  const bullets = b ? (locale === "bn" ? b.bulletsBn : b.bulletsEn) : [];
 
   return (
     <Panel
-      variant="glass"
       title={t("brief.cardTitle")}
-      subtitle={subtitle}
-      right={headerRight}
+      subtitle={b ? `${b.date} · generated ${formatRelative(b.meta.generatedAt, locale)}` : undefined}
+      icon={<Sunrise size={14} />}
+      right={
+        <>
+          {b?.meta.simulated && <span title={b.meta.notes || b.meta.source}><Badge tone="accent">{t("brief.simulatedChip")}</Badge></span>}
+          <Button variant="ghost" size="sm" onClick={() => void brief.reload()} disabled={brief.refreshing} aria-label={t("brief.refreshAria")}>
+            <RefreshCw size={13} className={cn(brief.refreshing && "animate-spin")} />
+          </Button>
+        </>
+      }
+      className="h-full"
     >
-      {body}
+      {brief.error && !b ? (
+        <div className="text-center py-4">
+          <AlertTriangle size={18} className="mx-auto text-[var(--risk-high)]" />
+          <p className="mt-2 text-body text-fg-primary">{t("brief.loadFailed")}</p>
+          <p className="text-caption text-fg-tertiary">{errorMessage(brief.error)}</p>
+          <Button className="mt-3" variant="secondary" size="sm" onClick={() => void brief.reload()}>{t("brief.retry")}</Button>
+        </div>
+      ) : brief.loading ? (
+        <div className="space-y-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-5" />)}</div>
+      ) : b ? (
+        <div data-testid="brief-card" data-simulated={b.meta.simulated ? "true" : "false"}>
+          <ul className="space-y-2.5">
+            {bullets.map((text, i) => {
+              return (
+                <li key={`${i}-${text.slice(0, 16)}`} className="flex items-start gap-2.5">
+                  <span
+                    className={cn(
+                      "mt-0.5 size-5 shrink-0 rounded-full text-[11px] font-semibold inline-flex items-center justify-center",
+                      i === 0 ? "bg-accent text-[var(--accent-fg-on-bg)]" : "bg-surface-2 border border-border-subtle text-fg-tertiary"
+                    )}
+                    aria-hidden
+                  >
+                    {i + 1}
+                  </span>
+                  <span className={cn("text-body", i === 0 ? "text-fg-primary font-medium" : "text-fg-secondary")}>{text}</span>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {b.pendingApprovals > 0 && (
+              <Link href="/app/approvals" data-testid="brief-approvals-link" className="badge hover:border-[var(--accent-border)] hover:text-accent">
+                <span className="badge-dot text-accent" aria-hidden />
+                {b.pendingApprovals === 1 ? t("brief.approvalsLabelOne", { n: 1 }) : t("brief.approvalsLabelOther", { n: b.pendingApprovals })}
+                <ArrowUpRight size={11} />
+              </Link>
+            )}
+            {b.riskCount > 0 && (
+              <span className="badge" data-testid="brief-risks" title="Medium- and high-risk insights stored on the server">
+                <span className="badge-dot text-[var(--risk-medium)]" aria-hidden />
+                {b.riskCount === 1 ? t("brief.risksLabelOne", { n: 1 }) : t("brief.risksLabelOther", { n: b.riskCount })}
+              </span>
+            )}
+            {!b.topBottleneckLineId && (
+              <span className="badge" data-testid="brief-all-green">
+                <span className="badge-dot text-[var(--risk-low)]" aria-hidden />
+                {t("brief.allOnTarget")}
+              </span>
+            )}
+          </div>
+        </div>
+      ) : null}
     </Panel>
   );
 }

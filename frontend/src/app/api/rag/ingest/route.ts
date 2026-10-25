@@ -1,8 +1,7 @@
-// Server-only proxy for POST /api/rag/ingest.
+// Server-side pass-through for POST /api/rag/ingest.
 //
-// The backend requires X-Admin-Token in Production. The frontend ingest
-// form posts to /api/rag/ingest; this route forwards to the .NET backend
-// and attaches the token from ADMIN_API_TOKEN.
+// Forwards the caller's own bearer token; the .NET API requires the Admin
+// role. No shared secret is added here; see src/lib/adminProxy.ts.
 
 import { NextRequest } from "next/server";
 import { proxyAdminRequest } from "@/lib/adminProxy";

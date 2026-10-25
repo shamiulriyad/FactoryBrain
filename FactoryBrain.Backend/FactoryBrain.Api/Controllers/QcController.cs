@@ -1,5 +1,7 @@
 using FactoryBrain.Application.Dtos.Qc;
 using FactoryBrain.Application.Abstractions.Interfaces;
+using FactoryBrain.Api.Middleware;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FactoryBrain.Api.Controllers;
@@ -22,6 +24,7 @@ public class QcController : ControllerBase
     // ValidationProblemDetails (RFC 7807 with an errors map) before this
     // method runs.
     [HttpPost("flag")]
+    [Authorize(Policy = AuthPolicies.Operator)]
     public async Task<IActionResult> Flag([FromBody] QcFlagRequest body, CancellationToken ct)
         => Ok(await _svc.FlagAsync(body, ct));
 }

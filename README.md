@@ -167,21 +167,35 @@ Never commit real values. Real shell or Docker env vars always win over the file
 
 | App | How it finds the root `.env` | Main keys |
 |---|---|---|
-| Next.js | `frontend/next.config.mjs` loads it | `NEXT_PUBLIC_API_URL`, `DOTNET_API_URL`, `ADMIN_API_TOKEN` |
-| .NET API | `Program.cs` walks up from its working directory | `FACTORYBRAIN_DB`, `JWT_SIGNING_KEY`, `ADMIN_API_TOKEN`, `LLM_*`, `RAG_EMBEDDING_*`, `CORS_ORIGINS`, `SIMULATOR_ENABLED` |
+| Next.js | `frontend/next.config.mjs` loads it | `NEXT_PUBLIC_API_URL`, `DOTNET_API_URL` |
+| .NET API | `Program.cs` walks up from its working directory | `FACTORYBRAIN_DB`, `JWT_SIGNING_KEY`, `SEED_ADMIN_*`, `LLM_*`, `RAG_EMBEDDING_*`, `CORS_ORIGINS`, `SIMULATOR_ENABLED` |
 | Python RAG | `rag/config.py` loads `../.env` | `GOOGLE_API_KEY`, `PYRAG_*` |
 
 The Python keys carry a `PYRAG_` prefix so they never clash with the API's
 (for example, both have an LLM model setting).
 
-- `ADMIN_API_TOKEN` protects `POST /api/settings/llm`, `/api/rag/ingest` and
-  `/api/rag/reindex`. One value now serves both Next.js and the API.
+- Every API route except `/health` and `/api/auth/{login,refresh,logout}`
+  needs a signed-in user. Create the first account with `SEED_ADMIN_EMAIL` /
+  `SEED_ADMIN_PASSWORD`, then sign in at `/login`. Roles are checked by the API:
+  **Viewer** reads, **Operator** also runs agents, flags QC, ingests sensor data
+  and acknowledges alerts, **Admin** also changes LLM settings and manages the
+  RAG index. `ADMIN_API_TOKEN` is retired and no longer read.
 
 - `JWT_SIGNING_KEY` (32+ bytes) is required in Production.
-- `LLM_PROVIDER` can be `openai`, `gemini` or `anthropic`. The key can also be
-  entered in **Settings → Advanced**.
-- With no embedding key, RAG falls back to a local hash vectorizer.
+- `LLM_PROVIDER` can be `openai`, `gemini` or `anthropic`. An Admin can also
+  set the provider, model and key in **Settings → Advanced**; saved settings
+  are stored in the database (the key encrypted with
+  `AI_SETTINGS_ENCRYPTION_KEY`), survive restarts, take effect from the next
+  question, and from then on win over the `LLM_*` variables (which are read
+  only at startup). Clearing them really switches Ask to demo mode.
+- Embeddings are configured separately (`RAG_EMBEDDING_*`, or Settings →
+  Advanced): an LLM key never changes them. With no embedding key, RAG uses a
+  local hash vectorizer. Changing the embedding provider or dimensions, or
+  reindexing, shows a plan (documents, vector size, cost) and runs only after an
+  Admin confirms it; the API never re-embeds on its own at startup.
 - `SIMULATOR_ENABLED=true` makes the API generate a live sensor event stream.
+  The Overview page only reads it (`GET /api/sensors/snapshot`); without the
+  simulator the data moves only when an Operator presses *Simulate tick*.
 
 ---
 
@@ -192,6 +206,8 @@ The Python keys carry a `PYRAG_` prefix so they never clash with the API's
 | `/api/auth/{login,refresh,logout,me}` | Cookie/JWT authentication |
 | `/api/ask` | Ask a question (RAG + LLM) |
 | `/api/agents`, `/api/agents/{id}/run` | List and run agents |
+| `/api/approvals`, `/api/approvals/{id}/{approve,reject}` | Server-side approval queue (Operator/Admin to decide; High risk needs Admin; reject needs a reason) |
+| `/api/audit` | Append-only audit log of decisions (Admin) |
 | `/api/brief/morning` | Morning brief |
 | `/api/line-board` | Line metrics, `POST /refresh` |
 | `/api/sensors/{ingest,live,latest}` | Sensor readings |
@@ -209,12 +225,59 @@ The Python keys carry a `PYRAG_` prefix so they never clash with the API's
 Dev and test scripts live in `frontend/scripts/`. Run them from `frontend/`:
 
 ```bash
-npm run smoke         # dataset, i18n and service contract checks + RAG eval
-npm run test:rag      # RAG golden-set check against the running API's /api/ask
+npm run smoke         # static contract checks, Ask-mode logic, admin-proxy runtime check
+npm run e2e           # browser E2E + authenticated RAG eval on a disposable stack (needs Docker)
+npm run test:rag      # RAG golden-set eval (needs RAG_EVAL_BASE_URL + test credentials)
 npm run probe         # hit every page on a running Next.js server (BASE, default :3000)
 npm run sensor:live -- --entity M-101 --vibration 6.4 --temp 82   # push one sensor reading
 npm run lint
 ```
+
+Backend integration tests, from `FactoryBrain.Backend/`:
+
+```bash
+dotnet test FactoryBrain.Backend.sln
+```
+
+- They never read the repo-root `.env` and never touch your configured
+  database. Hosts run in the `Testing` (no database) or `IntegrationTesting`
+  environment, and `IntegrationTesting` refuses to start against a
+  non-local database.
+- With **Docker Desktop running**, the database tests start a disposable
+  `pgvector/pgvector:pg16` container (random test-only credentials, removed
+  afterwards). They then run migrations and seeding and cover login, refresh,
+  logout, roles, and RAG ingest and retrieval on real pgvector. Without
+  Docker those tests are reported as skipped.
+- Every outbound HTTP call is intercepted, so no test can reach a paid LLM
+  or embedding provider. The OpenAI paths run against local fakes.
+- Only the .NET 10 runtime installed? The test project rolls forward on its
+  own; the API itself still needs `DOTNET_ROLL_FORWARD=Major`.
+
+Browser end-to-end tests (Playwright), from `frontend/`, with Docker Desktop running:
+
+```bash
+npx playwright install chromium   # once
+npm run e2e
+```
+
+`npm run e2e` (`e2e/run-e2e.mjs`):
+
+1. Starts a disposable `pgvector/pgvector:pg16` container (random credentials,
+   removed afterwards).
+2. Starts the built API on it in `IntegrationTesting` mode, which ignores
+   `.env` and accepts only a local database.
+3. Starts a local fake OpenAI-compatible model (`LLM_BASE_URL`), with every
+   other outbound call blocked by a dead proxy.
+4. Builds and starts Next.js without the root `.env`.
+5. Runs the authenticated RAG golden-set eval (`scripts/test-rag.mjs`) and the
+   Playwright suite in `e2e/tests`: login and protected routes, approvals and
+   audit, and Ask's Live / Demo / No source labels.
+
+It leaves `.next` as a test build, so run `npm run build` again afterwards.
+
+`npm run test:rag` alone needs `RAG_EVAL_BASE_URL` (a local test API) and
+`RAG_EVAL_EMAIL` / `RAG_EVAL_PASSWORD`. It refuses non-local targets and APIs
+wired to a hosted LLM or hosted embeddings.
 
 Python RAG tests, from `rag/`:
 

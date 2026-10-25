@@ -1,5 +1,6 @@
 "use client";
 
+import { DemoDataBanner } from "@/components/ui/Callout";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import ReactFlow, {
   Background,
@@ -182,7 +183,10 @@ function BrainInner() {
 
   return (
     <div className="h-full flex flex-col" data-tour="brain">
-      <div className="px-6 md:px-8 py-5 flex items-start justify-between gap-4 flex-wrap">
+      <div className="px-4 md:px-8 pt-5">
+        <DemoDataBanner what="This graph is built in your browser from a sample dataset (orders, buyers, suppliers, risks). The API has no knowledge-graph endpoint, so nothing here reflects your server data." />
+      </div>
+      <div className="px-4 md:px-8 py-5 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-display font-semibold tracking-tight">{t("brain.title")}</h1>
           <p className="mt-1 text-caption text-fg-tertiary">{t("brain.subtitle")}</p>

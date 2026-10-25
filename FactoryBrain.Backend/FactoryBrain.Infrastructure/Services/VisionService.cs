@@ -19,18 +19,19 @@ public sealed class VisionService : IVisionService
 
     private readonly FactoryBrainDbContext _db;
     private readonly IFloorAlertService _alerts;
-    private static readonly Random _rng = new(unchecked((int)0xC0FFEE71));
 
     public VisionService(FactoryBrainDbContext db, IFloorAlertService alerts)
     { _db = db; _alerts = alerts; }
 
-    public VisionAnalyzeResponse Analyze(VisionAnalyzeRequest req, CancellationToken ct)
+    public async Task<VisionAnalyzeResponse> AnalyzeAsync(VisionAnalyzeRequest req, CancellationToken ct)
     {
         var anomaly = MapStagedSample(req.SampleFile);
 
         var result = new VisionResult
         {
-            Id = $"vis-{DateTime.UtcNow.ToString("yyMMddHHmmssfff")}",
+            // GUID, not a millisecond timestamp: concurrent analyses used to
+            // collide on the primary key.
+            Id = $"vis-{Guid.NewGuid():N}",
             SampleFile = req.SampleFile,
             AnomalyLabelEn = anomaly.AnomalyLabelEn,
             AnomalyLabelBn = anomaly.AnomalyLabelBn,
@@ -106,7 +107,12 @@ public sealed class VisionService : IVisionService
             Read = false
         };
 
-        _db.SaveChangesAsync(ct).GetAwaiter().GetResult();
+        // PushAsync adds the alert and saves, so the result, insight,
+        // approval, activity event and alert commit together in one
+        // SaveChanges, and the alert is broadcast to SignalR clients. (The
+        // alert used to be built but never stored, so the returned
+        // FloorAlertId pointed at nothing.)
+        await _alerts.PushAsync(alert, ct);
 
         return new VisionAnalyzeResponse(
             Simulated: true,

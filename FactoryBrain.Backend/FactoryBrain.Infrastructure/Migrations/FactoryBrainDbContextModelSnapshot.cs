@@ -117,6 +117,69 @@ namespace FactoryBrain.Infrastructure.Migrations
                     b.ToTable("agents", (string)null);
                 });
 
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.AiSettingsRecord", b =>
+                {
+                    b.Property<short>("Id")
+                        .HasColumnType("smallint");
+
+                    b.Property<byte[]>("EmbeddingApiKeyEncrypted")
+                        .HasColumnType("bytea");
+
+                    b.Property<int?>("EmbeddingDimensions")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EmbeddingModel")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("EmbeddingProvider")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset?>("EmbeddingUpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<byte[]>("LlmApiKeyEncrypted")
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("LlmModel")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("LlmProvider")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset?>("LlmUpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<DateTimeOffset?>("ReindexLeaseExpiresAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<Guid?>("ReindexLeaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("UpdatedByEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ai_settings", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ai_settings_singleton", "\"Id\" = 1");
+                        });
+                });
+
             modelBuilder.Entity("FactoryBrain.Domain.Entities.ApprovalRequest", b =>
                 {
                     b.Property<string>("Id")
@@ -124,6 +187,20 @@ namespace FactoryBrain.Infrastructure.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamptz");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("DecidedByEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("DecidedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DecisionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<string>("InsightId")
                         .IsRequired()
@@ -148,7 +225,73 @@ namespace FactoryBrain.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Stage");
+
                     b.ToTable("approvals", (string)null);
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.AuditLogEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ActorEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ActorRole")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EntityId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("FromState")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("ToState")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TraceId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.HasIndex("EntityType", "EntityId");
+
+                    b.ToTable("audit_log", (string)null);
                 });
 
             modelBuilder.Entity("FactoryBrain.Domain.Entities.CustomerRecord", b =>
@@ -485,6 +628,39 @@ namespace FactoryBrain.Infrastructure.Migrations
                     b.HasIndex("Region");
 
                     b.ToTable("orders", (string)null);
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.PasswordResetToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("password_reset_tokens", (string)null);
                 });
 
             modelBuilder.Entity("FactoryBrain.Domain.Entities.PolicyDocument", b =>
@@ -845,6 +1021,15 @@ namespace FactoryBrain.Infrastructure.Migrations
                     b.Navigation("Factors");
 
                     b.Navigation("Recommendation")
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.PasswordResetToken", b =>
+                {
+                    b.HasOne("FactoryBrain.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

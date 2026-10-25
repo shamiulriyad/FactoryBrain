@@ -23,6 +23,23 @@ public sealed class SensorService : ISensorService
         { "M-101", "M-102", "M-103", "M-104", "M-105", "M-201", "M-202", "M-203",
           "M-204", "M-205", "M-206", "M-207", "M-208", "M-209", "M-210", "M-267" };
 
+    /// <summary>
+    /// Most ticks one request may advance the simulation by. Bounds the work
+    /// done while <see cref="_gate"/> is held (each tick allocates a few
+    /// readings), so an oversized <c>tick</c> is rejected instead of looping.
+    /// </summary>
+    public const int MaxTicksPerRequest = 60;
+
+    /// <summary>
+    /// Caps on how many distinct lines / machines live readings may add to
+    /// the in-memory floor model. Readings for entities beyond the cap are
+    /// still stored, they just don't create new simulated entities.
+    /// </summary>
+    public const int MaxTrackedLines    = 64;
+    public const int MaxTrackedMachines = 512;
+
+    // Guards every read and write of _state. Hold it only for in-memory
+    // work; database I/O always happens after the lock is released.
     private static readonly object _gate = new();
     private static SimState _state = Seed();
     /// <summary>
@@ -36,50 +53,45 @@ public sealed class SensorService : ISensorService
     private readonly FactoryBrainDbContext _db;
     private readonly IRealtimeNotifier _notifier;
 
+    // The constructor does no I/O. Reading ids are GUID-based (see
+    // NewReadingId), so there is no per-request scan of sensor_readings to
+    // find the next free number.
     public SensorService(FactoryBrainDbContext db, IRealtimeNotifier notifier)
     {
         _db = db;
         _notifier = notifier;
-        SyncNextIdFromDatabaseAsync().GetAwaiter().GetResult();
     }
 
-    /// <summary>
-    /// On first construction (per process), look at the highest existing
-    /// <c>srv-sensor-N</c> primary key in Postgres and bump <c>_state.NextId</c>
-    /// past it so freshly-ingested readings don't collide with persisted ones.
-    /// </summary>
-    private async Task SyncNextIdFromDatabaseAsync()
+    public bool LiveConnected
     {
-        try
+        get { lock (_gate) return _state.Live; }
+    }
+
+    public SensorSimState CurrentState
+    {
+        get
         {
-            var maxId = await _db.SensorReadings
-                .Where(r => r.Id.StartsWith("srv-sensor-"))
-                .Select(r => r.Id)
-                .ToListAsync();
-            int max = 0;
-            foreach (var id in maxId)
+            lock (_gate)
             {
-                if (id.StartsWith("srv-sensor-") &&
-                    int.TryParse(id.AsSpan("srv-sensor-".Length), out var n) &&
-                    n > max) max = n;
+                return new(
+                    _state.Tick,
+                    _state.Lines.Select(l => new LineBoardLine(l.Id, l.Efficiency, l.Uptime, l.EnergyKwh)).ToList(),
+                    _state.Machines.Select(m => new LineBoardMachine(m.Id, m.Vibration, m.Temperature, m.DutyCycle, m.Status)).ToList(),
+                    _state.Readings.ToList()
+                );
             }
-            if (max >= _state.NextId) _state.NextId = max + 1;
-        }
-        catch
-        {
-            // best-effort; if DB is unreachable the first ingest will surface the
-            // underlying error via GlobalExceptionMiddleware.
         }
     }
 
-    public bool LiveConnected => _state.Live;
-
-    public SensorSimState CurrentState => new(
-        _state.Tick,
-        _state.Lines.Select(l => new LineBoardLine(l.Id, l.Efficiency, l.Uptime, l.EnergyKwh)).ToList(),
-        _state.Machines.Select(m => new LineBoardMachine(m.Id, m.Vibration, m.Temperature, m.DutyCycle, m.Status)).ToList(),
-        _state.Readings.ToList()
-    );
+    public IngestResponse Snapshot()
+    {
+        lock (_gate)
+        {
+            return _state.Live
+                ? Snapshot(simulated: false, source: "Live — latest accepted floor readings")
+                : Snapshot(simulated: true, source: "Simulated — no live PLC / Modbus / MQTT traffic");
+        }
+    }
 
     public async Task<IngestResponse> AcceptLiveAsync(LiveIngestRequest req, CancellationToken ct)
     {
@@ -95,7 +107,7 @@ public sealed class SensorService : ISensorService
                     continue;
                 var reading = new SensorReading
                 {
-                    Id = $"srv-sensor-{++_state.NextId}",
+                    Id = NewReadingId(),
                     Source = source,
                     EntityId = input.EntityId.Trim(),
                     Metric = input.Metric.Trim(),
@@ -119,26 +131,36 @@ public sealed class SensorService : ISensorService
             await _db.SaveChangesAsync(ct);
         }
 
-        var response = Snapshot(simulated: false, source: "Live — POST /api/sensors/live");
+        IngestResponse response;
+        lock (_gate) response = Snapshot(simulated: false, source: "Live — POST /api/sensors/live");
         await _notifier.SensorReadingAsync(response, ct);
         return response;
     }
 
     public async Task<IngestResponse> IngestAsync(IngestRequest req, CancellationToken ct)
     {
-        if (_state.Live && req.Simulate != true)
-            return Snapshot(simulated: false, source: "Live — holding last POST /api/sensors/live readings");
+        List<SensorReading> batch;
+        lock (_gate)
+        {
+            if (_state.Live && req.Simulate != true)
+                return Snapshot(simulated: false, source: "Live — holding last POST /api/sensors/live readings");
 
-        AdvanceSim(req.Tick);
-        // Persist last batch into Postgres so the live page reflects history.
-        var batch = _state.LastBatch ?? new List<SensorReading>();
+            // Throws SimulationLimitException before mutating anything when
+            // the requested tick is too far ahead.
+            batch = AdvanceSim(req.Tick);
+        }
+
+        // Persist this call's own batch (not _state.LastBatch, which a
+        // concurrent caller may already have replaced) so history is
+        // neither duplicated nor dropped.
         if (batch.Count > 0)
         {
             _db.SensorReadings.AddRange(batch);
             await _db.SaveChangesAsync(ct);
         }
 
-        var response = Snapshot(simulated: true, source: "Simulated — no live PLC / Modbus / MQTT traffic");
+        IngestResponse response;
+        lock (_gate) response = Snapshot(simulated: true, source: "Simulated — no live PLC / Modbus / MQTT traffic");
 
         // Realtime broadcast (best-effort — the notifier swallows its own errors).
         await _notifier.SensorReadingAsync(response, ct);
@@ -148,6 +170,11 @@ public sealed class SensorService : ISensorService
 
     public Task<LatestReadingsResponse> LatestAsync(CancellationToken ct)
     {
+        lock (_gate) return Task.FromResult(LatestLocked());
+    }
+
+    private LatestReadingsResponse LatestLocked()
+    {
         var sorted = _state.Readings
             .OrderByDescending(r => r.SimTick).ThenByDescending(r => r.Ts)
             .GroupBy(r => $"{r.Source}::{r.EntityId}")
@@ -155,26 +182,34 @@ public sealed class SensorService : ISensorService
             .OrderBy(r => r.Source).ThenBy(r => r.EntityId)
             .Select(ToDto).ToList();
 
-        return Task.FromResult(new LatestReadingsResponse(
+        return new LatestReadingsResponse(
             Simulated: !_state.Live,
             Source: _state.Live
                 ? "Live — latest accepted floor readings"
                 : "Simulated — derived from server sensor ingest buffer",
             Count: sorted.Count,
             Readings: sorted
-        ));
+        );
     }
 
     public Task<SimStatusResponse> StatusAsync(CancellationToken ct)
-        => Task.FromResult(new SimStatusResponse(!_state.Live,
-            _state.Live
-                ? "Live — POST /api/sensors/live"
-                : "Simulated — no live PLC / Modbus / MQTT traffic",
-            _state.Tick, _state.Readings.Count, _state.Lines.Count, _state.Machines.Count));
+    {
+        lock (_gate)
+        {
+            return Task.FromResult(new SimStatusResponse(!_state.Live,
+                _state.Live
+                    ? "Live — POST /api/sensors/live"
+                    : "Simulated — no live PLC / Modbus / MQTT traffic",
+                _state.Tick, _state.Readings.Count, _state.Lines.Count, _state.Machines.Count));
+        }
+    }
 
     // ----------------------------------------------------------------------
 
-    private IngestResponse Snapshot(bool simulated, string source)
+    private static string NewReadingId() => $"srv-sensor-{Guid.NewGuid():N}";
+
+    /// <summary>Builds the response DTO. Callers must hold <see cref="_gate"/>.</summary>
+    private static IngestResponse Snapshot(bool simulated, string source)
     {
         var readings = _state.Readings.Take(50).Select(ToDto).ToList();
         return new IngestResponse(
@@ -208,6 +243,7 @@ public sealed class SensorService : ISensorService
             var line = _state.Lines.FirstOrDefault(l => l.Id.Equals(entity, StringComparison.OrdinalIgnoreCase));
             if (line is null)
             {
+                if (_state.Lines.Count >= MaxTrackedLines) return;
                 line = new LineSim { Id = entity, Efficiency = 0.7, Uptime = 1, EnergyKwh = 0 };
                 _state.Lines.Add(line);
             }
@@ -225,6 +261,7 @@ public sealed class SensorService : ISensorService
             var machine = _state.Machines.FirstOrDefault(m => m.Id.Equals(entity, StringComparison.OrdinalIgnoreCase));
             if (machine is null)
             {
+                if (_state.Machines.Count >= MaxTrackedMachines) return;
                 machine = new MachineSim { Id = entity, Status = "healthy" };
                 _state.Machines.Add(machine);
             }
@@ -268,10 +305,22 @@ public sealed class SensorService : ISensorService
         }
     }
 
-    private static void AdvanceSim(int? tickOverride)
+    /// <summary>
+    /// Advance the simulation by one tick, or up to <paramref name="tickOverride"/>
+    /// when it is ahead of the current tick, and return the readings generated.
+    /// Rejects targets more than <see cref="MaxTicksPerRequest"/> ahead before
+    /// touching any state.
+    /// </summary>
+    private static List<SensorReading> AdvanceSim(int? tickOverride)
     {
         lock (_gate)
         {
+            if (tickOverride.HasValue && (long)tickOverride.Value - _state.Tick > MaxTicksPerRequest)
+            {
+                throw new SimulationLimitException(
+                    $"tick may be at most {MaxTicksPerRequest} ahead of the current tick ({_state.Tick}).");
+            }
+
             int target = tickOverride.HasValue ? Math.Max(_state.Tick + 1, tickOverride.Value) : _state.Tick + 1;
             var batch = new List<SensorReading>();
             for (; _state.Tick < target; _state.Tick++)
@@ -285,13 +334,14 @@ public sealed class SensorService : ISensorService
                 _state.Readings.Insert(0, r);
             }
             while (_state.Readings.Count > 200) _state.Readings.RemoveAt(_state.Readings.Count - 1);
+            return batch;
         }
     }
 
     private static IEnumerable<SensorReading> StepTick()
     {
-        // Tick-scoped RNG; readings use the global _state.NextId counter so IDs
-        // are unique across the whole process (multiple StepTicks per Ingest).
+        // Tick-scoped RNG; reading ids are GUID-based so they stay unique
+        // across ticks, requests and process restarts.
         // When the simulator sets SimulatorSeedOverride != 0, the seed is
         // XOR'd in so two runs with the same seed produce identical
         // readings (modulo timestamps and ids).
@@ -311,7 +361,7 @@ public sealed class SensorService : ISensorService
             double v = Math.Round(p.Lo + rng.NextDouble() * (p.Hi - p.Lo), 2);
             var reading = new SensorReading
             {
-                Id = $"srv-sensor-{++_state.NextId}",
+                Id = NewReadingId(),
                 Source = p.Source,
                 EntityId = p.Entity,
                 Metric = p.Metric,

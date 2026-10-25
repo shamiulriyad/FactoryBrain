@@ -1,5 +1,7 @@
 using FactoryBrain.Application.Dtos.Vision;
 using FactoryBrain.Application.Abstractions.Interfaces;
+using FactoryBrain.Api.Middleware;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FactoryBrain.Api.Controllers;
@@ -23,6 +25,7 @@ public class VisionController : ControllerBase
     // "unknown_sample_file" rule, so an invalid sample file returns the
     // same envelope as a missing field.
     [HttpPost("analyze")]
-    public IActionResult Analyze([FromBody] VisionAnalyzeRequest body, CancellationToken ct)
-        => Ok(_svc.Analyze(body, ct));
+    [Authorize(Policy = AuthPolicies.Operator)]
+    public async Task<IActionResult> Analyze([FromBody] VisionAnalyzeRequest body, CancellationToken ct)
+        => Ok(await _svc.AnalyzeAsync(body, ct));
 }

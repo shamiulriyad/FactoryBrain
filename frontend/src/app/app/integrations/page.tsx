@@ -1,5 +1,6 @@
 "use client";
 
+import { DemoDataBanner } from "@/components/ui/Callout";
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { PlugZap, RefreshCw, Power, Pencil, ChevronDown, ChevronRight, FlaskConical, RadioTower, FileText, Info } from "lucide-react";
@@ -73,7 +74,8 @@ export default function IntegrationsPage() {
   if (list.length === 0) return null;
 
   return (
-    <div className="px-6 md:px-8 py-6 max-w-4xl mx-auto" data-tour="integrations">
+    <div className="page page-narrow" data-tour="integrations">
+      <DemoDataBanner className="mb-5" what="Connecting, syncing and disconnecting here only changes a demo list stored in this browser; no data is imported and nothing reaches the API. Real sensor data arrives through POST /api/sensors/live (see Sensors)." />
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-display font-semibold tracking-tight">{t("integrations.title")}</h1>

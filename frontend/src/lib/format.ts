@@ -46,6 +46,21 @@ export function formatDate(iso: string, locale: Locale = "en") {
   return formatted;
 }
 
+/** Date + time, e.g. "25 Oct 2026, 14:05" (local time zone). */
+export function formatDateTime(iso: string | null | undefined, locale: Locale = "en") {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const formatted = new Intl.DateTimeFormat(locale === "bn" ? "bn-BD" : "en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(d);
+  return locale === "bn" ? toBanglaDigits(formatted) : formatted;
+}
+
 export function formatRelative(iso: string, locale: Locale = "en", now: Date = new Date()) {
   const then = new Date(iso).getTime();
   const diff = (now.getTime() - then) / 1000;

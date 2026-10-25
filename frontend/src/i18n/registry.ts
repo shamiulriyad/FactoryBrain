@@ -6,13 +6,20 @@ export type Locale = "en" | "bn";
 
 const dicts: Record<Locale, Dict> = { en, bn };
 
-export function t(locale: Locale, path: string, params?: Record<string, string | number>): string {
-  const segments = path.split(".");
-  let value: any = dicts[locale];
+function lookup(dict: Dict, segments: string[]): unknown {
+  let value: any = dict;
   for (const seg of segments) {
-    if (value == null) return path;
+    if (value == null) return undefined;
     value = value[seg];
   }
+  return value;
+}
+
+export function t(locale: Locale, path: string, params?: Record<string, string | number>): string {
+  const segments = path.split(".");
+  let value = lookup(dicts[locale], segments);
+  // A key not yet translated falls back to English rather than showing its path.
+  if (typeof value !== "string" && locale !== "en") value = lookup(dicts.en, segments);
   if (typeof value !== "string") return path;
   if (!params) return value;
   return value.replace(/\{(\w+)\}/g, (_, k) => String(params[k] ?? `{${k}}`));

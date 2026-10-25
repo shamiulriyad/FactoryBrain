@@ -120,6 +120,51 @@ public class ApprovalRequestConfiguration : IEntityTypeConfiguration<ApprovalReq
         b.ToTable("approvals");
         b.HasKey(x => x.Id);
         b.Property(x => x.CreatedAt).HasColumnType("timestamptz");
+        b.Property(x => x.DecidedAt).HasColumnType("timestamptz");
+        b.Property(x => x.DecidedByEmail).HasMaxLength(256);
+        b.Property(x => x.DecisionReason).HasMaxLength(1000);
+        b.HasIndex(x => x.Stage);
+    }
+}
+
+public class AuditLogEntryConfiguration : IEntityTypeConfiguration<AuditLogEntry>
+{
+    public void Configure(EntityTypeBuilder<AuditLogEntry> b)
+    {
+        b.ToTable("audit_log");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).UseIdentityAlwaysColumn();
+        b.Property(x => x.OccurredAt).HasColumnType("timestamptz");
+        b.Property(x => x.ActorEmail).HasMaxLength(256).IsRequired();
+        b.Property(x => x.ActorRole).HasMaxLength(32).IsRequired();
+        b.Property(x => x.Action).HasMaxLength(64).IsRequired();
+        b.Property(x => x.EntityType).HasMaxLength(64).IsRequired();
+        b.Property(x => x.EntityId).HasMaxLength(128).IsRequired();
+        b.Property(x => x.FromState).HasMaxLength(32);
+        b.Property(x => x.ToState).HasMaxLength(32);
+        b.Property(x => x.Reason).HasMaxLength(1000);
+        b.Property(x => x.TraceId).HasMaxLength(128);
+        b.HasIndex(x => new { x.EntityType, x.EntityId });
+        b.HasIndex(x => x.OccurredAt);
+    }
+}
+
+public class AiSettingsRecordConfiguration : IEntityTypeConfiguration<AiSettingsRecord>
+{
+    public void Configure(EntityTypeBuilder<AiSettingsRecord> b)
+    {
+        b.ToTable("ai_settings", t => t.HasCheckConstraint("CK_ai_settings_singleton", "\"Id\" = 1"));
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.LlmProvider).HasMaxLength(32);
+        b.Property(x => x.LlmModel).HasMaxLength(128);
+        b.Property(x => x.LlmUpdatedAt).HasColumnType("timestamptz");
+        b.Property(x => x.EmbeddingProvider).HasMaxLength(32);
+        b.Property(x => x.EmbeddingModel).HasMaxLength(128);
+        b.Property(x => x.EmbeddingUpdatedAt).HasColumnType("timestamptz");
+        b.Property(x => x.UpdatedAt).HasColumnType("timestamptz");
+        b.Property(x => x.UpdatedByEmail).HasMaxLength(256);
+        b.Property(x => x.ReindexLeaseExpiresAt).HasColumnType("timestamptz");
     }
 }
 

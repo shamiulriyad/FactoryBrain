@@ -1,4 +1,6 @@
 using FactoryBrain.Application.Abstractions.Interfaces;
+using FactoryBrain.Api.Middleware;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FactoryBrain.Api.Controllers;
@@ -15,6 +17,7 @@ public class AgentsController : ControllerBase
         => Ok(await _svc.RosterAsync(ct));
 
     [HttpPost("{agentId}/run")]
+    [Authorize(Policy = AuthPolicies.Operator)]
     public async Task<IActionResult> Run([FromRoute] string agentId, CancellationToken ct)
     {
         try

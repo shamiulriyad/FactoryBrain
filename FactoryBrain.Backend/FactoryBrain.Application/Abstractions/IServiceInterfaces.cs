@@ -1,6 +1,8 @@
 using FactoryBrain.Domain.Entities;
 using FactoryBrain.Domain.Enums;
+using FactoryBrain.Application.Abstractions;
 using FactoryBrain.Application.Dtos.Agents;
+using FactoryBrain.Application.Dtos.Approvals;
 using FactoryBrain.Application.Dtos.Ask;
 using FactoryBrain.Application.Dtos.Auth;
 using FactoryBrain.Application.Dtos.Brief;
@@ -17,6 +19,19 @@ namespace FactoryBrain.Application.Abstractions.Interfaces;
 public interface IAskService
 {
     Task<AskAnswerResponse> AskAsync(AskRequest req, CancellationToken ct);
+}
+
+/// <summary>
+/// Server-side approval queue. Decisions are atomic state transitions
+/// (pending → approved | rejected) recorded in the append-only audit log in
+/// the same transaction.
+/// </summary>
+public interface IApprovalService
+{
+    /// <param name="status"><c>pending</c> (default) | <c>approved</c> | <c>rejected</c> | <c>all</c>.</param>
+    Task<ApprovalListResponse> ListAsync(string status, int limit, CancellationToken ct);
+    Task<ApprovalDecisionResult> DecideAsync(string id, bool approve, string? reason, ApprovalActor actor, string? traceId, CancellationToken ct);
+    Task<IReadOnlyList<AuditEntryDto>> AuditAsync(string? entityType, string? entityId, int limit, CancellationToken ct);
 }
 
 public interface IBriefService
@@ -50,20 +65,23 @@ public interface ISensorService
     Task<IngestResponse>  AcceptLiveAsync(LiveIngestRequest req, CancellationToken ct);
     Task<LatestReadingsResponse> LatestAsync(CancellationToken ct);
     Task<SimStatusResponse> StatusAsync(CancellationToken ct);
+    /// <summary>Current state without advancing the simulation or touching the database.</summary>
+    IngestResponse Snapshot();
     /// <summary>Immiration from src/services/sensors.server for the sim buffer.</summary>
     SensorSimState CurrentState { get; }
 }
 
 public interface IVisionService
 {
-    VisionAnalyzeResponse Analyze(VisionAnalyzeRequest req, CancellationToken ct);
+    Task<VisionAnalyzeResponse> AnalyzeAsync(VisionAnalyzeRequest req, CancellationToken ct);
     VisionAllowedResponse Allowed();
 }
 
 public interface ILlmSettingsService
 {
-    LlmSettingsResponse ReadStatus();
-    LlmSettingsResponse Update(LlmSettingsRequest req);
+    Task<LlmSettingsResponse> ReadStatusAsync(CancellationToken ct = default);
+    Task<SettingsWriteResult<LlmSettingsResponse>> UpdateAsync(
+        LlmSettingsRequest req, AuditActor actor, string? traceId, CancellationToken ct = default);
 }
 
 public interface IAgentRunService
@@ -75,17 +93,16 @@ public interface IAgentRunService
 public interface IRagService
 {
     /// <summary>Chunk a doc body and emit embeddings (pgvector or in-memory).</summary>
+    /// <remarks>Pass <paramref name="embed"/> = false to build the chunks without vectors
+    /// (stored as pending), e.g. when embedding would be a paid call at startup.</remarks>
     Task<List<DocumentChunk>> ChunkAsync(
         string docId, string title, string body, IEnumerable<string> tags,
-        string department, string category, CancellationToken ct = default);
+        string department, string category, CancellationToken ct = default, bool embed = true);
 
     /// <summary>Hybrid retrieval: cosine + BM25, returns top-k RAG hits.</summary>
     Task<IReadOnlyList<AskRagHit>> RetrieveAsync(
         string query, RagFilter? filter, int topK = 4, double similarityThreshold = 0,
         double bm25Weight = 0.35, CancellationToken ct = default);
-
-    /// <summary>Re-embed every chunk with the currently active embedder.</summary>
-    Task<ReindexReport> ReindexAsync(CancellationToken ct = default);
 
     /// <summary>
     /// True when the embedder metadata stored on existing manual rows
@@ -103,7 +120,7 @@ public interface IRagService
     /// chunks to <c>manual_documents</c>. In degraded mode the chunks are
     /// stored with <c>Embedding = null</c> and
     /// <c>EmbeddingProvider = "pending"</c> — they will be embedded by
-    /// the next non-degraded startup reindex or POST /api/rag/reindex.
+    /// the next Admin-confirmed POST /api/rag/reindex.
     /// </summary>
     Task<IngestOutcome> IngestAsync(IngestInput input, CancellationToken ct = default);
 
@@ -287,4 +304,32 @@ public interface IPasswordHasher
 
     /// <summary>True when <paramref name="provided"/> matches <paramref name="hashed"/>.</summary>
     bool Verify(User user, string hashed, string provided);
+}
+
+/// <summary>
+/// Self-service account flows: sign-up (always a Viewer), forgot / reset
+/// password with a one-time emailed link, and the Admin's user list and
+/// role changes. Every change is written to the audit log.
+/// </summary>
+public interface IAccountService
+{
+    bool SelfRegistrationEnabled { get; }
+    Task<RegisterResult> RegisterAsync(string email, string password, string? traceId, CancellationToken ct);
+    /// <summary>Queues a reset email when the account exists; does the same visible work either way.</summary>
+    Task RequestPasswordResetAsync(string email, string? traceId, CancellationToken ct);
+    Task<ResetOutcome> ResetPasswordAsync(string token, string newPassword, string? traceId, CancellationToken ct);
+    Task<IReadOnlyList<UserListItem>> ListUsersAsync(CancellationToken ct);
+    Task<RoleChangeResult> ChangeRoleAsync(Guid userId, string role, AuditActor actor, string? traceId, CancellationToken ct);
+}
+
+/// <summary>Sends one email. Implementations never log the body (it may carry a reset link).</summary>
+public interface IEmailSender
+{
+    Task SendAsync(EmailMessage message, CancellationToken ct);
+}
+
+/// <summary>Hands an email to the background dispatcher so the request doesn't wait on SMTP.</summary>
+public interface IEmailQueue
+{
+    void Enqueue(EmailMessage message);
 }

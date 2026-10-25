@@ -1,6 +1,9 @@
 using FactoryBrain.Application.Dtos.LineBoard;
 using FactoryBrain.Application.Abstractions.Interfaces;
+using FactoryBrain.Api.Middleware;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace FactoryBrain.Api.Controllers;
 
@@ -23,7 +26,20 @@ public class LineBoardController : ControllerBase
     // method runs. RefreshRequestValidator only constrains Tick when
     // supplied, so an empty/missing body still passes through to the
     // service which interprets null Tick as "use current server tick".
+    // Advancing the simulation is an Operator action and shares the
+    // sensor-sim rate limit with POST /api/sensors/ingest.
     [HttpPost("refresh")]
+    [Authorize(Policy = AuthPolicies.Operator)]
+    [EnableRateLimiting(RateLimitPolicies.SensorSimulation)]
     public async Task<IActionResult> Refresh([FromBody] RefreshRequest? body, CancellationToken ct)
-        => Ok(await _svc.RefreshAsync(body?.Tick, ct));
+    {
+        try
+        {
+            return Ok(await _svc.RefreshAsync(body?.Tick, ct));
+        }
+        catch (SimulationLimitException ex)
+        {
+            return SensorsController.SimulationLimitProblem(ex);
+        }
+    }
 }

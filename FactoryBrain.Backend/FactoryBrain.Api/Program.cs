@@ -20,16 +20,21 @@
 // IMPORTANT: both Env.Load calls below use LoadOptions(clobberExistingVars:
 // false) so a host-set env var (e.g. FACTORYBRAIN_DB on a Docker / CI box,
 // RAG_EMBEDDING_API_KEY on the operator's shell) always wins over what is
-// committed in .env. EnvReloader may still overwrite RAG_* values at runtime
-// in Development; see EnvReloader.cs for the prefix guard.
+// committed in .env.
 //
-// RAG embedding providers (resolved at startup):
-//   RAG_EMBEDDING_PROVIDER = local | openai | gemini   (default: local)
-//   RAG_EMBEDDING_MODEL    = e.g. text-embedding-3-small
-//   RAG_EMBEDDING_API_KEY  = falls back to LLM_API_KEY
-//   RAG_EMBEDDING_DIMENSIONS = falls back to Rag:EmbeddingDimensions, then 384
-//   If LLM_PROVIDER is set and a key is present, that provider is mirrored
-//   (gemini → Gemini embeddings, openai → text-embedding-3-small).
+// LLM and embedding settings (see docs/AI_SETTINGS_DESIGN.md):
+//   One IAiSettingsProvider decides them, per group (LLM, embedding):
+//   runtime override > saved settings (ai_settings table, once that group has
+//   been saved) > startup configuration > defaults. The startup configuration
+//   is read ONCE below:
+//     LLM_PROVIDER / LLM_MODEL / LLM_API_KEY / LLM_BASE_URL
+//     RAG_EMBEDDING_PROVIDER = local | openai | gemini   (default: local)
+//     RAG_EMBEDDING_MODEL / RAG_EMBEDDING_DIMENSIONS / RAG_EMBEDDING_API_KEY
+//   An LLM key never changes the embedding provider or dimensions, and
+//   embeddings never use LLM_API_KEY. Saved API keys are AES-GCM encrypted
+//   with AI_SETTINGS_ENCRYPTION_KEY (or _FILE), which never goes in the DB.
+//   Startup never resizes the vector column and never re-embeds: an Admin
+//   reviews a plan and confirms it (POST /api/rag/reindex).
 //
 // Health check:
 //   GET /health → 200 OK when PostgreSQL is reachable, otherwise 503.
@@ -57,7 +62,8 @@ using FactoryBrain.Application.Abstractions.Interfaces;
 using FactoryBrain.Application.Rag;
 using FactoryBrain.Infrastructure.Rag;
 using FactoryBrain.Infrastructure.Configuration;
-using FactoryBrain.Api.Services;
+using FactoryBrain.Application.Settings;
+using FactoryBrain.Infrastructure.Settings;
 using FactoryBrain.Api.Realtime;
 using FactoryBrain.Api.Hubs;
 using FluentValidation;
@@ -77,8 +83,21 @@ using Microsoft.EntityFrameworkCore;
 // .env itself is NOT read from the working directory only: onlyExactPath:
 // false walks up parent folders until it finds one, so `dotnet run` from
 // FactoryBrain.Api/ picks up the single .env at the repo root.
-Env.Load(".env.local",  new LoadOptions(clobberExistingVars: false));
-Env.Load(".env",        new LoadOptions(clobberExistingVars: false, onlyExactPath: false));
+//
+// The integration tests run with ASPNETCORE_ENVIRONMENT=Testing (no
+// database) or IntegrationTesting (a disposable local PostgreSQL) and must
+// never pick up the developer's repo-root .env (which can point at a
+// remote database and carry real provider keys), so the files are skipped
+// in both environments.
+var hostEnvironmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+var isTestingHost =
+    string.Equals(hostEnvironmentName, "Testing", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(hostEnvironmentName, "IntegrationTesting", StringComparison.OrdinalIgnoreCase);
+if (!isTestingHost)
+{
+    Env.Load(".env.local",  new LoadOptions(clobberExistingVars: false));
+    Env.Load(".env",        new LoadOptions(clobberExistingVars: false, onlyExactPath: false));
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -193,6 +212,27 @@ var pgConn =
     ?? builder.Configuration.GetConnectionString("Postgres")
     ?? "Host=localhost;Port=5432;Database=factorybrain;Username=postgres;Password=postgres;Include Error Detail=true";
 
+// Development conveniences (detailed EF errors, SQL parameter values in
+// logs) are only safe against a database on this machine. Against a remote
+// or shared database they would write real row data into the logs, so they
+// are switched off and the operator is told why.
+var dbIsLoopback = IsLoopbackDatabase(pgConn);
+// IntegrationTesting migrates and seeds the database it is given, so it
+// must only ever run against a disposable database on this machine.
+if (builder.Environment.IsEnvironment("IntegrationTesting") && !dbIsLoopback)
+{
+    throw new InvalidOperationException(
+        "ASPNETCORE_ENVIRONMENT=IntegrationTesting only runs against a loopback database " +
+        "(it applies migrations and seeds data). Point FACTORYBRAIN_DB at a local test database.");
+}
+if (builder.Environment.IsDevelopment() && !dbIsLoopback)
+{
+    Console.WriteLine(
+        "[startup] Development environment with a non-local database host: " +
+        "EF sensitive-data logging stays OFF. Authentication and role checks are " +
+        "enforced exactly as in Production.");
+}
+
 builder.Services.AddDbContext<FactoryBrainDbContext>(opts =>
 {
     opts.UseNpgsql(pgConn, npg =>
@@ -201,7 +241,7 @@ builder.Services.AddDbContext<FactoryBrainDbContext>(opts =>
         npg.MigrationsHistoryTable("__ef_migrations");
         npg.UseVector();
     });
-    if (builder.Environment.IsDevelopment())
+    if (builder.Environment.IsDevelopment() && dbIsLoopback)
     {
         opts.EnableDetailedErrors();
         opts.EnableSensitiveDataLogging();
@@ -229,13 +269,6 @@ builder.Services.Configure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
 {
     o.Filters.AddService<FluentValidationFilter>();
 });
-
-// ─── Admin-token gate (bound to the three write actions via [AdminToken]) ──
-// Replaces the old path-matching middleware: the filter is invoked only on
-// actions that carry [AdminToken], so URL/path spellings (trailing slash,
-// mixed case, double slash, percent-encoded slash) either match the route
-// or they don't — the filter never gets a chance to mis-handle them.
-builder.Services.AddScoped<AdminTokenAuthorizationFilter>();
 
 // ─── JWT signing key resolution ────────────────────────────────────────────
 // Bind JwtOptions from configuration first (Issuer/Audience come from
@@ -277,8 +310,8 @@ else
 builder.Services.PostConfigure<JwtOptions>(o => { o.SigningKeyBytes = jwtOpts.SigningKeyBytes; });
 
 // ─── Authentication (JWT bearer) ───────────────────────────────────────────
-// The bearer scheme is what /api/auth/me and the AdminOrLegacyToken
-// policy's role check rely on. Issuer / Audience / SigningKey come from
+// The bearer scheme backs the fallback (authenticated) policy and the
+// Operator / Admin role policies below. Issuer / Audience / SigningKey come from
 // the resolved JwtOptions above.
 var jwtIssuer   = jwtOpts.Issuer   ?? "factorybrain";
 var jwtAudience = jwtOpts.Audience ?? "factorybrain";
@@ -327,104 +360,69 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 // ─── Authorization policies ───────────────────────────────────────────────
-// AdminOrLegacyToken succeeds when:
-//   (1) the caller has role Admin on a valid JWT (the modern path), OR
-//   (2) the legacy X-Admin-Token check passes via AdminTokenVerifier, OR
-//   (3) the request is anonymous AND the process is in Development
-//       (so the [AdminToken] filter can short-circuit with its
-//       IsDevelopment bypass).
+// Every endpoint requires an authenticated user unless it explicitly opts
+// out with [AllowAnonymous] (login / refresh / logout / health). Role
+// checks are evaluated here, on the server, from the validated JWT role
+// claim — the frontend only hides buttons, it never decides access.
 //
-// For an anonymous request in non-Development the policy *fails open*.
-// This is intentional: we want the [AdminToken] filter (an
-// IAsyncAuthorizationFilter) to get a chance to emit its canonical
-// {error: "AdminTokenMissing"} envelope in Production — if the policy
-// returned false instead, the framework's JwtBearer challenge would
-// win the race and return its default 401 problem details instead.
-//
-// TODO(54c): remove the legacy X-Admin-Token path. The JWT role branch
-// is now the canonical way to authorise admin actions; the legacy
-// ADMIN_API_TOKEN is kept only as a fallback so a fresh deploy with no
-// seeded users still boots. Batch 54c deletes AdminTokenVerifier and the
-// AdminTokenAuthorizationFilter envelope and switches every [AdminToken]
-// action to [Authorize(Policy = AdminOrLegacyToken)] alone.
-builder.Services.AddSingleton<AdminTokenVerifier>();
+// The former legacy X-Admin-Token path (a shared secret that the Next.js
+// proxy attached on behalf of any caller) and its Development-mode bypass
+// are gone: admin actions now need a JWT whose role is Admin. Bootstrap the
+// first admin with SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD.
 builder.Services.AddAuthorization(o =>
 {
-    o.AddPolicy(AuthPolicies.AdminOrLegacyToken, p =>
-        p.RequireAssertion(ctx =>
-        {
-            // Path (1): role Admin on a valid JWT.
-            if (ctx.User.Identity?.IsAuthenticated == true && ctx.User.IsInRole("Admin"))
-                return true;
-
-            // Path (2): legacy X-Admin-Token matches the env var.
-            if (ctx.Resource is HttpContext http)
-            {
-                var verifier = http.RequestServices.GetService(typeof(AdminTokenVerifier)) as AdminTokenVerifier;
-                if (verifier is not null)
-                {
-                    var outcome = verifier.Verify(http);
-                    if (outcome == AdminTokenVerifier.Outcome.Pass
-                        || outcome == AdminTokenVerifier.Outcome.PassDevelopment)
-                        return true;
-                }
-            }
-
-            // Path (3): anonymous request — let the [AdminToken] filter
-            // decide. In Development it short-circuits; in non-Development
-            // it returns the canonical {error: "AdminTokenMissing"}
-            // envelope. A *present-but-not-Admin* JWT skips this branch
-            // (IsAuthenticated == true) and falls through to "false" →
-            // framework 403 problem details, which is what the spec wants.
-            //
-            // 54c note: this anonymous fallthrough exists ONLY because
-            // [AdminToken] still does the legacy token check. In batch
-            // 54c the fallthrough and every [AdminToken] attribute must
-            // be removed TOGETHER — never one without the other. If you
-            // drop the fallthrough first, anonymous callers start
-            // getting framework 401 problem details instead of the
-            // AdminTokenMissing envelope; if you drop [AdminToken]
-            // first, anonymous callers get 403 problem details instead
-            // of AdminTokenMissing. Removing them in the same commit
-            // keeps the response shape stable.
-            if (ctx.User.Identity?.IsAuthenticated != true)
-                return true;
-
-            return false;
-        }));
+    o.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+    o.AddPolicy(AuthPolicies.Operator, p => p.RequireAuthenticatedUser().RequireRole(Roles.Admin, Roles.Operator));
+    o.AddPolicy(AuthPolicies.Admin,    p => p.RequireAuthenticatedUser().RequireRole(Roles.Admin));
 });
 
-// ─── Login rate limit (fixed window, 5/min/IP, login route only) ──────────
-// Named "login" — AuthController.Login decorates the action with
-// [EnableRateLimiting("login")] so every other route is unrestricted.
-// UseForwardedHeaders below resolves the real client IP behind a reverse
-// proxy before the limiter partitions on it.
+// ─── Rate limits ──────────────────────────────────────────────────────────
+// "account"     same budget per client IP on register / forgot-password / reset-password.
+// "login"       5/min per client IP on POST /api/auth/login (LOGIN_RATE_LIMIT_PER_MINUTE
+//               overrides it, 1–1000; the end-to-end harness raises it because every
+//               browser login there comes from 127.0.0.1).
+// "sensor-sim"  20/min per user on the endpoints that advance the
+//               simulation (POST /api/sensors/ingest, /api/line-board/refresh).
+// "sensor-live" 120/min per user on POST /api/sensors/live (a floor gateway
+//               posting every second or two stays inside it).
+// Every other route is unrestricted. UseRateLimiter runs after
+// authentication, so the per-user policies partition on the JWT subject;
+// UseForwardedHeaders runs earlier so the IP-based login policy sees the
+// real client IP behind a trusted proxy.
 builder.Services.AddRateLimiter(o =>
 {
     // PartitionedRateLimiter.Create<HttpContext, string> is required for
     // per-IP buckets. AddFixedWindowLimiter alone creates a single shared
-    // bucket — useless for credential-stuffing protection. The partition
-    // key reads RemoteIpAddress AFTER UseForwardedHeaders rewrites it,
-    // so when FORWARDED_HEADERS_ENABLED=true and the request comes from a
-    // trusted proxy, each forwarded client gets its own 5/min budget.
-    o.AddPolicy("login", httpContext =>
+    // bucket — useless for credential-stuffing protection.
+    o.AddPolicy(RateLimitPolicies.Login, httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit       = 5,
-                Window            = TimeSpan.FromMinutes(1),
-                QueueLimit        = 0,
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                AutoReplenishment = true,
-            }));
+            factory: _ => FixedWindow(RateLimitPolicies.LoginPerMinute())));
+    o.AddPolicy(RateLimitPolicies.Account, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => FixedWindow(RateLimitPolicies.LoginPerMinute())));
+    o.AddPolicy(RateLimitPolicies.SensorSimulation, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: RateLimitPolicies.UserPartition(httpContext),
+            factory: _ => FixedWindow(RateLimitPolicies.SensorSimulationPerMinute)));
+    o.AddPolicy(RateLimitPolicies.SensorLive, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: RateLimitPolicies.UserPartition(httpContext),
+            factory: _ => FixedWindow(RateLimitPolicies.SensorLivePerMinute)));
 
     // 429 response shape: RFC 7807 ProblemDetails + Retry-After. Matches
     // the rest of the API's error envelope.
     o.OnRejected = async (ctx, ct) =>
     {
+        var retryAfterSeconds = ctx.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter)
+            ? Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds))
+            : 60; // one full window
+        var isLogin = ctx.HttpContext.Request.Path.StartsWithSegments("/api/auth/login", StringComparison.OrdinalIgnoreCase);
+
         ctx.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-        var retryAfterSeconds = 60; // one full window
         ctx.HttpContext.Response.Headers["Retry-After"] = retryAfterSeconds.ToString();
         ctx.HttpContext.Response.Headers["Cache-Control"] = "no-store";
         ctx.HttpContext.Response.ContentType = "application/problem+json";
@@ -433,11 +431,22 @@ builder.Services.AddRateLimiter(o =>
             Type   = "https://datatracker.ietf.org/doc/html/rfc6585#section-4",
             Title  = "Too Many Requests",
             Status = StatusCodes.Status429TooManyRequests,
-            Detail = "Too many login attempts from this client. Retry after 60 seconds.",
+            Detail = isLogin
+                ? $"Too many login attempts from this client. Retry after {retryAfterSeconds} seconds."
+                : $"Too many requests to this endpoint. Retry after {retryAfterSeconds} seconds.",
             Instance = ctx.HttpContext.Request.Path.HasValue
                 ? ctx.HttpContext.Request.Path.Value! : string.Empty,
         };
         await ctx.HttpContext.Response.WriteAsJsonAsync(problem, ct);
+    };
+
+    static FixedWindowRateLimiterOptions FixedWindow(int permitsPerMinute) => new()
+    {
+        PermitLimit          = permitsPerMinute,
+        Window               = TimeSpan.FromMinutes(1),
+        QueueLimit           = 0,
+        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+        AutoReplenishment    = true,
     };
 });
 
@@ -464,39 +473,55 @@ builder.Services.AddSingleton<ITokenService, TokenService>();
 builder.Services.AddScoped<IPasswordHasher, PasswordHasherAdapter>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
+// ─── Self-service accounts + email ─────────────────────────────────────────
+// Sign-up (always Viewer; ALLOW_SELF_REGISTRATION=false turns it off),
+// forgot / reset password with a one-time emailed link, Admin role changes.
+// Emails go through a background queue; SMTP_* configures delivery, and
+// without SMTP_HOST the message is only logged (outside Production).
+var emailOptions = EmailOptions.FromEnvironment(Environment.GetEnvironmentVariable);
+builder.Services.AddSingleton(emailOptions);
+builder.Services.AddSingleton(AccountOptions.FromEnvironment(Environment.GetEnvironmentVariable));
+if (emailOptions.IsConfigured) builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+else builder.Services.AddSingleton<IEmailSender, LogOnlyEmailSender>();
+builder.Services.AddSingleton<EmailQueue>();
+builder.Services.AddSingleton<IEmailQueue>(sp => sp.GetRequiredService<EmailQueue>());
+builder.Services.AddHostedService<EmailDispatcher>();
+builder.Services.AddScoped<IAccountService, AccountService>();
+
 // ─── RAG tuning config (Rag: section in appsettings.json, env Rag__*) ──────
 builder.Services.Configure<RagConfig>(builder.Configuration.GetSection("Rag"));
 
+// ─── LLM + embedding settings (one provider for Ask, agents, embeddings) ───
+// Startup configuration and the encryption key are read here, once. A
+// malformed AI_SETTINGS_ENCRYPTION_KEY fails startup; a missing one only
+// prevents saving API keys (the settings API says so).
+var startupAi = StartupAiConfig.FromEnvironment(Environment.GetEnvironmentVariable);
+var secretProtector = AiSecretProtector.FromEnvironment(Environment.GetEnvironmentVariable);
+var settingsRefresh = AiSettingsProvider.RefreshIntervalFrom(Environment.GetEnvironmentVariable(AiSettingsProvider.EnvRefreshSeconds));
+builder.Services.AddSingleton(startupAi);
+builder.Services.AddSingleton(secretProtector);
+builder.Services.AddSingleton<IAiSettingsProvider>(sp => new AiSettingsProvider(
+    sp.GetRequiredService<IServiceScopeFactory>(), secretProtector, startupAi, settingsRefresh,
+    sp.GetRequiredService<ILogger<AiSettingsProvider>>()));
+builder.Services.AddScoped<ILlmSettingsService, LlmSettingsService>();
+
 // ─── RAG: pluggable embedder + chunker + scorer ────────────────────────────
-// The resolver is a singleton; the actual IEmbeddingService is built once at
-// startup (also a singleton) and is decorated with WithFallback so any
-// hosted-provider failure drops permanently to the local hash embedder with
-// a warning log — never a crash, never a key in the log.
+// IEmbeddingService resolves the embedder for the settings in effect at each
+// call, so a saved change applies without a restart. Hosted embedders are
+// wrapped so a failure drops that configuration to the local hash embedder
+// with a warning — never a crash, never a key in the log.
 builder.Services.AddSingleton<EmbeddingProviderResolver>();
-builder.Services.AddSingleton<IEmbeddingService>(sp =>
-{
-    var resolver = sp.GetRequiredService<EmbeddingProviderResolver>();
-    var http     = sp.GetRequiredService<IHttpClientFactory>();
-    var lf       = sp.GetRequiredService<ILoggerFactory>();
-    // BuildService wraps the hosted (or stub) primary with the local hash
-    // fallback so transient hosted failures don't crash the request — they
-    // flip Degraded via the wrapper and degrade gracefully.
-    return resolver.BuildService(http, lf);
-});
+builder.Services.AddSingleton<IEmbeddingService, SettingsBoundEmbeddingService>();
+builder.Services.AddScoped<EmbeddingReindexService>();
 builder.Services.AddSingleton<TextChunker>();
 builder.Services.AddSingleton<HybridScorer>();
 
-// Background health probe + automatic reindex on recovery. The monitor
-// re-reads env vars on every cycle so newly-set RAG_EMBEDDING_* values
-// take effect without a restart.
+// Background health probe of the current embedding settings. It never
+// re-embeds; that is an Admin-confirmed operation.
 builder.Services.AddSingleton<RagHealthMonitor>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RagHealthMonitor>());
 
-// Scoped helpers for column-dim probing + metadata-aware reindex.
-// EmbeddingColumnAdmin needs IHttpClientFactory + ILoggerFactory so it can
-// build a fresh primary hosted embedder directly (no fallback wrapper)
-// during the reindex path — that's how we surface hosted-call failures
-// as exceptions that trigger a transactional rollback + Degraded flag.
+// Scoped helper for the live column dimension and the per-vector dim guard.
 builder.Services.AddScoped<EmbeddingColumnAdmin>();
 
 // Scoped: each request gets a fresh instance with its own DbContext.
@@ -508,8 +533,8 @@ builder.Services.AddScoped<IQcService,         QcService>();
 builder.Services.AddScoped<ISensorService,     SensorService>();
 builder.Services.AddScoped<IVisionService,     VisionService>();
 builder.Services.AddScoped<IAgentRunService,   AgentRunService>();
-builder.Services.AddScoped<ILlmSettingsService, LlmSettingsService>();
 builder.Services.AddScoped<IBriefService,      BriefService>();
+builder.Services.AddScoped<IApprovalService,   ApprovalService>();
 
 // ─── Realtime (SignalR) ────────────────────────────────────────────────────
 // FactoryHub is server-to-client only — clients don't call hub methods.
@@ -562,8 +587,25 @@ builder.Services.AddSwaggerGen(c =>
         Title = "FactoryBrain.Api",
         Version = "v9",
         Description = "Backend for the BunonBrain (factoryBrain) platform. " +
-                      "Every route mirrors a /api/** path the Next.js frontend expects."
+                      "Every route mirrors a /api/** path the Next.js frontend expects. " +
+                      "Most endpoints need a signed-in user: call POST /api/auth/login, copy accessToken, " +
+                      "then use Authorize."
     });
+    // "Authorize" button: send the access token as Authorization: Bearer <token>.
+    var bearer = new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Description = "Access token from POST /api/auth/login (valid 15 minutes).",
+        Reference = new Microsoft.OpenApi.Models.OpenApiReference
+        {
+            Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+            Id = "Bearer",
+        },
+    };
+    c.AddSecurityDefinition("Bearer", bearer);
+    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement { [bearer] = Array.Empty<string>() });
 });
 
 // ─── Health checks (PostgreSQL connectivity via NpgSql) ────────────────────
@@ -576,26 +618,43 @@ builder.Services.AddHealthChecks()
 var app = builder.Build();
 
 // ─── Automatic database initialization & seeding ───────────────────────────
+// Skipped for the database-free integration tests (environment "Testing"):
+// they exercise authentication, authorization, validation and rate limits,
+// none of which need a database, and they must never migrate or seed one.
+// "IntegrationTesting" does run it, against a loopback-only test database
+// (enforced above).
+if (!app.Environment.IsEnvironment("Testing"))
 using (var scope = app.Services.CreateScope())
 {
     var db    = scope.ServiceProvider.GetRequiredService<FactoryBrainDbContext>();
-    var rag   = scope.ServiceProvider.GetRequiredService<IRagService>();
     var admin = scope.ServiceProvider.GetRequiredService<EmbeddingColumnAdmin>();
     var log   = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    var embed = scope.ServiceProvider.GetRequiredService<IEmbeddingService>();
     var httpF = scope.ServiceProvider.GetRequiredService<IHttpClientFactory>();
     var lf    = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
+    var resolver = scope.ServiceProvider.GetRequiredService<EmbeddingProviderResolver>();
 
     // Ensure the pgvector extension is present before EF tries to use it.
     db.Database.ExecuteSqlRaw("CREATE EXTENSION IF NOT EXISTS vector;");
 
-    // Surface the configured-vs-active shape so operators see degraded
-    // mode (and which provider was requested) without hitting /api/rag/status.
-    var resolver = scope.ServiceProvider.GetRequiredService<EmbeddingProviderResolver>();
+    // (a) If the app tables exist (legacy EnsureCreated bootstrap) but the
+    //     __ef_migrations history table is missing or empty, create it and
+    //     stamp the InitialBaseline migration as already applied so EF
+    //     doesn't try to recreate existing schema and lose data. Newer
+    //     migrations still run normally via Database.Migrate() below.
+    BootstrapMigrationBaseline(db, log);
+
+    // (b) Apply EF Core migrations. They run before anything reads the
+    //     ai_settings table (the settings provider, the probe below).
+    var pending = db.Database.GetPendingMigrations();
+    if (pending.Any())
+    {
+        log.LogInformation("Applying {N} pending EF migration(s): {Names}",
+            pending.Count(), string.Join(", ", pending));
+        db.Database.Migrate();
+    }
 
     // Dev-only test switches: ignored (with one warning) when not in
-    // Development. Always read after the warning so an env flip right
-    // before a probe can still take effect.
+    // Development.
     if (!builder.Environment.IsDevelopment())
     {
         var swRaw = System.Environment.GetEnvironmentVariable(EmbeddingProviderResolver.EnvFakeFail)
@@ -608,31 +667,35 @@ using (var scope = app.Services.CreateScope())
         }
     }
 
-    // Pre-flight: make one probe embedding call against the active hosted
-    // provider (when configured != local). Any failure — HTTP error, auth,
-    // timeout, wrong-dim response, simulated failure — flips the resolver
-    // into Degraded and makes Active = local. The RagHealthMonitor will
-    // probe again on its own interval and recover when the provider is
-    // available.
+    // Embeddings no longer borrow LLM_API_KEY; say so if that is what a
+    // deployment was relying on.
+    if (EmbeddingCatalog.IsHosted(startupAi.Embedding.Provider ?? "") && startupAi.Embedding.ApiKey is null
+        && startupAi.Llm.ApiKey is not null)
+    {
+        log.LogWarning(
+            "RAG_EMBEDDING_PROVIDER={Provider} has no RAG_EMBEDDING_API_KEY. LLM_API_KEY is no longer used for embeddings; " +
+            "embeddings stay degraded (keyword-only retrieval) until an embedding key is configured.",
+            startupAi.Embedding.Provider);
+    }
+
+    // Pre-flight: one probe call against the effective embedding settings
+    // when they are hosted (no call for the local embedder). Failure marks
+    // that configuration degraded; the RagHealthMonitor probes again later.
     try
     {
         await resolver.ProbeAsync(httpF, lf, CancellationToken.None);
     }
     catch (Exception ex)
     {
-        log.LogWarning(ex, "RAG embedding probe threw unexpectedly.");
+        log.LogWarning("RAG embedding probe threw unexpectedly ({ErrorType}).", ex.GetType().Name);
     }
 
     var r1 = resolver.Resolve();
-    if (r1.Degraded || resolver.IsDegraded)
+    if (r1.Degraded)
     {
-        // Spec: degraded startup warning prints ONLY configuredProvider,
-        // activeProvider=local, configuredDims, apiKey=set|missing.
         log.LogWarning(
             "RAG embedding startup degraded mode: configuredProvider={ConfiguredProvider} activeProvider=local configuredDims={ConfiguredDims} apiKey={ApiKey}.",
-            r1.Configured.Provider,
-            r1.Configured.Dims,
-            r1.Configured.KeySet ? "set" : "missing");
+            r1.Configured.Provider, r1.Configured.Dims, r1.Configured.KeySet ? "set" : "missing");
     }
     else
     {
@@ -641,47 +704,15 @@ using (var scope = app.Services.CreateScope())
             r1.Configured.Provider, r1.Active.Provider, r1.Active.Model, r1.Active.Dims);
     }
 
-    // (a) If the app tables exist (legacy EnsureCreated bootstrap) but the
-    //     __ef_migrations history table is missing or empty, create it and
-    //     stamp the InitialBaseline migration as already applied so EF
-    //     doesn't try to recreate existing schema and lose data. Newer
-    //     migrations still run normally via Database.Migrate() below.
-    BootstrapMigrationBaseline(db, log);
-
-    // (b) Apply EF Core migrations. The two migrations are:
-    //       20260927222103_InitialBaseline    — pre-45 schema + vector extension
-    //       20260927222258_AddEmbeddingMetadata — adds EmbeddingProvider / Model / Dims
-    var pending = db.Database.GetPendingMigrations();
-    if (pending.Any())
+    // (c) Never resize or re-embed at startup. A mismatch is reported and
+    //     retrieval ranks by keywords until an Admin confirms a reindex.
+    var liveDims = admin.TryProbeLiveColumnDim();
+    if (liveDims is not null && liveDims != r1.Configured.Dims)
     {
-        log.LogInformation("Applying {N} pending EF migration(s): {Names}",
-            pending.Count(), string.Join(", ", pending));
-        db.Database.Migrate();
-    }
-
-    // (c) + (d) Atomic resize + reindex. Embeddings are pre-computed
-    //          outside the DB transaction; the DB write (ALTER + per-row
-    //          update + commit) is then done in one transaction inside
-    //          the EF execution strategy. A mid-batch embedding failure
-    //          returns 409; a mid-transaction DB error logs + surfaces
-    //          as 500 and rolls the whole thing back.
-    if (!resolver.IsDegraded)
-    {
-        try
-        {
-            var outcome = await admin.ResizeAndReindexAsync(CancellationToken.None);
-            if (outcome.Documents > 0)
-            {
-                log.LogInformation(
-                    "Startup reindex: updated {Docs} docs / {Chunks} chunks to provider={Provider} model={Model} dims={Dims}.",
-                    outcome.Documents, outcome.Chunks, outcome.Configured.Provider, outcome.Configured.Model, outcome.Configured.Dims);
-            }
-        }
-        catch (EmbeddingProviderUnavailableException ex)
-        {
-            log.LogError(ex,
-                "Startup reindex rolled back: embedding provider became unavailable mid-batch. Configure a working API key or set RAG_EMBEDDING_PROVIDER=local to recover.");
-        }
+        log.LogWarning(
+            "Embedding column is vector({Live}) but the embedding settings ask for {Configured} dimensions. Nothing was resized; " +
+            "vector scoring is off until an Admin reviews and confirms a reindex (GET /api/rag/reindex/plan, POST /api/rag/reindex).",
+            liveDims, r1.Configured.Dims);
     }
 
     await DbInitializer.Initialize(scope.ServiceProvider);
@@ -767,21 +798,25 @@ if (fwdEnabled)
     app.UseForwardedHeaders(fwdOptions);
 }
 
-if (app.Environment.IsDevelopment())
+// Swagger UI (/swagger) and the OpenAPI document (/swagger/v1/swagger.json):
+// on in Development, otherwise only with SWAGGER_ENABLED=true. They describe
+// the API but expose no data; every protected endpoint still needs a token
+// (use the Authorize button with an access token from /api/auth/login).
+if (SwaggerEnabled(Environment.GetEnvironmentVariable("SWAGGER_ENABLED"), app.Environment.IsDevelopment()))
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(o => o.DocumentTitle = "FactoryBrain API");
 }
 
 app.UseRouting();
 app.UseCors(CorsPolicyName);                       // CORS for the configured allowlist
-app.UseRateLimiter();                              // 5/min/IP on POST /api/auth/login
 app.UseAuthentication();
-app.UseAuthorization();
+app.UseAuthorization();                            // fallback: authenticated; role policies per action
+app.UseRateLimiter();                              // after auth so per-user policies see the JWT subject
 
 app.MapControllers();                              // Attribute-routed controllers
 app.MapHub<FactoryHub>("/hubs/factory");           // SignalR hub — server→client only
-app.MapHealthChecks("/health");                    // Health probe
+app.MapHealthChecks("/health").AllowAnonymous();   // Health probe — intentionally public, returns only Healthy/Unhealthy
 
 app.MapGet("/", () => Results.Ok(new
 {
@@ -792,6 +827,11 @@ app.MapGet("/", () => Results.Ok(new
     endpoints = new[]
     {
         "POST /api/ask",
+        "POST /api/auth/register",
+        "POST /api/auth/forgot-password",
+        "POST /api/auth/reset-password",
+        "GET  /api/users",
+        "PATCH /api/users/{id}/role",
         "POST /api/rag/reindex",
         "GET  /api/rag/status",
         "GET  /api/brief/morning",
@@ -802,6 +842,7 @@ app.MapGet("/", () => Results.Ok(new
         "GET  /api/qc/defects",
         "POST /api/qc/flag",
         "GET  /api/sensors/latest",
+        "GET  /api/sensors/snapshot",
         "POST /api/sensors/ingest",
         "POST /api/sensors/live",
         "GET  /api/sensors/ingest",
@@ -810,7 +851,11 @@ app.MapGet("/", () => Results.Ok(new
         "GET  /api/settings/llm",
         "POST /api/settings/llm",
         "GET  /api/agents",
-        "POST /api/agents/{agentId}/run"
+        "POST /api/agents/{agentId}/run",
+        "GET  /api/approvals",
+        "POST /api/approvals/{id}/approve",
+        "POST /api/approvals/{id}/reject",
+        "GET  /api/audit"
     }
 }));
 
@@ -824,6 +869,42 @@ app.Run();
 // ─── Helpers ────────────────────────────────────────────────────────────────
 public partial class Program
 {
+    /// <summary>
+    /// Whether to serve Swagger: <c>SWAGGER_ENABLED=true/false</c> when set,
+    /// otherwise only in Development.
+    /// </summary>
+    internal static bool SwaggerEnabled(string? raw, bool isDevelopment) =>
+        bool.TryParse(raw?.Trim(), out var on) ? on : isDevelopment;
+
+    /// <summary>
+    /// True when every host in the Npgsql connection string is this machine
+    /// (localhost, a loopback IP, or a Unix socket path). Used to keep
+    /// Development-only diagnostics away from remote / shared databases.
+    /// An unparseable string counts as remote, the safe default.
+    /// </summary>
+    internal static bool IsLoopbackDatabase(string connectionString)
+    {
+        try
+        {
+            var csb = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+            var hosts = (csb.Host ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (hosts.Length == 0) return false;
+            return hosts.All(h =>
+            {
+                if (IPAddress.TryParse(h.Trim('[', ']'), out var literal)) return IPAddress.IsLoopback(literal);
+                var host = h.Split(':')[0];            // multi-host entries may carry ":port"
+                if (host.StartsWith('/')) return true; // Unix domain socket
+                if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)) return true;
+                return IPAddress.TryParse(host.Trim('[', ']'), out var ip) && IPAddress.IsLoopback(ip);
+            });
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>
     /// Return the C# parameter name and CLR type of the action's
     /// <c>[FromBody]</c> bound argument, or <c>(null, null)</c> when the

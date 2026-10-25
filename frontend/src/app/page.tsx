@@ -273,7 +273,7 @@ function SewingFloor() {
         <p className="text-body font-semibold">Sewing floor</p>
         <p className="text-caption text-[var(--bench-muted)]">6 lines</p>
       </div>
-      <p className="mt-1 text-caption text-[var(--bench-muted)]">Line 3 is the one to watch.</p>
+      <p className="mt-1 text-caption text-[var(--bench-muted)]">Illustration — not live data. Sign in for your floor.</p>
       <ol className="mt-5">
         {rows.map((row) => (
           <li key={row.id} className="grid grid-cols-[16px_1fr_auto] items-center gap-3 py-2 border-t border-white/10">

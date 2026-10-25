@@ -29,11 +29,9 @@ public sealed class GeminiEmbeddingService : HostedEmbeddingServiceBase
     {
         var client = HttpFactory.CreateClient(nameof(GeminiEmbeddingService));
         var model = string.IsNullOrWhiteSpace(Model) ? "text-embedding-004" : Model;
-        // Gemini uses query-string auth. We hold the key in this URL only
-        // for the duration of the call; it is NEVER logged, and any
-        // exception message that escapes is passed through Redact() so
-        // the substring can never reach a log line.
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(model)}:embedContent?key={Uri.EscapeDataString(ApiKey)}";
+        // The key goes in the x-goog-api-key header, never the URL: request
+        // URLs are written to the log by HttpClient's logging handler.
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(model)}:embedContent";
 
         var body = new
         {
@@ -45,6 +43,7 @@ public sealed class GeminiEmbeddingService : HostedEmbeddingServiceBase
             {
                 Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json")
             };
+            req.Headers.TryAddWithoutValidation("x-goog-api-key", ApiKey);
             using var resp = await client.SendAsync(req, ct).ConfigureAwait(false);
             var raw = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode)

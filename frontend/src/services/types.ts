@@ -95,7 +95,8 @@ export type Stage =
   | "done"
   | "logged"
   | "rejected"
-  | "failed";
+  | "failed"
+  | "approved";
 
 export type RiskTier = "low" | "medium" | "high";
 
@@ -201,4 +202,9 @@ export type AskAnswer = {
   };
   createdAt: string;
   confidence: number;
+  /** "live" only when a language model answered; see src/lib/askMode.ts. */
+  mode?: "live" | "demo" | "no_source";
+  /** Why the answer isn't live although a model is configured. */
+  warning?: string | null;
+  citations?: Array<{ id: string; title: string; snippet: string; confidence: number; source: string; url: string }>;
 };

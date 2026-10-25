@@ -1,3 +1,5 @@
+using FactoryBrain.Application.Settings;
+
 namespace FactoryBrain.Infrastructure.Rag;
 
 /// <summary>
@@ -16,28 +18,22 @@ public sealed record EmbeddingConfig(
 }
 
 /// <summary>
-/// Pair of <see cref="EmbeddingConfig"/> values used to keep "what the user
-/// asked for" separate from "what actually serves requests this run".
+/// Pair of <see cref="EmbeddingConfig"/> values used to keep "what the
+/// settings ask for" separate from "what actually serves requests now".
 ///
 /// <list type="bullet">
 ///   <item>
-///     <see cref="Configured"/> is the raw env interpretation
-///     (<c>RAG_EMBEDDING_PROVIDER</c> / <c>RAG_EMBEDDING_MODEL</c> /
-///     <c>RAG_EMBEDDING_DIMENSIONS</c>, with the LLM_PROVIDER mirror rule
-///     only applied when RAG_EMBEDDING_PROVIDER is unset). It is the
-///     "desired" state — used to decide whether the stored vectors / column
-///     size are stale and need a reindex + resize.
+///     <see cref="Configured"/> is the effective embedding settings from
+///     <see cref="IAiSettingsProvider"/> (saved settings, else the startup
+///     configuration, else local/384). It is the "desired" state, compared
+///     with the stored vectors to decide whether a reindex is due.
 ///   </item>
 ///   <item>
 ///     <see cref="Active"/> is the live embedder. When <see cref="Degraded"/>
-///     is true, <see cref="Active"/> has been swapped to the local hash
-///     embedder because either the configured provider's key was missing,
-///     a probe embedding call failed, or a runtime call failed.
+///     is true, <see cref="Active"/> is the local hash embedder because the
+///     configured provider has no key, or a probe or runtime call failed.
 ///   </item>
 /// </list>
-///
-/// <see cref="Degraded"/> is the single source of truth for "do not run
-/// startup resize/reindex" and "skip the vector score at query time".
 /// </summary>
 public sealed record EmbeddingResolution(
     EmbeddingConfig Configured,
@@ -58,78 +54,73 @@ public sealed record DevEmbeddingSwitches(
 }
 
 /// <summary>
-/// Reads the embedding configuration from environment / appsettings and
-/// decides which <see cref="IEmbeddingService"/> implementation should
-/// serve requests. Keeps Configured (raw env) separate from Active (live).
+/// Decides which <see cref="IEmbeddingService"/> serves requests, from the
+/// effective embedding settings (<see cref="IAiSettingsProvider"/>). It never
+/// reads <c>LLM_*</c>: an LLM key does not change the embedding provider or
+/// dimensions, and embeddings never borrow the LLM key.
 ///
-/// Failure modes that flip the resolver into <c>Degraded</c>:
-///   1. A hosted provider is configured but no key is set in
-///      RAG_EMBEDDING_API_KEY / LLM_API_KEY. Caught at resolve time.
-///   2. The provider's embedding call (probe, or runtime) fails — auth
-///      error, HTTP error, timeout, wrong vector length, fake-fail.
-///   3. <see cref="FallbackEmbeddingService"/> catches a hosted-call failure
-///      at runtime and calls <see cref="MarkDegraded"/>.
-///   4. Building the configured provider's embedder instance throws
-///      (constructor error, missing dependency). Caught in
-///      <see cref="BuildService"/> / <see cref="BuildPrimaryService"/>.
+/// Degraded state belongs to one exact configuration (provider, model,
+/// dimensions, key). When the settings change, the new configuration starts
+/// healthy (unless it is hosted without a key) and is probed on its own.
+///
+/// Failure modes that make a configuration degraded:
+///   1. A hosted provider is configured without an embedding API key.
+///   2. A probe or runtime embedding call fails, or returns the wrong length.
+///   3. Building the provider's embedder throws.
 ///
 /// Database errors never set Degraded — those are a different concern.
 /// </summary>
 public sealed class EmbeddingProviderResolver
 {
     public const string DefaultProvider = "local";
-    public const string DefaultDims = "384";
 
-    public const string EnvProvider       = "RAG_EMBEDDING_PROVIDER";
-    public const string EnvModel          = "RAG_EMBEDDING_MODEL";
-    public const string EnvDims           = "RAG_EMBEDDING_DIMENSIONS";
-    public const string EnvApiKey         = "RAG_EMBEDDING_API_KEY";
     public const string EnvHealthInterval = "RAG_HEALTH_INTERVAL_SECONDS";
     public const string EnvFakeFail       = "RAG_EMBEDDING_FAKE_FAIL";
     public const string EnvFakeFailAfter  = "RAG_EMBEDDING_FAKE_FAIL_AFTER";
 
-    private readonly IConfiguration _cfg;
+    private readonly IAiSettingsProvider _settings;
     private readonly IHostEnvironment _env;
     private readonly ILogger<EmbeddingProviderResolver> _log;
-    private EmbeddingResolution? _resolved;
 
-    // Probe-state, read by the status endpoint. We don't try to make
-    // them strongly consistent — the worst case is a stale millisecond.
+    private readonly object _gate = new();
+    private EmbeddingSettings? _degradedFor;
+    private (EmbeddingSettings Settings, IEmbeddingService Service)? _built;
+
     private long _lastProbeTicks; // 0 = no probe yet
     private long _lastProbeOk;    // 1 = ok, 0 = fail
 
-    // Spec (48h): the "stub embedding outside Development, treated as
-    // local" warning is process-wide — the operator should see it
-    // exactly once even if Resolve() / ReResolve() / Probe() all hit
-    // ResolveCore() multiple times in the same lifetime. The flag is
-    // process-wide (static) so a second resolver instance (tests, hot
-    // reload) still respects "once".
-    private static int _stubWarned; // 0 = not yet, 1 = already logged
-
+    // The "stub outside Development" warning is logged once per process.
+    private static int _stubWarned;
 
     public EmbeddingProviderResolver(
-        IConfiguration cfg,
+        IAiSettingsProvider settings,
         IHostEnvironment env,
         ILogger<EmbeddingProviderResolver> log)
     {
-        _cfg = cfg;
+        _settings = settings;
         _env = env;
         _log = log;
     }
 
-    /// <summary>The resolved embedding configuration (cached between probes).</summary>
-    public EmbeddingResolution Resolve()
+    /// <summary>The effective embedding settings now (stub mapped to local outside Development).</summary>
+    public EmbeddingSettings CurrentSettings() => Normalize(_settings.GetCurrent().Embedding);
+
+    /// <summary>The resolved embedding configuration for the current settings.</summary>
+    public EmbeddingResolution Resolve() => ResolveFor(CurrentSettings());
+
+    public EmbeddingResolution ResolveFor(EmbeddingSettings s)
     {
-        // Re-read .env.local on every resolution so a newly-saved key (or a
-        // newly-set RAG_EMBEDDING_FAKE_FAIL=true) takes effect without a
-        // restart. Cheap in Development (single small file), no-op elsewhere.
-        EnvReloader.Reload(_log);
-        if (_resolved is not null) return _resolved;
-        _resolved = ResolveCore();
-        return _resolved;
+        var configured = new EmbeddingConfig(s.Provider, s.Model, s.Dimensions, KeySetFor(s));
+        bool degraded;
+        lock (_gate) degraded = Equals(_degradedFor, s);
+        if (configured.IsHosted && !configured.KeySet) degraded = true;
+        var active = configured.IsLocal || !degraded
+            ? configured
+            : new EmbeddingConfig("local", "hash-md5", configured.Dims, false);
+        return new EmbeddingResolution(configured, active, degraded && !configured.IsLocal);
     }
 
-    /// <summary>True when Active has fallen back to local — startup or runtime.</summary>
+    /// <summary>True when Active has fallen back to local for the current settings.</summary>
     public bool IsDegraded => Resolve().Degraded;
 
     /// <summary>When the most recent probe ran (UTC), or null if none yet.</summary>
@@ -145,74 +136,34 @@ public sealed class EmbeddingProviderResolver
             : Interlocked.Read(ref _lastProbeOk) == 1;
 
     /// <summary>
-    /// Called by <see cref="FallbackEmbeddingService"/> after a hosted-call
-    /// failure to flip the resolver into degraded mode. Idempotent. The
-    /// "configured vs active" pair is updated so the next <see cref="Resolve"/>
-    /// reflects the fall-back state.
+    /// Mark one configuration degraded after a hosted-call failure. Only the
+    /// exception TYPE is logged: a provider message or URL could carry key
+    /// material.
     /// </summary>
-    public void MarkDegraded(string reason, Exception? ex = null)
+    public void MarkDegraded(EmbeddingSettings forSettings, string reason, Exception? ex = null)
     {
-        var previous = _resolved;
-        if (previous is not null && previous.Degraded) return;
-
-        var cfg = previous?.Configured ?? new EmbeddingConfig(DefaultProvider, "hash-md5", 384, false);
-        var active = new EmbeddingConfig("local", "hash-md5", cfg.Dims, false);
-        _resolved = new EmbeddingResolution(cfg, active, Degraded: true);
-
-        // Spec (48f): never log the response body or any part of a key.
-        // The exception reference argument would carry the provider's
-        // HTTP failure message — including the URL for hosted GETs, which
-        // for Gemini carries the key in the query string. We log only the
-        // exception TYPE NAME (the "error type" the operator wants) and
-        // the supplied reason; ex itself is dropped.
+        lock (_gate)
+        {
+            if (Equals(_degradedFor, forSettings)) return;
+            _degradedFor = forSettings;
+        }
         _log.LogWarning(
             "Embedding provider degraded: {Reason} providerErrorType={ErrorType}. configuredProvider={ConfiguredProvider} configuredDims={ConfiguredDims}; activeProvider=local.",
-            reason,
-            ex?.GetType().Name ?? "unknown",
-            cfg.Provider, cfg.Dims);
+            reason, ex?.GetType().Name ?? "unknown", forSettings.Provider, forSettings.Dimensions);
     }
 
-    /// <summary>
-    /// Clear degraded state after a successful probe against the configured
-    /// provider. Re-runs a fresh resolution against the env so a newly-set
-    /// RAG_EMBEDDING_* value can take effect immediately.
-    /// </summary>
-    public void ClearDegraded(string reason)
-    {
-        var previous = _resolved;
-        if (previous is not null && !previous.Degraded) return;
-        // Force a fresh resolve from env so any newly-set env vars take effect.
-        var fresh = ResolveCore();
-        if (!fresh.Degraded)
-        {
-            _resolved = fresh;
-            _log.LogInformation(
-                "Embedding provider recovered: {Reason}. configuredProvider={ConfiguredProvider}; activeProvider={ActiveProvider} dims={Dims}.",
-                reason, fresh.Configured.Provider, fresh.Active.Provider, fresh.Active.Dims);
-        }
-    }
+    /// <summary>Mark the current configuration degraded (runtime failures).</summary>
+    public void MarkDegraded(string reason, Exception? ex = null) => MarkDegraded(CurrentSettings(), reason, ex);
 
-    /// <summary>
-    /// Re-reads configuration from the environment (.env included) and
-    /// rebuilds the resolution. Used by probes so that a recent
-    /// RAG_EMBEDDING_API_KEY update is honoured without a restart.
-    /// </summary>
-    public void ReResolve()
+    private void ClearDegraded(EmbeddingSettings forSettings, string reason)
     {
-        EnvReloader.Reload(_log);
-        var fresh = ResolveCore();
-        // Preserve a runtime-flipped Degraded flag: a runtime call failure
-        // already marked Degraded and a probe can't unset it (only ClearDegraded
-        // can, after a successful probe).
-        if (_resolved?.Degraded == true && !fresh.Degraded)
+        lock (_gate)
         {
-            var active = new EmbeddingConfig("local", "hash-md5", fresh.Configured.Dims, false);
-            _resolved = new EmbeddingResolution(fresh.Configured, active, Degraded: true);
+            if (!Equals(_degradedFor, forSettings)) return;
+            _degradedFor = null;
         }
-        else
-        {
-            _resolved = fresh;
-        }
+        _log.LogInformation("Embedding provider recovered: {Reason}. provider={Provider} dims={Dims}.",
+            reason, forSettings.Provider, forSettings.Dimensions);
     }
 
     /// <summary>
@@ -234,331 +185,132 @@ public sealed class EmbeddingProviderResolver
     }
 
     /// <summary>
-    /// Make one probe embedding call against the active hosted provider
-    /// (when Active != local). The configured resolution is RE-READ from
-    /// env first so any newly-set vars take effect. A successful probe
-    /// returns true; a failure flips Degraded and returns false. The
-    /// status timestamps are updated unconditionally.
+    /// One probe embedding call against the current configuration. The
+    /// returned vector must have exactly the configured dimensions. Success
+    /// clears Degraded for this configuration; failure sets it. Local is
+    /// never degraded and makes no network call.
     /// </summary>
     public async Task<bool> ProbeAsync(IHttpClientFactory httpFactory, ILoggerFactory loggerFactory, CancellationToken ct = default)
     {
-        // Always re-read env at the start of a probe.
-        ReResolve();
-
-        var switches = ReadDevSwitches();
-        var resolution = _resolved ?? Resolve();
-        var configured = resolution.Configured;
-        var primary    = BuildPrimaryServiceInternal(httpFactory, loggerFactory, switches);
-        var activeForProbe = configured.IsLocal
-            ? BuildInternalFromConfiguredSafe(configured, httpFactory, loggerFactory, switches)
-            : primary;
-        var swatches = ReadDevSwitches(); // re-read in case env changed mid-call
-
+        var settings = Normalize((await _settings.GetAsync(ct).ConfigureAwait(false)).Embedding);
         Interlocked.Exchange(ref _lastProbeTicks, DateTime.UtcNow.Ticks);
         bool ok;
-        if (configured.IsLocal)
+        if (settings.IsLocal)
         {
-            // Local hash provider can never be degraded. A successful
-            // probe here is a no-op; a failing one is itself a bug — log
-            // it loudly but keep IsDegraded false.
-            try
-            {
-                var arr = (await activeForProbe.EmbedAsync("health-check-probe", ct).ConfigureAwait(false)).ToArray();
-                ok = arr.Length == configured.Dims;
-                if (!ok)
-                    _log.LogWarning(
-                        "Local hash probe returned a vector of unexpected length: expected={Expected} actual={Actual}.",
-                        configured.Dims, arr.Length);
-            }
-            catch (Exception ex)
-            {
-                ok = false;
-                _log.LogError(ex, "Local hash provider failed during probe — this is a bug; treated as degraded-free (DB error, no API key involvement).");
-            }
+            var arr = new HashEmbeddingService(settings.Dimensions).Embed("health-check-probe").ToArray();
+            ok = arr.Length == settings.Dimensions;
+        }
+        else if (!KeySetFor(settings))
+        {
+            ok = false; // reported as degraded by ResolveFor; nothing to call
         }
         else
         {
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(TimeSpan.FromSeconds(15));
-            try
-            {
-                var arr = (await activeForProbe.EmbedAsync("health-check-probe", cts.Token).ConfigureAwait(false)).ToArray();
-                if (arr.Length != configured.Dims)
-                {
-                    MarkDegraded($"probe vector length mismatch: expected {configured.Dims}, got {arr.Length}");
-                    ok = false;
-                }
-                else
-                {
-                    ok = true;
-                    ClearDegraded("probe succeeded");
-                }
-            }
-            catch (Exception ex)
-            {
-                MarkDegraded($"probe failed: {ex.GetType().Name}", ex);
-                ok = false;
-            }
+            var (probeOk, actual, error) = await VerifyAsync(settings, httpFactory, loggerFactory, ct).ConfigureAwait(false);
+            ok = probeOk;
+            if (ok) ClearDegraded(settings, "probe succeeded");
+            else if (error is not null) MarkDegraded(settings, $"probe failed: {error.GetType().Name}", error);
+            else MarkDegraded(settings, $"probe vector length mismatch: expected {settings.Dimensions}, got {actual}");
         }
         Interlocked.Exchange(ref _lastProbeOk, ok ? 1L : 0L);
         return ok;
     }
 
-    private EmbeddingResolution ResolveCore()
+    /// <summary>
+    /// Make one embedding call with <paramref name="settings"/> (which need not
+    /// be saved yet) and check that the output length equals the requested
+    /// dimensions. Never throws for provider errors; returns them.
+    /// </summary>
+    public async Task<(bool Ok, int? ActualDims, Exception? Error)> VerifyAsync(
+        EmbeddingSettings settings, IHttpClientFactory httpFactory, ILoggerFactory loggerFactory, CancellationToken ct)
     {
-        // 1. Provider — explicit wins. Otherwise fall back to LLM_PROVIDER
-        //    only when a key is present and matches the LLM provider; this
-        //    lets a single LLM_API_KEY drive both chat and embeddings when
-        //    the user didn't bother to set RAG_EMBEDDING_*.
-        var rawProvider = ReadEnv(EnvProvider);
-        var llmProvider  = ReadEnv("LLM_PROVIDER");
-        var ragKey       = ReadEnv(EnvApiKey);
-        var llmKey       = ReadEnv("LLM_API_KEY");
-
-        string provider;
-        string? apiKey = null;
-
-        if (!string.IsNullOrWhiteSpace(rawProvider))
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(15));
+        try
         {
-            provider = rawProvider.Trim().ToLowerInvariant();
-            apiKey = !string.IsNullOrWhiteSpace(ragKey)
-                ? ragKey
-                : (llmKey ?? string.Empty);
+            var svc = BuildPrimary(settings, httpFactory, loggerFactory);
+            var len = (await svc.EmbedAsync("health-check-probe", cts.Token).ConfigureAwait(false)).ToArray().Length;
+            return (len == settings.Dimensions, len, null);
         }
-        else if (!string.IsNullOrWhiteSpace(llmProvider) && !string.IsNullOrWhiteSpace(llmKey))
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
-            var llm = llmProvider.Trim().ToLowerInvariant();
-            if (llm == "openai" || llm == "gemini")
-            {
-                provider = llm;
-                apiKey = llmKey;
-            }
-            else
-            {
-                provider = DefaultProvider;
-            }
+            return (false, null, ex);
         }
-        else
-        {
-            provider = DefaultProvider;
-        }
-
-        // 1a. Stub is dev-only. Outside Development we silently swap it
-        //     for the local hash embedder so an operator who set
-        //     RAG_EMBEDDING_PROVIDER=stub in Production still gets a
-        //     working system. One warning is logged below so the
-        //     downgrade is visible in the startup log — but only ONCE
-        //     per process (ResolveCore can be hit multiple times by
-        //     ReResolve() / ProbeAsync() in a single lifetime).
-        if (provider == "stub" && !_env.IsDevelopment())
-        {
-            if (Interlocked.Exchange(ref _stubWarned, 1) == 0)
-            {
-                _log.LogWarning(
-                    "RAG_EMBEDDING_PROVIDER=stub ignored outside Development (ASPNETCORE_ENVIRONMENT={Env}); falling back to local hash embedder.",
-                    _env.EnvironmentName);
-            }
-            provider = DefaultProvider;
-        }
-
-        // 2. Model — explicit wins, then a sensible default per provider.
-        var rawModel = ReadEnv(EnvModel);
-        string model = !string.IsNullOrWhiteSpace(rawModel)
-            ? rawModel.Trim()
-            : provider switch
-            {
-                "openai" => "text-embedding-3-small",
-                "gemini" => "text-embedding-004",
-                "stub"   => "stub-deterministic",
-                _        => "hash-md5"
-            };
-
-        // 3. Dimensions — only RAG_EMBEDDING_DIMENSIONS env var may
-        //    override the per-provider defaults.
-        var rawDims = ReadEnv(EnvDims);
-        int dims = int.TryParse(rawDims, out var d) ? d : 0;
-        if (dims <= 0)
-        {
-            dims = provider switch
-            {
-                "openai" => model.Contains("3-large", StringComparison.OrdinalIgnoreCase) ? 3072 : 1536,
-                "gemini" => 768,
-                "stub"   => 768,
-                _        => 384
-            };
-        }
-
-        // KeySet is just a boolean — we never log any key material.
-        bool keySet = !string.IsNullOrWhiteSpace(apiKey);
-
-        // For "stub" provider, the dev switches take over the call site —
-        // there's no real key required; we treat it as configured=set so
-        // the resolution doesn't drop to local until a probe tells us to.
-        if (provider == "stub") keySet = true;
-
-        var configured = new EmbeddingConfig(provider, model, dims, keySet);
-
-        // Active = what actually serves requests this run.
-        EmbeddingConfig active;
-        bool degraded = false;
-        if (configured.IsLocal)
-        {
-            // Local can never be degraded, never trips a probe.
-            active = configured;
-        }
-        else if (!keySet)
-        {
-            active = new EmbeddingConfig("local", "hash-md5", configured.Dims, false);
-            degraded = true;
-            _log.LogWarning(
-                "RAG embedding degraded at resolve: RAG_EMBEDDING_PROVIDER={Provider} selected but apiKey=missing. Active provider is now local hash; configured provider unchanged.",
-                configured.Provider);
-        }
-        else
-        {
-            active = configured;
-        }
-
-        return new EmbeddingResolution(configured, active, degraded);
     }
 
     /// <summary>
-    /// Build the live (runtime) <see cref="IEmbeddingService"/>. NEVER
-    /// throws — when the resolution is degraded, when the configured
-    /// provider's key is missing, or when the configured provider's
-    /// constructor throws, this falls back to the local hash embedder,
-    /// logs a warning (no key fragments; apiKey=set|missing only), marks
-    /// the resolver Degraded, and returns a working local embedder.
+    /// The embedder serving requests for the current settings. NEVER throws:
+    /// a degraded or keyless hosted configuration gets the local hash
+    /// embedder at the configured dimensions. Instances are reused while the
+    /// settings stay the same.
     /// </summary>
     public IEmbeddingService BuildService(IHttpClientFactory httpFactory, ILoggerFactory loggerFactory)
     {
-        var resolution = Resolve();
-        var switches   = ReadDevSwitches();
+        var settings = CurrentSettings();
+        var resolution = ResolveFor(settings);
+        if (resolution.Degraded) return new HashEmbeddingService(settings.Dimensions);
 
-        // Fast path: degraded or hosted-without-key → serve local.
-        if (resolution.Degraded || (resolution.Configured.IsHosted && !resolution.Configured.KeySet))
+        lock (_gate)
         {
-            return new HashEmbeddingService(resolution.Configured.Dims);
+            if (_built is { } b && Equals(b.Settings, settings)) return b.Service;
         }
-
-        // Try to build the configured provider. ANY exception becomes a
-        // degraded fallback to local — startup must never throw.
+        IEmbeddingService svc;
         try
         {
-            var primary = BuildInternalFromConfiguredSafe(
-                resolution.Configured, httpFactory, loggerFactory, switches);
-            return WithFallback(primary, switches);
+            var primary = BuildPrimary(settings, httpFactory, loggerFactory);
+            svc = primary is HashEmbeddingService ? primary : new FallbackEmbeddingService(this, settings, primary);
         }
         catch (Exception ex)
         {
-            var cfg = resolution.Configured;
-            _log.LogWarning(ex,
-                "Embedding provider build failed; falling back to local hash. configuredProvider={ConfiguredProvider} configuredDims={ConfiguredDims} apiKey={ApiKey}.",
-                cfg.Provider, cfg.Dims, cfg.KeySet ? "set" : "missing");
-            MarkDegraded($"build failed for provider '{cfg.Provider}': {ex.GetType().Name}", ex);
-            return new HashEmbeddingService(cfg.Dims);
+            _log.LogWarning(
+                "Embedding provider build failed ({ErrorType}); falling back to local hash. configuredProvider={ConfiguredProvider} configuredDims={ConfiguredDims}.",
+                ex.GetType().Name, settings.Provider, settings.Dimensions);
+            MarkDegraded(settings, $"build failed for provider '{settings.Provider}': {ex.GetType().Name}", ex);
+            return new HashEmbeddingService(settings.Dimensions);
         }
+        lock (_gate) _built = (settings, svc);
+        return svc;
     }
 
     /// <summary>
-    /// Build the un-wrapped PRIMARY embedder (no <see cref="FallbackEmbeddingService"/>
-    /// decoration). Used at startup for the probe call and inside
-    /// <see cref="EmbeddingColumnAdmin"/> so a hosted-call failure
-    /// surfaces as a throw that the caller can roll back.
-    ///
-    /// <para>
-    /// This method DOES propagate <see cref="InvalidOperationException"/>
-    /// for missing-key cases so the reindex path can surface a clean
-    /// <see cref="EmbeddingProviderUnavailableException"/> and the caller
-    /// can decide to retry / defer. Callers that want the never-throw
-    /// behaviour should use <see cref="BuildService"/>.
-    /// </para>
+    /// Build the un-wrapped embedder for explicit settings (the current ones or
+    /// a candidate under review). A hosted-call failure surfaces as an
+    /// exception so the reindex can abort before any write.
     /// </summary>
-    public IEmbeddingService BuildPrimaryService(IHttpClientFactory httpFactory, ILoggerFactory loggerFactory)
+    public IEmbeddingService BuildPrimary(EmbeddingSettings settings, IHttpClientFactory httpFactory, ILoggerFactory loggerFactory)
     {
-        var resolution = Resolve();
-        var switches   = ReadDevSwitches();
-        return BuildInternalFromConfigured(resolution.Configured, httpFactory, loggerFactory, switches);
-    }
-
-    private IEmbeddingService BuildPrimaryServiceInternal(
-        IHttpClientFactory httpFactory,
-        ILoggerFactory loggerFactory,
-        DevEmbeddingSwitches switches)
-    {
-        var resolution = Resolve();
-        return BuildInternalFromConfigured(resolution.Configured, httpFactory, loggerFactory, switches);
-    }
-
-    /// <summary>
-    /// Non-throwing variant of <see cref="BuildInternalFromConfigured"/>
-    /// used at probe / startup time. A missing key returns a stub
-    /// <see cref="HashEmbeddingService"/> at the configured dims and lets
-    /// the caller flip Degraded itself (it has more context for the log
-    /// line).
-    /// </summary>
-    private IEmbeddingService BuildInternalFromConfiguredSafe(
-        EmbeddingConfig configured,
-        IHttpClientFactory httpFactory,
-        ILoggerFactory loggerFactory,
-        DevEmbeddingSwitches switches)
-    {
-        // Local / stub don't need a key — go through the regular path.
-        if (configured.IsLocal || configured.Provider == "stub")
+        settings = Normalize(settings);
+        return settings.Provider switch
         {
-            return BuildInternalFromConfigured(configured, httpFactory, loggerFactory, switches);
-        }
-        if (!configured.KeySet)
-        {
-            return new HashEmbeddingService(configured.Dims);
-        }
-        return BuildInternalFromConfigured(configured, httpFactory, loggerFactory, switches);
-    }
-
-    private IEmbeddingService BuildInternalFromConfigured(
-        EmbeddingConfig configured,
-        IHttpClientFactory httpFactory,
-        ILoggerFactory loggerFactory,
-        DevEmbeddingSwitches switches)
-    {
-        return configured.Provider switch
-        {
-            "openai" => new OpenAiEmbeddingService(
-                            httpFactory,
-                            loggerFactory.CreateLogger<OpenAiEmbeddingService>(),
-                            GetKeyOrThrow("openai"),
-                            configured.Model),
-            "gemini" => new GeminiEmbeddingService(
-                            httpFactory,
-                            loggerFactory.CreateLogger<GeminiEmbeddingService>(),
-                            GetKeyOrThrow("gemini"),
-                            configured.Model),
-            "stub"   => new StubEmbeddingService(configured.Dims),
-            _        => new HashEmbeddingService(configured.Dims)
+            EmbeddingCatalog.OpenAi => new OpenAiEmbeddingService(
+                httpFactory, loggerFactory.CreateLogger<OpenAiEmbeddingService>(),
+                KeyOrThrow(settings), settings.Model, settings.Dimensions),
+            EmbeddingCatalog.Gemini => new GeminiEmbeddingService(
+                httpFactory, loggerFactory.CreateLogger<GeminiEmbeddingService>(),
+                KeyOrThrow(settings), settings.Model),
+            EmbeddingCatalog.Stub => new StubEmbeddingService(settings.Dimensions),
+            _ => new HashEmbeddingService(settings.Dimensions),
         };
     }
 
-    /// <summary>
-    /// Wrap a hosted embedder (OpenAI / Gemini / stub) so that an HTTP or
-    /// stub failure logs a warning (without the key), flips the resolver
-    /// into Degraded, and falls back to the local hash embedder for the
-    /// rest of the process lifetime.
-    /// </summary>
-    public IEmbeddingService WithFallback(IEmbeddingService primary, DevEmbeddingSwitches switches)
+    private static bool KeySetFor(EmbeddingSettings s) =>
+        !EmbeddingCatalog.IsHosted(s.Provider) || s.ApiKey is not null;
+
+    private static string KeyOrThrow(EmbeddingSettings s) =>
+        s.ApiKey?.Reveal() ?? throw new InvalidOperationException($"Embedding provider '{s.Provider}' requires an embedding API key.");
+
+    /// <summary>The stub embedder is Development-only; elsewhere it is served as local.</summary>
+    public EmbeddingSettings Normalize(EmbeddingSettings s)
     {
-        if (primary is HashEmbeddingService) return primary;
-        return new FallbackEmbeddingService(this, primary, new HashEmbeddingService(primary.Dimensions), primary.GetType().Name);
+        if (s.Provider != EmbeddingCatalog.Stub || _env.IsDevelopment()) return s;
+        if (Interlocked.Exchange(ref _stubWarned, 1) == 0)
+            _log.LogWarning(
+                "Embedding provider 'stub' ignored outside Development (ASPNETCORE_ENVIRONMENT={Env}); using the local hash embedder.",
+                _env.EnvironmentName);
+        return s with { Provider = EmbeddingCatalog.Local, Model = "hash-md5" };
     }
 
-    private string GetKeyOrThrow(string provider)
-    {
-        var key = ReadEnv(EnvApiKey) ?? ReadEnv("LLM_API_KEY");
-        if (string.IsNullOrWhiteSpace(key))
-            throw new InvalidOperationException($"Embedding provider '{provider}' requires an API key.");
-        return key;
-    }
-
-    private string? ReadEnv(string name)
+    private static string? ReadEnv(string name)
     {
         var v = Environment.GetEnvironmentVariable(name);
         return string.IsNullOrWhiteSpace(v) ? null : v;
@@ -566,31 +318,24 @@ public sealed class EmbeddingProviderResolver
 }
 
 /// <summary>
-/// Decorates a hosted (or stub) embedder with a warning-and-fallback to
-/// the local hash embedder on any failure. The fallback is taken for the
-/// remainder of the process lifetime so we don't keep hammering a broken
-/// provider. On failure it also flips the resolver into Degraded mode.
+/// Decorates a hosted (or stub) embedder with a warning-and-fallback to the
+/// local hash embedder on any failure, and marks that configuration
+/// degraded. A later settings change gets a fresh embedder.
 /// </summary>
 internal sealed class FallbackEmbeddingService : IEmbeddingService
 {
     private readonly EmbeddingProviderResolver _resolver;
+    private readonly EmbeddingSettings _settings;
     private readonly IEmbeddingService _primary;
     private readonly IEmbeddingService _fallback;
-    private readonly ILogger _log;
-    private readonly string _primaryLabel;
-    private int _failed; // 0 = healthy, 1 = permanently failed-over
+    private int _failed; // 0 = healthy, 1 = failed over
 
-    public FallbackEmbeddingService(
-        EmbeddingProviderResolver resolver,
-        IEmbeddingService primary,
-        IEmbeddingService fallback,
-        string primaryLabel)
+    public FallbackEmbeddingService(EmbeddingProviderResolver resolver, EmbeddingSettings settings, IEmbeddingService primary)
     {
         _resolver = resolver;
+        _settings = settings;
         _primary = primary;
-        _fallback = fallback;
-        _log = Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
-        _primaryLabel = primaryLabel;
+        _fallback = new HashEmbeddingService(primary.Dimensions);
     }
 
     public string ProviderId => _failed == 1 ? _fallback.ProviderId : _primary.ProviderId;
@@ -607,7 +352,7 @@ internal sealed class FallbackEmbeddingService : IEmbeddingService
         catch (Exception ex)
         {
             Interlocked.Exchange(ref _failed, 1);
-            _resolver.MarkDegraded($"runtime provider call failed ({_primary.ProviderId}/{_primary.ModelId})", ex);
+            _resolver.MarkDegraded(_settings, $"runtime provider call failed ({_primary.ProviderId}/{_primary.ModelId})", ex);
             return _fallback.Embed(text, dimensions);
         }
     }
@@ -622,8 +367,31 @@ internal sealed class FallbackEmbeddingService : IEmbeddingService
         catch (Exception ex)
         {
             Interlocked.Exchange(ref _failed, 1);
-            _resolver.MarkDegraded($"runtime provider call failed ({_primary.ProviderId}/{_primary.ModelId})", ex);
+            _resolver.MarkDegraded(_settings, $"runtime provider call failed ({_primary.ProviderId}/{_primary.ModelId})", ex);
             return await _fallback.EmbedAsync(text, ct).ConfigureAwait(false);
         }
     }
+}
+
+/// <summary>
+/// The application's <see cref="IEmbeddingService"/>: every call goes to the
+/// embedder for the settings in effect at that moment, so a saved change
+/// applies from the next request without a restart.
+/// </summary>
+public sealed class SettingsBoundEmbeddingService : IEmbeddingService
+{
+    private readonly EmbeddingProviderResolver _resolver;
+    private readonly IHttpClientFactory _http;
+    private readonly ILoggerFactory _loggers;
+
+    public SettingsBoundEmbeddingService(EmbeddingProviderResolver resolver, IHttpClientFactory http, ILoggerFactory loggers)
+    { _resolver = resolver; _http = http; _loggers = loggers; }
+
+    private IEmbeddingService Current => _resolver.BuildService(_http, _loggers);
+
+    public string ProviderId => Current.ProviderId;
+    public string ModelId    => Current.ModelId;
+    public int Dimensions     => Current.Dimensions;
+    public Pgvector.Vector Embed(string text, int dimensions = 0) => Current.Embed(text, dimensions);
+    public Task<Pgvector.Vector> EmbedAsync(string text, CancellationToken ct = default) => Current.EmbedAsync(text, ct);
 }

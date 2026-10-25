@@ -2,6 +2,8 @@ using FactoryBrain.Infrastructure.Persistence;
 using FactoryBrain.Application.Dtos.Rag;
 using FactoryBrain.Api.Middleware;
 using FactoryBrain.Application.Abstractions.Interfaces;
+using FactoryBrain.Application.Dtos.Settings;
+using FactoryBrain.Application.Settings;
 using FactoryBrain.Infrastructure.Rag;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,11 +15,13 @@ namespace FactoryBrain.Api.Controllers;
 /// Admin endpoints for the RAG index.
 /// <list type="bullet">
 ///   <item>
-///     <c>POST /api/rag/reindex</c> probes the provider, then runs an
-///     atomic resize + reindex cycle. Returns <c>409 Conflict</c> with
-///     the canonical error envelope whenever the embedder is in
-///     degraded mode OR an embedding call fails mid-batch (the DB is
-///     never touched).
+///     <c>GET /api/rag/reindex/plan</c> (Admin) reports what a reindex with
+///     the current settings would do — documents, chunks, column
+///     dimensions, size and cost — without calling any provider.
+///     <c>POST /api/rag/reindex</c> (Admin) runs it only with
+///     <c>{ confirmPlanId }</c> matching that plan (428 without it, 409 when
+///     the plan is stale). A provider failure aborts before any write; a
+///     database failure rolls everything back.
 ///   </item>
 ///   <item>
 ///     <c>POST /api/rag/ingest</c> validates the body with
@@ -48,9 +52,8 @@ public class RagController : ControllerBase
     private readonly IRagService _rag;
     private readonly EmbeddingProviderResolver _resolver;
     private readonly EmbeddingColumnAdmin _admin;
-    private readonly RagHealthMonitor _monitor;
-    private readonly IHttpClientFactory _http;
-    private readonly ILoggerFactory _loggerFactory;
+    private readonly EmbeddingReindexService _reindex;
+    private readonly IAiSettingsProvider _settings;
     private readonly FactoryBrainDbContext _db;
     private readonly ILogger<RagController> _log;
 
@@ -58,100 +61,50 @@ public class RagController : ControllerBase
         IRagService rag,
         EmbeddingProviderResolver resolver,
         EmbeddingColumnAdmin admin,
-        RagHealthMonitor monitor,
-        IHttpClientFactory http,
-        ILoggerFactory loggerFactory,
+        EmbeddingReindexService reindex,
+        IAiSettingsProvider settings,
         FactoryBrainDbContext db,
         ILogger<RagController> log)
     {
         _rag = rag; _resolver = resolver; _admin = admin;
-        _monitor = monitor; _http = http; _loggerFactory = loggerFactory;
+        _reindex = reindex; _settings = settings;
         _db = db; _log = log;
     }
 
     /// <summary>
-    /// POST /api/rag/reindex — probes the provider first, then runs the
-    /// atomic resize + reindex cycle. Probing right before the reindex
-    /// means a key that was set since the last periodic probe is picked
-    /// up here.
-    ///
-    /// In degraded mode the action returns <c>409 Conflict</c> with the
-    /// canonical error envelope — stored vectors and the column size are
-    /// left untouched. If an embedding call fails mid-batch the same
-    /// <c>409</c> is returned and the DB is never written.
+    /// GET /api/rag/reindex/plan — what a reindex with the current embedding
+    /// settings would embed, and what it would cost. No provider calls.
+    /// </summary>
+    [HttpGet("reindex/plan")]
+    [Authorize(Policy = AuthPolicies.Admin)]
+    public async Task<IActionResult> ReindexPlan(CancellationToken ct)
+        => SettingsResults.ToResult(this, await _reindex.PlanAsync(null, ct));
+
+    /// <summary>
+    /// POST /api/rag/reindex — re-embeds the documents in a reviewed plan
+    /// with the current settings. Requires <c>{ "confirmPlanId": "…" }</c>.
+    /// All-or-nothing: a provider failure stops before any write, and a
+    /// database failure rolls the column, vectors and audit record back.
     /// </summary>
     [HttpPost("reindex")]
-    [AdminToken]
-    [Authorize(Policy = AuthPolicies.AdminOrLegacyToken)]
-    public async Task<IActionResult> Reindex(CancellationToken ct)
+    [Authorize(Policy = AuthPolicies.Admin)]
+    public async Task<IActionResult> Reindex([FromBody] ReindexRequest? body, CancellationToken ct)
     {
-        _log.LogInformation("Manual reindex requested via /api/rag/reindex");
-
-        // Probe first so a newly-set API key (or recovery from a previous
-        // failure) is reflected immediately. The health monitor does this
-        // on its own interval, but the controller is the user-facing
-        // escape hatch — it should not depend on probe timing.
         try
         {
-            await _resolver.ProbeAsync(_http, _loggerFactory, ct);
+            var result = await _reindex.ReindexAsync(body?.ConfirmPlanId, SettingsResults.Actor(User), SettingsResults.TraceId(HttpContext), ct);
+            return SettingsResults.ToResult(this, result);
         }
-        catch (Exception ex) when (ex is not EmbeddingProviderUnavailableException)
+        catch (Exception ex) when (ex is not OperationCanceledException and not AiSettingsUnavailableException)
         {
-            // Probe is best-effort; a runtime DB error here is logged but
-            // the reindex still proceeds if not degraded.
-            _log.LogWarning(ex, "Pre-reindex probe threw unexpectedly; continuing.");
-        }
-
-        var r = _resolver.Resolve();
-        if (_resolver.IsDegraded)
-        {
-            _log.LogWarning(
-                "Reindex request rejected: degraded mode (configuredProvider={ConfiguredProvider} configuredDims={ConfiguredDims}).",
-                r.Configured.Provider, r.Configured.Dims);
-            return Conflict(new
-            {
-                error = "EmbeddingProviderUnavailable",
-                details = "embedding provider unavailable; reindex skipped"
-            });
-        }
-
-        try
-        {
-            var outcome = await _admin.ResizeAndReindexAsync(ct);
-
-            return Ok(new
-            {
-                reindexed        = outcome.Documents,
-                chunks           = outcome.Chunks,
-                provider         = outcome.Configured.Provider,
-                model            = outcome.Configured.Model,
-                dims             = outcome.Configured.Dims,
-                columnDimBefore  = outcome.LiveBefore,
-                columnDimAfter   = outcome.LiveAfter,
-                resized          = outcome.Resized
-            });
-        }
-        catch (EmbeddingProviderUnavailableException ex)
-        {
-            _log.LogWarning(ex,
-                "Reindex aborted before any DB write: embedding provider became unavailable mid-batch. configuredProvider={ConfiguredProvider} configuredDims={ConfiguredDims}.",
-                r.Configured.Provider, r.Configured.Dims);
-            return Conflict(new
-            {
-                error = "EmbeddingProviderUnavailable",
-                details = "embedding provider unavailable; reindex skipped"
-            });
-        }
-        catch (Exception ex)
-        {
-            // Database error — never set Degraded, never log the key.
-            _log.LogError(ex,
-                "Reindex failed mid-transaction; rolled back. configuredProvider={ConfiguredProvider} configuredDims={ConfiguredDims}.",
-                r.Configured.Provider, r.Configured.Dims);
+            // Database error: logged with the exception; the response carries
+            // only a stable message and the trace id to look it up with.
+            _log.LogError(ex, "Reindex failed and was rolled back.");
             return StatusCode(StatusCodes.Status500InternalServerError, new
             {
                 error = "DatabaseError",
-                details = ex.Message
+                details = "Reindex failed and was rolled back; no stored vectors or settings were changed. See the server log for this trace id.",
+                traceId = SettingsResults.TraceId(HttpContext)
             });
         }
     }
@@ -165,14 +118,13 @@ public class RagController : ControllerBase
     /// <para>
     /// In degraded mode the chunks are stored with
     /// <c>EmbeddingProvider = "pending"</c> and <c>Embedding = null</c>
-    /// so a later reindex (startup or POST /api/rag/reindex) can fill
+    /// so a later Admin-confirmed reindex (POST /api/rag/reindex) can fill
     /// them in. The response surfaces <c>embedded = false</c> + a
     /// human-readable <c>warning</c>.
     /// </para>
     /// </summary>
     [HttpPost("ingest")]
-    [AdminToken]
-    [Authorize(Policy = AuthPolicies.AdminOrLegacyToken)]
+    [Authorize(Policy = AuthPolicies.Admin)]
     public async Task<IActionResult> Ingest([FromBody] RagIngestRequest body, CancellationToken ct)
     {
         // Step 51: body validation runs in the global FluentValidationFilter
@@ -221,8 +173,9 @@ public class RagController : ControllerBase
     /// the API key or a key fragment.
     /// </summary>
     [HttpGet("status")]
-    public IActionResult Status()
+    public async Task<IActionResult> Status(CancellationToken ct)
     {
+        await _settings.GetAsync(ct);
         var r   = _resolver.Resolve();
         var cfg = r.Configured;
         var act = r.Active;

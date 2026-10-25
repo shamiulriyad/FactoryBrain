@@ -36,8 +36,8 @@ export default function AgentsPage() {
         }
       />
 
-      <Callout tone="demo" className="mt-5" title="Agent runs are rule-based today">
-        Findings come from deterministic rules over the stored floor data; the configured language model is not used for agents yet.
+      <Callout tone="info" className="mt-5" title="Agent findings come from the RAG service">
+        A run sends the agent&apos;s purpose and the current line and machine readings to the Python RAG service, which answers from the indexed PDFs. Nothing is stored when no document covers the question.
         {!operator && " Running an agent needs the Operator or Admin role."}
       </Callout>
 

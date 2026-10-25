@@ -46,6 +46,7 @@ public static class DbInitializer
         await SeedLineBoardAsync(db, ct);
         await SeedSensorReadingsAsync(db, ct);
         await SeedQcDefectsAsync(db, ct);
+        await SeedQcDefectCategoriesAsync(db, ct);
         await SeedFloorAlertsAsync(db, ct);
         await SeedOrdersAndInventoryAsync(db, ct);
         await SeedAdminUserAsync(db, hasher, log, ct);
@@ -718,6 +719,43 @@ public static class DbInitializer
         { "cutting", "sewing", "buttonhole", "top_stitch", "qc_inspection", "finishing" };
     private static readonly string[] Lines =
         { "line-1", "line-2", "line-3", "line-4", "line-5", "line-6" };
+
+    // --- QC defect taxonomy -------------------------------------------------
+    // A starting taxonomy of common garment defects (configuration, not
+    // inspection data). Seeded only into an empty table, so an Admin's edits,
+    // additions and deactivations are never overwritten.
+    private static async Task SeedQcDefectCategoriesAsync(FactoryBrainDbContext db, CancellationToken ct)
+    {
+        if (await db.QcDefectCategories.AnyAsync(ct)) return;
+        var now = DateTime.UtcNow;
+        (string Code, string Name, string NameBn, string Description, QcDefectSeverity Severity)[] defaults =
+        {
+            ("skipped_stitch",  "Skipped stitch",         "সেলাই বাদ",          "One or more stitches missing, leaving a gap in the stitch line.", QcDefectSeverity.Major),
+            ("broken_stitch",   "Broken stitch",          "ছেঁড়া সেলাই",        "Thread broken within a seam or topstitch.", QcDefectSeverity.Major),
+            ("open_seam",       "Open seam",              "খোলা সিম",           "Seam not joined or come apart, exposing the edge or a hole.", QcDefectSeverity.Critical),
+            ("seam_pucker",     "Seam puckering",         "সিম ভাঁজ",           "Wavy or gathered fabric along a seam.", QcDefectSeverity.Minor),
+            ("uneven_stitch",   "Uneven stitching",       "অসম সেলাই",          "Irregular stitch length, wavy stitch line or uneven margin.", QcDefectSeverity.Minor),
+            ("stain",           "Stain / spot",           "দাগ",                "Oil, dirt, chalk or other marks on the fabric.", QcDefectSeverity.Major),
+            ("hole",            "Hole",                   "ছিদ্র",              "A hole or puncture through the fabric.", QcDefectSeverity.Critical),
+            ("fabric_damage",   "Fabric damage",          "কাপড়ের ক্ষতি",       "Snags, pulls, tears, abrasion or needle cuts.", QcDefectSeverity.Major),
+            ("fabric_flaw",     "Fabric flaw",            "কাপড়ের ত্রুটি",       "Weaving or knitting faults such as slubs, thick/thin yarn or missing yarn.", QcDefectSeverity.Minor),
+            ("shade_variation", "Shade variation",        "রঙের পার্থক্য",       "Colour difference between panels or within a panel.", QcDefectSeverity.Major),
+            ("misalignment",    "Misalignment",           "অসমতা",              "Panels, pockets, plackets, labels or patterns out of position or not matched.", QcDefectSeverity.Major),
+            ("loose_thread",    "Untrimmed thread",       "না-কাটা সুতা",        "Loose or untrimmed thread ends.", QcDefectSeverity.Minor),
+            ("print_defect",    "Print / embroidery defect", "প্রিন্ট/এমব্রয়ডারি ত্রুটি", "Smudged, cracked, misplaced or incomplete print or embroidery.", QcDefectSeverity.Major),
+        };
+        var order = 10;
+        foreach (var d in defaults)
+        {
+            db.QcDefectCategories.Add(new QcDefectCategory
+            {
+                Code = d.Code, Name = d.Name, NameBn = d.NameBn, Description = d.Description,
+                DefaultSeverity = d.Severity, SortOrder = order, IsActive = true, CreatedAt = now, UpdatedAt = now,
+            });
+            order += 10;
+        }
+        await db.SaveChangesAsync(ct);
+    }
 
     private static async Task SeedQcDefectsAsync(FactoryBrainDbContext db, CancellationToken ct)
     {

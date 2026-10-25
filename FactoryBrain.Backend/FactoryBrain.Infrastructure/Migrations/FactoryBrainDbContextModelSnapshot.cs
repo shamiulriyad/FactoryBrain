@@ -763,6 +763,332 @@ namespace FactoryBrain.Infrastructure.Migrations
                     b.ToTable("qc_defects", (string)null);
                 });
 
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.QcDefectCategory", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("DefaultSeverity")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("NameBn")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Code");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("qc_defect_categories", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_qc_defect_categories_code", "\"Code\" ~ '^[a-z][a-z0-9_]{1,39}$'");
+                        });
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.QcInspection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("AnalyzedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<double?>("ConfidenceThreshold")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("CreatedByEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FailureCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("FailureMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("FollowUpApprovalId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ImageContentType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("ImageHeight")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ImageSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long>("ImageSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ImageStorageKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("ImageWidth")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("InferenceMs")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LineId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<bool?>("LocalizationSupported")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ModelVersion")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("OriginalFileName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTime?>("ProcessingStartedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("ProductType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ProductionOrder")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Provider")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.PrimitiveCollection<List<string>>("RequestedCategoryCodes")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<string>("ReviewNotes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("ReviewedByEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Stage")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("Reference")
+                        .IsUnique();
+
+                    b.HasIndex("CreatedByUserId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
+
+                    b.HasIndex("LineId", "CreatedAt");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("qc_inspections", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_qc_inspections_attempts", "\"Attempts\" >= 0");
+
+                            t.HasCheckConstraint("CK_qc_inspections_image_dims", "\"ImageWidth\" > 0 AND \"ImageHeight\" > 0");
+
+                            t.HasCheckConstraint("CK_qc_inspections_image_size", "\"ImageSizeBytes\" > 0");
+
+                            t.HasCheckConstraint("CK_qc_inspections_review", "\"Status\" <> 'Reviewed' OR (\"Outcome\" IS NOT NULL AND \"ReviewedAt\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_qc_inspections_threshold", "\"ConfidenceThreshold\" IS NULL OR (\"ConfidenceThreshold\" >= 0 AND \"ConfidenceThreshold\" <= 1)");
+                        });
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.QcInspectionFinding", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<double?>("BoxHeight")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("BoxWidth")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("BoxX")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("BoxY")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("CategoryCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<double?>("Confidence")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("CorrectedCategoryCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("CorrectedSeverity")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("InspectionId")
+                        .HasColumnType("uuid");
+
+                    b.PrimitiveCollection<double[]>("Polygon")
+                        .HasColumnType("double precision[]");
+
+                    b.Property<string>("RawLabel")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("ReviewerNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryCode");
+
+                    b.HasIndex("CorrectedCategoryCode");
+
+                    b.HasIndex("InspectionId");
+
+                    b.ToTable("qc_inspection_findings", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_qc_findings_box", "(\"BoxX\" IS NULL AND \"BoxY\" IS NULL AND \"BoxWidth\" IS NULL AND \"BoxHeight\" IS NULL) OR (\"BoxX\" >= 0 AND \"BoxY\" >= 0 AND \"BoxWidth\" > 0 AND \"BoxHeight\" > 0 AND \"BoxX\" + \"BoxWidth\" <= 1.0001 AND \"BoxY\" + \"BoxHeight\" <= 1.0001)");
+
+                            t.HasCheckConstraint("CK_qc_findings_confidence", "\"Confidence\" IS NULL OR (\"Confidence\" >= 0 AND \"Confidence\" <= 1)");
+
+                            t.HasCheckConstraint("CK_qc_findings_source", "(\"Source\" = 'Inspector' AND \"Confidence\" IS NULL) OR (\"Source\" = 'Model' AND \"RawLabel\" IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("FactoryBrain.Domain.Entities.SensorReading", b =>
                 {
                     b.Property<string>("Id")
@@ -1071,9 +1397,33 @@ namespace FactoryBrain.Infrastructure.Migrations
                     b.Navigation("Weeks");
                 });
 
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.QcInspectionFinding", b =>
+                {
+                    b.HasOne("FactoryBrain.Domain.Entities.QcDefectCategory", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryCode")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("FactoryBrain.Domain.Entities.QcDefectCategory", null)
+                        .WithMany()
+                        .HasForeignKey("CorrectedCategoryCode")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("FactoryBrain.Domain.Entities.QcInspection", null)
+                        .WithMany("Findings")
+                        .HasForeignKey("InspectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("FactoryBrain.Domain.Entities.ManualDocument", b =>
                 {
                     b.Navigation("Chunks");
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.QcInspection", b =>
+                {
+                    b.Navigation("Findings");
                 });
 #pragma warning restore 612, 618
         }

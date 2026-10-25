@@ -41,6 +41,9 @@ public class FactoryBrainDbContext : DbContext
     public DbSet<AuditLogEntry>      AuditLog           => Set<AuditLogEntry>();
     public DbSet<AiSettingsRecord>   AiSettings         => Set<AiSettingsRecord>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<QcInspection>        QcInspections        => Set<QcInspection>();
+    public DbSet<QcInspectionFinding> QcInspectionFindings => Set<QcInspectionFinding>();
+    public DbSet<QcDefectCategory>    QcDefectCategories   => Set<QcDefectCategory>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {

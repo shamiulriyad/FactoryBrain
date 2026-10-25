@@ -412,6 +412,10 @@ builder.Services.AddRateLimiter(o =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: RateLimitPolicies.UserPartition(httpContext),
             factory: _ => FixedWindow(RateLimitPolicies.SensorLivePerMinute)));
+    o.AddPolicy(RateLimitPolicies.QcUpload, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: RateLimitPolicies.UserPartition(httpContext),
+            factory: _ => FixedWindow(RateLimitPolicies.QcUploadPerMinute)));
 
     // 429 response shape: RFC 7807 ProblemDetails + Retry-After. Matches
     // the rest of the API's error envelope.
@@ -536,10 +540,30 @@ builder.Services.AddScoped<IFloorAlertService, FloorAlertService>();
 builder.Services.AddScoped<ILineBoardService,  LineBoardService>();
 builder.Services.AddScoped<IQcService,         QcService>();
 builder.Services.AddScoped<ISensorService,     SensorService>();
-builder.Services.AddScoped<IVisionService,     VisionService>();
 builder.Services.AddScoped<IAgentRunService,   AgentRunService>();
 builder.Services.AddScoped<IBriefService,      BriefService>();
 builder.Services.AddScoped<IApprovalService,   ApprovalService>();
+
+// ─── Quality inspection (QC_* env vars, read once; see QcOptions) ──────────
+// Images go to the file store (QC_IMAGE_STORAGE_PATH), metadata and
+// predictions to PostgreSQL. The vision provider is chosen by
+// QC_VISION_PROVIDER (llm | http); unset means inference is reported as not
+// configured — no prediction is ever made up. A background worker claims
+// queued inspections from the database (safe across several instances).
+var qcOptions = FactoryBrain.Infrastructure.Qc.QcOptions.FromEnvironment(
+    Environment.GetEnvironmentVariable, builder.Environment.ContentRootPath);
+if (qcOptions.ConfigurationError is not null)
+    Console.WriteLine($"[startup] QC vision: {qcOptions.ConfigurationError}");
+builder.Services.AddSingleton(qcOptions);
+builder.Services.AddSingleton<IQcImageStore, FactoryBrain.Infrastructure.Qc.LocalFileQcImageStore>();
+builder.Services.AddSingleton<IDefectDetectionProvider, FactoryBrain.Infrastructure.Qc.ConfiguredDefectDetectionProvider>();
+builder.Services.AddSingleton<IQcWorkSignal, FactoryBrain.Infrastructure.Qc.QcWorkSignal>();
+builder.Services.AddScoped<IQcInspectionService, FactoryBrain.Infrastructure.Qc.QcInspectionService>();
+builder.Services.AddScoped<IQcDefectCategoryService, FactoryBrain.Infrastructure.Qc.QcDefectCategoryService>();
+builder.Services.AddScoped<IQcInspectionProcessor, FactoryBrain.Infrastructure.Qc.QcInspectionProcessor>();
+// The database-free "Testing" host has nothing to process.
+if (!builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddHostedService<FactoryBrain.Infrastructure.Qc.QcInspectionWorker>();
 
 // ─── Realtime (SignalR) ────────────────────────────────────────────────────
 // FactoryHub is server-to-client only — clients don't call hub methods.
@@ -851,8 +875,17 @@ app.MapGet("/", () => Results.Ok(new
         "POST /api/sensors/ingest",
         "POST /api/sensors/live",
         "GET  /api/sensors/ingest",
-        "POST /api/vision/analyze",
-        "GET  /api/vision/analyze",
+        "GET  /api/qc/inspections",
+        "POST /api/qc/inspections",
+        "GET  /api/qc/inspections/{id}",
+        "GET  /api/qc/inspections/{id}/image",
+        "POST /api/qc/inspections/{id}/review",
+        "POST /api/qc/inspections/{id}/retry",
+        "GET  /api/qc/summary",
+        "GET  /api/qc/vision/status",
+        "GET  /api/qc/categories",
+        "POST /api/qc/categories",
+        "PUT  /api/qc/categories/{code}",
         "GET  /api/settings/llm",
         "POST /api/settings/llm",
         "GET  /api/agents",

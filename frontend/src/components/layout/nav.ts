@@ -44,7 +44,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/app", labelKey: "nav.overview", icon: LayoutDashboard, role: "Viewer", keywords: "dashboard home line board brief" },
       { href: "/app/approvals", labelKey: "nav.approvals", icon: ShieldCheck, role: "Viewer", keywords: "approve reject decisions queue" },
       { href: "/app/activity", labelKey: "nav.floorAlerts", icon: Activity, role: "Viewer", keywords: "alerts whatsapp floor notifications" },
-      { href: "/app/qc", labelKey: "nav.qc", icon: ClipboardCheck, role: "Viewer", keywords: "quality defects rework" },
+      { href: "/app/qc", labelKey: "nav.qc", icon: ClipboardCheck, role: "Viewer", keywords: "quality defects rework inspections history dhu taxonomy" },
       { href: "/app/sensors", labelKey: "nav.sensors", icon: Gauge, role: "Viewer", keywords: "telemetry energy rfid readings machines" }
     ]
   },
@@ -54,7 +54,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/app/ask", labelKey: "nav.ask", icon: MessageSquareText, role: "Viewer", keywords: "question rag assistant search manuals" },
       { href: "/app/knowledge", labelKey: "nav.knowledge", icon: BookOpenText, role: "Viewer", keywords: "documents rag ingest reindex embeddings manuals" },
       { href: "/app/agents", labelKey: "nav.agents", icon: Bot, role: "Viewer", keywords: "run agent roster" },
-      { href: "/app/vision", labelKey: "nav.vision", icon: ScanLine, role: "Viewer", keywords: "camera defect image repair" }
+      { href: "/app/vision", labelKey: "nav.vision", icon: ScanLine, role: "Viewer", keywords: "camera photo defect image inspect upload vision" }
     ]
   },
   {

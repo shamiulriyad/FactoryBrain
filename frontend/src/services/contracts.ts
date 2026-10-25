@@ -305,44 +305,162 @@ export type EmbeddingUpdateResult = { settings: EmbeddingStatus; reindex?: Reind
 
 export type UserRow = { id: string; email: string; role: Role; createdAt: string };
 
-// ── Vision ──────────────────────────────────────────────────────────────────
+// ── QC inspections ──────────────────────────────────────────────────────────
+// /api/qc/inspections, /api/qc/summary, /api/qc/categories, /api/qc/vision/status.
+// Coordinates are fractions (0–1) of the image width / height, origin top-left.
 
-export type VisionAllowed = { simulated: boolean; source: string; allowedSampleFiles: string[]; method: string };
+export const QC_STAGES = ["fabric", "cutting", "inline", "end_of_line", "final"] as const;
+export type QcStage = (typeof QC_STAGES)[number];
+export const QC_STATUSES = ["pending", "processing", "completed", "failed", "reviewed"] as const;
+export type QcStatus = (typeof QC_STATUSES)[number];
+export const QC_SEVERITIES = ["minor", "major", "critical"] as const;
+export type QcSeverity = (typeof QC_SEVERITIES)[number];
+export const QC_OUTCOMES = ["pass", "rework", "reject"] as const;
+export type QcOutcome = (typeof QC_OUTCOMES)[number];
+export type QcDecision = "unreviewed" | "accepted" | "rejected" | "corrected";
 
-export type VisionResult = {
+export type QcInspectionListItem = {
   id: string;
-  sampleFile: string;
-  anomalyLabelEn: string;
-  anomalyLabelBn: string;
-  repairStepsEn: string[];
-  repairStepsBn: string[];
-  confidence: number;
-  machineId?: string | null;
+  reference: string;
+  status: QcStatus;
+  productType: string;
+  stage: QcStage;
+  lineId?: string | null;
+  productionOrder?: string | null;
   createdAt: string;
+  createdByEmail: string;
+  predictionCount: number;
+  verifiedDefectCount: number;
+  maxConfidence?: number | null;
+  outcome?: QcOutcome | null;
+  provider?: string | null;
+  model?: string | null;
+  failureCode?: string | null;
 };
 
-export type VisionAnalyzeResponse = {
-  simulated: boolean;
-  source: string;
-  result: VisionResult;
-  insight?: InsightLite | null;
-  approvalPending?: boolean | null;
-  approvalReason?: string | null;
-  floorAlertId?: string | null;
-  activityEventId?: string | null;
+export type QcInspectionPage = { items: QcInspectionListItem[]; page: number; pageSize: number; total: number; totalPages: number };
+
+export type QcBox = { x: number; y: number; width: number; height: number };
+
+export type QcFinding = {
+  id: string;
+  source: "model" | "inspector";
+  categoryCode?: string | null;
+  categoryName?: string | null;
+  rawLabel?: string | null;
+  confidence?: number | null;
+  box?: QcBox | null;
+  polygon?: number[][] | null;
+  severity: QcSeverity;
+  description?: string | null;
+  decision: QcDecision;
+  correctedCategoryCode?: string | null;
+  correctedSeverity?: QcSeverity | null;
+  reviewerNote?: string | null;
+  effectiveCategoryCode?: string | null;
+  effectiveCategoryName?: string | null;
+  effectiveSeverity: QcSeverity;
+  verified: boolean;
+  createdAt: string;
+  reviewedAt?: string | null;
 };
 
-// ── QC ──────────────────────────────────────────────────────────────────────
-
-export type QcFlagRequest = {
-  operation: string;
-  lineId: string;
-  defectRatePct?: number;
-  reworkRatePct?: number;
-  note?: string;
+export type QcInspectionDetail = {
+  id: string;
+  reference: string;
+  status: QcStatus;
+  productType: string;
+  stage: QcStage;
+  lineId?: string | null;
+  productionOrder?: string | null;
+  notes?: string | null;
+  requestedCategoryCodes: string[];
+  image: { url: string; contentType: string; width: number; height: number; sizeBytes: number; originalFileName?: string | null; sha256: string };
+  analysis: {
+    provider?: string | null;
+    model?: string | null;
+    modelVersion?: string | null;
+    localizationSupported?: boolean | null;
+    confidenceThreshold?: number | null;
+    inferenceMs?: number | null;
+    attempts: number;
+    processingStartedAt?: string | null;
+    analyzedAt?: string | null;
+    failureCode?: string | null;
+    failureMessage?: string | null;
+    retryable: boolean;
+  };
+  findings: QcFinding[];
+  review?: { outcome: QcOutcome; notes?: string | null; reviewedAt: string; reviewedByEmail?: string | null } | null;
+  followUp?: { approvalId: string; status: string; riskTier: "low" | "medium" | "high" } | null;
+  createdAt: string;
+  updatedAt: string;
+  createdByEmail: string;
+  version: number;
 };
 
-export type QcFlagResponse = { insightId: string; flaggedAt: string };
+export type QcReviewRequest = {
+  expectedVersion: number;
+  outcome: QcOutcome;
+  notes?: string;
+  decisions: { findingId: string; decision: Exclude<QcDecision, "unreviewed">; correctedCategoryCode?: string; correctedSeverity?: QcSeverity; note?: string }[];
+  additions: { categoryCode: string; severity?: QcSeverity; box?: QcBox; note?: string }[];
+  requestFollowUp?: boolean;
+  followUpNote?: string;
+};
+
+export type QcVisionStatus = {
+  configured: boolean;
+  mode: "llm" | "http" | "none";
+  provider?: string | null;
+  model?: string | null;
+  localizationSupported?: boolean | null;
+  reason?: string | null;
+  confidenceThreshold: number;
+  maxImageBytes: number;
+  acceptedContentTypes: string[];
+  confidenceNote: string;
+};
+
+export type QcCategory = {
+  code: string;
+  name: string;
+  nameBn?: string | null;
+  description?: string | null;
+  defaultSeverity: QcSeverity;
+  isActive: boolean;
+  sortOrder: number;
+  version: number;
+  updatedAt: string;
+};
+
+export type QcSummary = {
+  from: string;
+  to: string;
+  totals: {
+    inspections: number;
+    inProgress: number;
+    failed: number;
+    awaitingReview: number;
+    reviewed: number;
+    passed: number;
+    rework: number;
+    rejected: number;
+    verifiedDefects: number;
+    defectiveRatePct?: number | null;
+    dhu?: number | null;
+    rejectOrReworkRatePct?: number | null;
+  };
+  model: { predictionsReviewed: number; accepted: number; corrected: number; rejected: number; acceptedPct?: number | null; inspectorAdded: number; awaitingReview: number };
+  byCategory: { code?: string | null; name: string; count: number; sharePct: number }[];
+  bySeverity: { minor: number; major: number; critical: number };
+  byLine: { lineId: string; reviewed: number; defective: number; defectiveRatePct?: number | null; verifiedDefects: number }[];
+  daily: { date: string; inspections: number; reviewed: number; defective: number; verifiedDefects: number; defectiveRatePct?: number | null }[];
+  recurring: { lineId: string; categoryCode?: string | null; categoryName: string; defects: number; inspections: number }[];
+  recurringThreshold: number;
+  definitions: Record<string, string>;
+  generatedAt: string;
+};
 
 // ── Ask ─────────────────────────────────────────────────────────────────────
 

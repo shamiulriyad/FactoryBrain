@@ -23,3 +23,6 @@ promt/
 docs/
 
 PROJECT_WORK_SUMMARY.txt
+
+# QC inspection images (default store: FactoryBrain.Api/App_Data/qc-images)
+App_Data/

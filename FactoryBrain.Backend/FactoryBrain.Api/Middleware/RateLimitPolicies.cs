@@ -11,10 +11,13 @@ public static class RateLimitPolicies
     public const string Account          = "account";
     public const string SensorSimulation = "sensor-sim";
     public const string SensorLive       = "sensor-live";
+    /// <summary>Per-user budget on QC image uploads (POST /api/qc/inspections).</summary>
+    public const string QcUpload         = "qc-upload";
 
     public const int DefaultLoginPerMinute     = 5;
     public const int SensorSimulationPerMinute = 20;
     public const int SensorLivePerMinute       = 120;
+    public const int QcUploadPerMinute         = 30;
 
     /// <summary>
     /// Login attempts per client IP per minute: <c>LOGIN_RATE_LIMIT_PER_MINUTE</c>

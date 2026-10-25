@@ -36,6 +36,9 @@ public static class TestEnvironment
         "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM", "SMTP_ENABLE_SSL",
         "PYRAG_SERVICE_URL", "PYRAG_API_KEY", "PYRAG_COLLECTION_NAME", "PYRAG_LLM_MODEL",
         "PYRAG_EMBEDDING_PROVIDER", "PYRAG_EMBEDDING_MODEL", "PYRAG_TIMEOUT_SECONDS",
+        "QC_VISION_PROVIDER", "QC_VISION_MODEL", "QC_VISION_HTTP_URL", "QC_VISION_HTTP_API_KEY",
+        "QC_VISION_TIMEOUT_SECONDS", "QC_VISION_MIN_CONFIDENCE", "QC_MAX_ATTEMPTS",
+        "QC_IMAGE_STORAGE_PATH", "QC_IMAGE_MAX_MB", "QC_WORKER_ENABLED",
     };
 
     private static readonly object Gate = new();
@@ -73,6 +76,12 @@ public static class TestEnvironment
                 $"Expected 1 simulator and 1 factory-registered hosted service (RagHealthMonitor); " +
                 $"found {simulator.Count} and {factoryRegistered.Count}. Update RemoveBackgroundServices.");
         foreach (var d in simulator.Concat(factoryRegistered)) services.Remove(d);
+
+        // The QC worker (registered outside the database-free Testing host):
+        // tests call IQcInspectionProcessor themselves so processing is deterministic.
+        foreach (var d in services.Where(d => d.ServiceType == typeof(IHostedService)
+                                              && d.ImplementationType == typeof(FactoryBrain.Infrastructure.Qc.QcInspectionWorker)).ToList())
+            services.Remove(d);
     }
 
     /// <summary>A fresh random 32-byte AI settings encryption key (base64), as the API expects it.</summary>

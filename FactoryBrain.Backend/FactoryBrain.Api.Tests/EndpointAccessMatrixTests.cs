@@ -40,6 +40,12 @@ public static class EndpointMatrix
         ("GET",   "/api/floor-alerts",          Access.Authenticated),
         ("GET",   "/api/line-board",            Access.Authenticated),
         ("GET",   "/api/qc/defects",            Access.Authenticated),
+        ("GET",   "/api/qc/inspections",        Access.Authenticated),
+        ("GET",   "/api/qc/inspections/{id}",   Access.Authenticated),
+        ("GET",   "/api/qc/inspections/{id}/image", Access.Authenticated),
+        ("GET",   "/api/qc/summary",            Access.Authenticated),
+        ("GET",   "/api/qc/vision/status",      Access.Authenticated),
+        ("GET",   "/api/qc/categories",         Access.Authenticated),
         ("GET",   "/api/rag/documents",         Access.Authenticated),
         ("GET",   "/api/rag/status",            Access.Authenticated),
         ("GET",   "/api/sensors/ingest",        Access.Authenticated),
@@ -58,12 +64,17 @@ public static class EndpointMatrix
         ("PATCH", "/api/floor-alerts/{id}",     Access.Operator),
         ("POST",  "/api/line-board/refresh",    Access.Operator),
         ("POST",  "/api/qc/flag",               Access.Operator),
+        ("POST",  "/api/qc/inspections",        Access.Operator),
+        ("POST",  "/api/qc/inspections/{id}/review", Access.Operator),
+        ("POST",  "/api/qc/inspections/{id}/retry",  Access.Operator),
         ("POST",  "/api/sensors/ingest",        Access.Operator),
         ("POST",  "/api/sensors/live",          Access.Operator),
         ("POST",  "/api/vision/analyze",        Access.Operator),
 
         // Configuration and index management: Admin only.
         ("GET",   "/api/audit",                 Access.Admin),
+        ("POST",  "/api/qc/categories",         Access.Admin),
+        ("PUT",   "/api/qc/categories/{code}",  Access.Admin),
         ("POST",  "/api/rag/ingest",            Access.Admin),
         ("POST",  "/api/rag/reindex",           Access.Admin),
         ("GET",   "/api/rag/reindex/plan",      Access.Admin),
@@ -80,7 +91,8 @@ public static class EndpointMatrix
     /// <summary>Concrete request target for a route template.</summary>
     public static string Url(string route) => route
         .Replace("{agentId}", "line-throughput-agent")
-        .Replace("{id}", "alert-1");
+        .Replace("{id}", "alert-1")
+        .Replace("{code}", "stain");
 
     public static HttpRequestMessage Request(string method, string route, string? body = "{}")
     {
@@ -170,7 +182,7 @@ public sealed class EndpointAccessMatrixTests
         // completes against the in-process host. (The settings reads now
         // come from the database; DbAiSettingsTests covers them per role.)
         using var client = _factory.ClientAs(role);
-        foreach (var path in new[] { "/api/vision/analyze", "/api/sensors/snapshot", "/api/sensors/ingest" })
+        foreach (var path in new[] { "/api/qc/vision/status", "/api/sensors/snapshot", "/api/sensors/ingest" })
         {
             using var response = await client.GetAsync(path);
             Assert.True(response.StatusCode == HttpStatusCode.OK, $"{role} GET {path} → {(int)response.StatusCode}");

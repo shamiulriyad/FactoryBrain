@@ -12,7 +12,6 @@ using FactoryBrain.Application.Dtos.Qc;
 using FactoryBrain.Application.Dtos.Rag;
 using FactoryBrain.Application.Dtos.Sensors;
 using FactoryBrain.Application.Dtos.Settings;
-using FactoryBrain.Application.Dtos.Vision;
 
 namespace FactoryBrain.Application.Abstractions.Interfaces;
 
@@ -69,12 +68,6 @@ public interface ISensorService
     IngestResponse Snapshot();
     /// <summary>Immiration from src/services/sensors.server for the sim buffer.</summary>
     SensorSimState CurrentState { get; }
-}
-
-public interface IVisionService
-{
-    Task<VisionAnalyzeResponse> AnalyzeAsync(VisionAnalyzeRequest req, CancellationToken ct);
-    VisionAllowedResponse Allowed();
 }
 
 public interface ILlmSettingsService

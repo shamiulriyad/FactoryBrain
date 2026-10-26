@@ -56,6 +56,13 @@ public class FactoryBrainDbContext : DbContext
     public DbSet<LineLayout>             LineLayouts             => Set<LineLayout>();
     public DbSet<LineLayoutStation>      LineLayoutStations      => Set<LineLayoutStation>();
     public DbSet<LineBalanceProposal>    BalanceProposals        => Set<LineBalanceProposal>();
+    public DbSet<MerchOrder>             MerchOrders             => Set<MerchOrder>();
+    public DbSet<MerchMilestone>         MerchMilestones         => Set<MerchMilestone>();
+    public DbSet<MerchDocument>          MerchDocuments          => Set<MerchDocument>();
+    public DbSet<MerchDocumentVersion>   MerchDocumentVersions   => Set<MerchDocumentVersion>();
+    public DbSet<MerchDocumentPage>      MerchDocumentPages      => Set<MerchDocumentPage>();
+    public DbSet<MerchExtractedField>    MerchExtractedFields    => Set<MerchExtractedField>();
+    public DbSet<MerchConflict>          MerchConflicts          => Set<MerchConflict>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {

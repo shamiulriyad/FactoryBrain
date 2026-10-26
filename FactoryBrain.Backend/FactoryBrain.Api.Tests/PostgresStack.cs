@@ -67,21 +67,29 @@ public sealed class PostgresStack : IAsyncLifetime
     public const string EmbeddingDatabase = "factorybrain_test_embedding";
     /// <summary>Used only by the QC inspection tests (deterministic test detector).</summary>
     public const string QcDatabase = "factorybrain_test_qc";
+    /// <summary>Used only by the production-planning tests (plant time zone Asia/Dhaka).</summary>
+    public const string ProductionDatabase = "factorybrain_test_production";
 
     private PostgreSqlContainer? _container;
     private readonly Lazy<DbApiFactory> _local;
     private readonly Lazy<DbApiFactory> _mocked;
     private readonly Lazy<DbApiFactory> _qc;
+    private readonly Lazy<DbApiFactory> _production;
 
     public PostgresStack()
     {
         _local  = new(() => Build(DbApiFactory.LocalEmbeddings(ConnectionStringFor(LocalDatabase))));
         _mocked = new(() => Build(DbApiFactory.MockedHostedProviders(ConnectionStringFor(MockedDatabase))));
         _qc     = new(() => Build(DbApiFactory.QcDetector(ConnectionStringFor(QcDatabase))));
+        _production = new(() => Build(DbApiFactory.Custom(ConnectionStringFor(ProductionDatabase),
+            new() { ["RAG_EMBEDDING_PROVIDER"] = "local", ["PRODUCTION_TIME_ZONE"] = "Asia/Dhaka" })));
     }
 
     /// <summary>API host whose vision provider is the deterministic TEST detector (an http provider answered by the guard).</summary>
     public DbApiFactory Qc => _qc.Value.Activate();
+
+    /// <summary>API host for the production-planning tests: its own database, plant time zone Asia/Dhaka (UTC+6).</summary>
+    public DbApiFactory Production => _production.Value.Activate();
 
     /// <summary>API host on its own database, local hash embeddings, no outbound HTTP at all.</summary>
     public DbApiFactory Local => _local.Value.Activate();
@@ -112,7 +120,7 @@ public sealed class PostgresStack : IAsyncLifetime
         };
         await using var admin = new NpgsqlConnection(adminCs.ConnectionString);
         await admin.OpenAsync();
-        foreach (var name in new[] { MockedDatabase, SettingsDatabase, EmbeddingDatabase, QcDatabase })
+        foreach (var name in new[] { MockedDatabase, SettingsDatabase, EmbeddingDatabase, QcDatabase, ProductionDatabase })
         {
             await using var create = new NpgsqlCommand($"CREATE DATABASE \"{name}\"", admin);
             await create.ExecuteNonQueryAsync();
@@ -139,6 +147,7 @@ public sealed class PostgresStack : IAsyncLifetime
         if (_local.IsValueCreated)  await _local.Value.DisposeAsync();
         if (_mocked.IsValueCreated) await _mocked.Value.DisposeAsync();
         if (_qc.IsValueCreated)     await _qc.Value.DisposeAsync();
+        if (_production.IsValueCreated) await _production.Value.DisposeAsync();
         if (_container is not null) await _container.DisposeAsync();
     }
 }

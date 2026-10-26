@@ -499,3 +499,588 @@ export type RagServiceStatus = {
   embeddingModel: string;
   error?: string | null;
 };
+
+// ── Production planning & line efficiency (/api/production/**) ─────────────
+// Dates without a time are plant-local production dates (yyyy-MM-dd); instants
+// are UTC ISO strings. Quantities are pieces, times minutes, rates pieces per
+// hour, SMV minutes per piece. Every metric is calculated by the API; the UI
+// only displays it.
+
+export const PRODUCTION_STAGES = ["cutting", "sewing_input", "sewing_output", "finishing", "packing"] as const;
+export type ProductionStage = (typeof PRODUCTION_STAGES)[number];
+export const PLAN_STATUSES = ["draft", "pending_approval", "active", "completed", "cancelled"] as const;
+export type PlanStatus = (typeof PLAN_STATUSES)[number];
+export const ORDER_STATUSES = ["open", "closed", "cancelled"] as const;
+export type OrderStatus = (typeof ORDER_STATUSES)[number];
+export const PROPOSAL_STATUSES = ["proposed", "pending_approval", "applied", "rejected", "superseded"] as const;
+export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number];
+export const OUTPUT_SOURCES = ["manual", "import", "integration"] as const;
+export type OutputSource = (typeof OUTPUT_SOURCES)[number];
+export const WEEKDAYS = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"] as const;
+export type RiskLevel = "complete" | "low" | "medium" | "high" | "insufficient_data" | "not_applicable";
+
+export type Paged<T> = { items: T[]; page: number; pageSize: number; total: number; totalPages: number };
+
+export type ProductionLine = { id: string; name: string; workstations: number; isActive: boolean; version: number; updatedAt: string };
+
+export type ProductionShift = {
+  code: string;
+  name: string;
+  start: string;
+  end: string;
+  breakStart?: string | null;
+  breakMinutes: number;
+  weekdays: string[];
+  overnight: boolean;
+  workingMinutes: number;
+  isActive: boolean;
+  version: number;
+};
+
+export type StyleOperation = { id: string; sequence: number; name: string; smv: number; machineType?: string | null; predecessors: number[] };
+
+export type ProductionStyle = {
+  id: string;
+  code: string;
+  name: string;
+  productType?: string | null;
+  approvedSmv?: number | null;
+  effectiveSmv?: number | null;
+  smvBasis: "approved" | "operation_bulletin" | "missing";
+  operationSmvTotal: number;
+  isActive: boolean;
+  version: number;
+  operations: StyleOperation[];
+};
+
+export type DataSourceStatus = { source: OutputSource; status: "available" | "receiving" | "not_connected"; description: string; recordsLast24h: number };
+
+export type ProductionConfig = {
+  timeZone: string;
+  utcOffsetNow: string;
+  requireSeparateApprover: boolean;
+  maxBackfillDays: number;
+  maxIntervalHours: number;
+  rateLookbackDays: number;
+  riskSlackPct: number;
+  observationMaxAgeDays: number;
+  configurationError?: string | null;
+  activeLines: number;
+  activeShifts: number;
+  activeStyles: number;
+  openOrders: number;
+  dataSources: DataSourceStatus[];
+  definitions: Record<string, string>;
+};
+
+export type ProductionOrderListItem = {
+  id: string;
+  orderNumber: string;
+  styleId: string;
+  styleCode: string;
+  styleName: string;
+  buyer?: string | null;
+  quantity: number;
+  dueDate: string;
+  status: OrderStatus;
+  producedGood: number;
+  progressPct: number;
+  activePlans: number;
+  riskLevel: RiskLevel;
+  projectedCompletion?: string | null;
+  version: number;
+};
+
+export type ProductionOrder = {
+  id: string;
+  orderNumber: string;
+  styleId: string;
+  buyer?: string | null;
+  quantity: number;
+  dueDate: string;
+  dueAt: string;
+  status: OrderStatus;
+  notes?: string | null;
+  createdAt: string;
+  createdByEmail: string;
+  version: number;
+};
+
+export type StageProgress = { stage: ProductionStage; good: number; reject: number; rework: number; records: number };
+export type WipBuffer = {
+  key: string;
+  label: string;
+  from: ProductionStage;
+  to: ProductionStage;
+  pieces?: number | null;
+  state: "ok" | "missing_to" | "inconsistent" | "partial";
+};
+export type LineProgress = { lineId: string; good: number; rework: number; reject: number; lastIntervalEnd?: string | null };
+export type Recommendation = { code: string; action: string; reason: string; evidence: string; caveat: string };
+
+export type RiskAssessment = {
+  orderId: string;
+  orderNumber: string;
+  evaluatedAt: string;
+  dueAt: string;
+  lineIds: string[];
+  level: Exclude<RiskLevel, "not_applicable">;
+  remainingQuantity: number;
+  remainingScheduledMinutes: number;
+  requiredRatePerLineHour?: number | null;
+  observedRatePerLineHour?: number | null;
+  observedRateLow?: number | null;
+  observedRateHigh?: number | null;
+  plannedRatePerHour?: number | null;
+  projectedCompletion?: string | null;
+  projectedCompletionEarliest?: string | null;
+  projectedCompletionLatest?: string | null;
+  scheduleEnd?: string | null;
+  projectedShortfall?: number | null;
+  observedLineHours: number;
+  method: string;
+  observations: string[];
+  assumptions: string[];
+  limitations: string[];
+  missingInputs: string[];
+  recommendations: Recommendation[];
+};
+
+export type OrderDetail = {
+  order: ProductionOrder;
+  style: ProductionStyle;
+  plans: PlanListItem[];
+  stages: StageProgress[];
+  wip: WipBuffer[];
+  byLine: LineProgress[];
+  risk: RiskAssessment;
+};
+
+export type PlanValues = {
+  lineId: string;
+  startDate: string;
+  endDate: string;
+  plannedQuantity: number;
+  operators: number;
+  targetEfficiencyPct: number;
+  shiftCodes: string[];
+  overtimeMinutesPerDay: number;
+  notes?: string | null;
+};
+
+export type PlanListItem = {
+  id: string;
+  reference: string;
+  orderId: string;
+  orderNumber: string;
+  lineId: string;
+  lineName: string;
+  startDate: string;
+  endDate: string;
+  plannedQuantity: number;
+  operators: number;
+  targetEfficiencyPct: number;
+  status: PlanStatus;
+  revision: number;
+  hasPendingChange: boolean;
+  updatedAt: string;
+};
+
+export type ApprovalRef = {
+  id: string;
+  status: string;
+  riskTier: RiskTier;
+  createdAt: string;
+  decidedAt?: string | null;
+  decidedByEmail?: string | null;
+  decisionReason?: string | null;
+};
+
+export type FieldDiff = { field: string; from?: string | null; to?: string | null };
+
+export type PlanChange = {
+  id: string;
+  kind: "created" | "edited" | "revision";
+  status: "pending" | "applied" | "rejected" | "superseded";
+  previous?: PlanValues | null;
+  proposed: PlanValues;
+  diff: FieldDiff[];
+  reason?: string | null;
+  approval?: ApprovalRef | null;
+  requestedAt: string;
+  requestedByEmail: string;
+  decidedAt?: string | null;
+  decidedByEmail?: string | null;
+};
+
+export type PlanTargets = {
+  smv?: number | null;
+  smvBasis: ProductionStyle["smvBasis"];
+  hourlyTarget?: number | null;
+  scheduledMinutes: number;
+  workingDays: number;
+  capacityAtTarget?: number | null;
+  plannedMethod: "target_rate" | "even_spread";
+  daily: { date: string; scheduledMinutes: number; target: number }[];
+  warnings: string[];
+  formula: string;
+};
+
+export type PlanProgress = {
+  evaluatedAt: string;
+  comparedThrough?: string | null;
+  plannedToDate: number;
+  actualToDate: number;
+  variance: number;
+  achievementPct?: number | null;
+  actualTotal: number;
+  remainingQuantity: number;
+};
+
+export type PlanDetail = {
+  summary: PlanListItem;
+  values: PlanValues;
+  targets: PlanTargets;
+  progress: PlanProgress;
+  activationApproval?: ApprovalRef | null;
+  changes: PlanChange[];
+  submittedByEmail?: string | null;
+  submittedAt?: string | null;
+  activatedByEmail?: string | null;
+  activatedAt?: string | null;
+  closedReason?: string | null;
+  createdByEmail: string;
+  createdAt: string;
+  version: number;
+};
+
+export type PlanActionResponse = { outcome: string; message: string; plan: PlanDetail };
+
+export type PlanWrite = Partial<PlanValues> & { orderId?: string; reason?: string; expectedVersion?: number };
+
+export type OutputEvent = {
+  id: string;
+  lineId: string;
+  orderId: string;
+  orderNumber: string;
+  stage: ProductionStage;
+  intervalStart: string;
+  intervalEnd: string;
+  productionDate: string;
+  shiftCode?: string | null;
+  quantity: number;
+  reworkQuantity: number;
+  rejectQuantity: number;
+  operatorsPresent?: number | null;
+  downtimeMinutes?: number | null;
+  downtimeReason?: string | null;
+  source: OutputSource;
+  sourceRef?: string | null;
+  notes?: string | null;
+  isSuperseded: boolean;
+  supersededById?: string | null;
+  correctionOfId?: string | null;
+  correctionReason?: string | null;
+  recordedAt: string;
+  recordedByEmail: string;
+  late: boolean;
+};
+
+export type OutputWrite = {
+  lineId: string;
+  orderId: string;
+  stage: ProductionStage;
+  intervalStart: string;
+  intervalEnd: string;
+  quantity: number;
+  reworkQuantity?: number;
+  rejectQuantity?: number;
+  operatorsPresent?: number | null;
+  downtimeMinutes?: number | null;
+  downtimeReason?: string;
+  notes?: string;
+};
+
+export type OutputImportRow = {
+  sourceRef?: string;
+  lineId?: string;
+  orderNumber?: string;
+  stage?: string;
+  intervalStart?: string;
+  intervalEnd?: string;
+  quantity?: number;
+  reworkQuantity?: number;
+  rejectQuantity?: number;
+  operatorsPresent?: number;
+  downtimeMinutes?: number;
+  downtimeReason?: string;
+  notes?: string;
+};
+
+export type ImportRowOutcome = {
+  row: number;
+  sourceRef?: string | null;
+  outcome: "created" | "duplicate" | "invalid" | "not_imported";
+  eventId?: string | null;
+  errors?: string[] | null;
+};
+export type OutputImportResult = { received: number; created: number; duplicates: number; invalid: number; rows: ImportRowOutcome[] };
+
+export type SummaryTotals = {
+  actual: number;
+  planned: number;
+  variance: number;
+  achievementPct?: number | null;
+  efficiencyPct?: number | null;
+  efficiencyExcludingDowntimePct?: number | null;
+  earnedMinutes: number;
+  availableMinutes: number;
+  downtimeMinutes: number;
+  rework: number;
+  reject: number;
+  records: number;
+  scheduledPlanLineMinutes: number;
+  calendarLineMinutes: number;
+  capacityUtilizationPct?: number | null;
+  unplannedActual: number;
+};
+
+export type SummaryRow = {
+  key: string;
+  label: string;
+  actual: number;
+  planned: number;
+  variance: number;
+  achievementPct?: number | null;
+  efficiencyPct?: number | null;
+  downtimeMinutes: number;
+  rework: number;
+  reject: number;
+  records: number;
+};
+
+export type BottleneckStatus = "observed" | "standard_only" | "insufficient_data";
+
+export type OrderRiskRow = {
+  orderId: string;
+  orderNumber: string;
+  dueDate: string;
+  level: RiskAssessment["level"];
+  remainingQuantity: number;
+  requiredRatePerLineHour?: number | null;
+  observedRatePerLineHour?: number | null;
+  projectedCompletion?: string | null;
+};
+
+export type LineBottleneck = {
+  lineId: string;
+  styleId: string;
+  styleCode: string;
+  status: BottleneckStatus;
+  operation?: string | null;
+  capacityPerHour?: number | null;
+  evidence?: string | null;
+};
+
+export type ProductionSummary = {
+  fromDate: string;
+  toDate: string;
+  timeZone: string;
+  fromUtc: string;
+  toUtc: string;
+  evaluatedAt: string;
+  comparedThrough: string;
+  totals: SummaryTotals;
+  byLine: SummaryRow[];
+  byOrder: SummaryRow[];
+  byShift: SummaryRow[];
+  daily: { date: string; actual: number; planned: number; achievementPct?: number | null; efficiencyPct?: number | null; downtimeMinutes: number }[];
+  wip: { lineId: string; buffers: WipBuffer[] }[];
+  orderRisks: OrderRiskRow[];
+  bottlenecks: LineBottleneck[];
+  quality: { outputRecords: number; missingOperators: number; missingSmv: number; unplannedRecords: number; lateRecords: number; correctedRecords: number; notes: string[] };
+  sources: Record<string, number>;
+  definitions: Record<string, string>;
+};
+
+export type OperationCapacity = {
+  operationId: string;
+  sequence: number;
+  name: string;
+  smv: number;
+  machineType?: string | null;
+  observedCycleSeconds?: number | null;
+  operatorsAssigned?: number | null;
+  observedCapacityPerHour?: number | null;
+  performancePct?: number | null;
+  standardCapacityPerHour?: number | null;
+  queueBefore?: number | null;
+  observedAtUtc?: string | null;
+  sampleCount?: number | null;
+};
+
+export type BottleneckResult = {
+  status: BottleneckStatus;
+  constraint?: OperationCapacity | null;
+  constraintStationNo?: number | null;
+  constraintCapacityPerHour?: number | null;
+  operations: OperationCapacity[];
+  observedOperations: number;
+  totalOperations: number;
+  evidence: string[];
+  limitations: string[];
+  missingInputs: string[];
+};
+
+export type StationLoad = { stationNo: number; operationIds: string[]; sequences: number[]; machineType?: string | null; loadMinutes: number; utilizationPct: number };
+
+export type WorkloadMetrics = {
+  stations: number;
+  totalSmv: number;
+  cycleTimeMinutes: number;
+  capacityPerHour: number;
+  balanceEfficiencyPct: number;
+  balanceDelayPct: number;
+  smoothnessIndex: number;
+  bottleneckStationNo: number;
+  stationLoads: StationLoad[];
+};
+
+export type LayoutStation = {
+  stationNo: number;
+  operationIds: string[];
+  operations: string[];
+  machineType?: string | null;
+  loadMinutes: number;
+  utilizationPct: number;
+};
+
+export type LineLayout = {
+  id: string;
+  lineId: string;
+  styleId: string;
+  origin: "manual" | "proposal";
+  proposalId?: string | null;
+  createdAt: string;
+  createdByEmail: string;
+  stations: LayoutStation[];
+  metrics: WorkloadMetrics;
+  issues: { code: string; message: string }[];
+};
+
+export type TimelinePoint = {
+  start: string;
+  end: string;
+  label: string;
+  shiftCode?: string | null;
+  actual: number;
+  planned: number;
+  efficiencyPct?: number | null;
+  downtimeMinutes: number;
+  records: number;
+};
+
+export type LineDetail = {
+  line: ProductionLine;
+  date: string;
+  shift?: string | null;
+  timeZone: string;
+  fromUtc: string;
+  toUtc: string;
+  comparedThrough: string;
+  totals: SummaryTotals;
+  timeline: TimelinePoint[];
+  plans: PlanListItem[];
+  events: OutputEvent[];
+  wip: { lineId: string; buffers: WipBuffer[] }[];
+  styles: { styleId: string; styleCode: string; styleName: string; bottleneck: BottleneckResult; layout?: LineLayout | null }[];
+  definitions: Record<string, string>;
+};
+
+export type Observation = {
+  id: string;
+  lineId: string;
+  styleId: string;
+  operationId: string;
+  operationSequence: number;
+  operationName: string;
+  observedAt: string;
+  cycleSeconds: number;
+  sampleCount: number;
+  operatorsAssigned: number;
+  queueBefore?: number | null;
+  notes?: string | null;
+  source: OutputSource;
+  recordedAt: string;
+  recordedByEmail: string;
+};
+
+export type BalanceResult = {
+  feasible: boolean;
+  status: "ok" | "missing_inputs" | "invalid_inputs" | "infeasible";
+  problems: string[];
+  assumptions: string[];
+  proposed?: WorkloadMetrics | null;
+  proposedStations: { stationNo: number; operationIds: string[] }[];
+  lowerBoundCycleTimeMinutes?: number | null;
+  targetCycleTimeMinutes?: number | null;
+  targetMet?: boolean | null;
+  stationsNeededForTarget?: number | null;
+  method: string;
+};
+
+export type BalanceComparison = {
+  current?: WorkloadMetrics | null;
+  proposed: WorkloadMetrics;
+  cycleTimeChangePct?: number | null;
+  capacityChangePct?: number | null;
+  balanceEfficiencyChangePts?: number | null;
+  currentBottleneck?: string | null;
+  proposedBottleneck: string;
+};
+
+export type BalanceProposalListItem = {
+  id: string;
+  reference: string;
+  lineId: string;
+  styleId: string;
+  styleCode: string;
+  workstations: number;
+  status: ProposalStatus;
+  cycleTimeMinutes?: number | null;
+  capacityPerHour?: number | null;
+  balanceEfficiencyPct?: number | null;
+  createdAt: string;
+  createdByEmail: string;
+};
+
+export type BalanceProposal = {
+  id: string;
+  reference: string;
+  lineId: string;
+  lineName: string;
+  styleId: string;
+  styleCode: string;
+  styleName: string;
+  workstations: number;
+  targetOutputPerHour?: number | null;
+  status: ProposalStatus;
+  statusReason?: string | null;
+  result: BalanceResult;
+  proposedStations: LayoutStation[];
+  current?: LineLayout | null;
+  inputsChanged: boolean;
+  baselineChanged: boolean;
+  comparison?: BalanceComparison | null;
+  approval?: ApprovalRef | null;
+  createdAt: string;
+  createdByEmail: string;
+  submittedByEmail?: string | null;
+  submittedAt?: string | null;
+  appliedByEmail?: string | null;
+  appliedAt?: string | null;
+  version: number;
+};
+
+export type BalanceAnalysis = { result: BalanceResult; proposal?: BalanceProposal | null; current?: LineLayout | null; missingInputs: string[] };
+export type ProposalActionResponse = { outcome: string; message: string; proposal: BalanceProposal };

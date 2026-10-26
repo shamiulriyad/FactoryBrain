@@ -124,6 +124,7 @@ export const bn: Dict = {
     integrations: "ইন্টিগ্রেশন",
     settings: "সেটিংস",
     vision: "পোশাক পরিদর্শন",
+    production: "উৎপাদন পরিকল্পনা",
     qc: "মান পরিদর্শন",
     floorAlerts: "ফ্লোর অ্যালার্ট",
     sensors: "সেন্সর",

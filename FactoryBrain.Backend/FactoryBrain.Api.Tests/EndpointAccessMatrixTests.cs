@@ -71,6 +71,14 @@ public static class EndpointMatrix
         ("GET",   "/api/production/layouts/current", Access.Authenticated),
         ("GET",   "/api/production/balance/proposals", Access.Authenticated),
         ("GET",   "/api/production/balance/proposals/{id}", Access.Authenticated),
+        ("GET",   "/api/merchandising/config",  Access.Authenticated),
+        ("GET",   "/api/merchandising/overview", Access.Authenticated),
+        ("GET",   "/api/merchandising/orders",  Access.Authenticated),
+        ("GET",   "/api/merchandising/orders/{id}", Access.Authenticated),
+        ("GET",   "/api/merchandising/documents", Access.Authenticated),
+        ("GET",   "/api/merchandising/documents/{id}", Access.Authenticated),
+        ("GET",   "/api/merchandising/versions/{id}", Access.Authenticated),
+        ("GET",   "/api/merchandising/versions/{id}/file", Access.Authenticated),
         ("*",     "/hubs/factory/negotiate",    Access.Authenticated),
         ("*",     "/hubs/factory",              Access.Authenticated),
 
@@ -106,6 +114,15 @@ public static class EndpointMatrix
         ("POST",  "/api/production/balance/analyze", Access.Operator),
         ("POST",  "/api/production/balance/proposals/{id}/submit", Access.Operator),
         ("POST",  "/api/production/balance/proposals/{id}/apply",  Access.Operator),
+        ("POST",  "/api/merchandising/orders",  Access.Operator),
+        ("PUT",   "/api/merchandising/orders/{id}", Access.Operator),
+        ("POST",  "/api/merchandising/orders/{id}/milestones", Access.Operator),
+        ("PUT",   "/api/merchandising/milestones/{id}", Access.Operator),
+        ("POST",  "/api/merchandising/conflicts/{id}/resolve", Access.Operator),
+        ("POST",  "/api/merchandising/orders/{id}/documents", Access.Operator),
+        ("POST",  "/api/merchandising/documents/{id}/versions", Access.Operator),
+        ("POST",  "/api/merchandising/versions/{id}/retry", Access.Operator),
+        ("POST",  "/api/merchandising/versions/{id}/confirm", Access.Operator),
 
         // Configuration and index management: Admin only.
         ("GET",   "/api/audit",                 Access.Admin),
@@ -225,7 +242,7 @@ public sealed class EndpointAccessMatrixTests
         // completes against the in-process host. (The settings reads now
         // come from the database; DbAiSettingsTests covers them per role.)
         using var client = _factory.ClientAs(role);
-        foreach (var path in new[] { "/api/qc/vision/status", "/api/sensors/snapshot", "/api/sensors/ingest" })
+        foreach (var path in new[] { "/api/qc/vision/status", "/api/sensors/snapshot", "/api/sensors/ingest", "/api/merchandising/config" })
         {
             using var response = await client.GetAsync(path);
             Assert.True(response.StatusCode == HttpStatusCode.OK, $"{role} GET {path} → {(int)response.StatusCode}");

@@ -33,6 +33,7 @@ English and বাংলা.
 | 📊 | **Overview** | Morning brief, line board (throughput and bottlenecks), QC summary, live sensor readings |
 | 💬 | **Ask BunonBrain** | Answers questions from manuals and policies with hybrid RAG (vector + BM25) and cites its sources |
 | 🤖 | **Agents** | Agent runs with a risk tier, and an approval queue for risky actions |
+| 🏭 | **Production planning** | Orders, approval-gated production plans, recorded / imported output, planned vs actual, line efficiency from SMV, WIP, delivery risk, time-study bottlenecks and line-balancing proposals, all from the plant's own records |
 | 🔍 | **Quality inspection** | Upload garment photos, AI defect detection with boxes (configurable vision provider), inspector review and corrections, inspection history, defect rates and DHU from reviewed records |
 | 🚨 | **Floor alerts** | Alerts stored by the backend and broadcast over SignalR (`/hubs/factory`) |
 | 🎭 | **Demo mode** | With no LLM key, Ask and agent runs return deterministic canned answers |
@@ -197,6 +198,9 @@ The Python keys carry a `PYRAG_` prefix so they never clash with the API's
   or `http` (your own detection model, contract in ARCHITECTURE.md §9). Unset, inspections
   are stored and marked "AI analysis not configured" and can be reviewed manually; nothing
   is predicted. Images are stored under `QC_IMAGE_STORAGE_PATH` (mount a volume in Docker).
+- Production planning: set `PRODUCTION_TIME_ZONE` to the plant's zone (default UTC); lines, shifts and
+  styles are added by an Admin on Production → Setup, nothing is seeded. Formulas and the approval
+  workflow: ARCHITECTURE.md §10; other `PRODUCTION_*` settings: `.env.example`.
 - `SIMULATOR_ENABLED=true` makes the API generate a live sensor event stream.
   The Overview page only reads it (`GET /api/sensors/snapshot`); without the
   simulator the data moves only when an Operator presses *Simulate tick*.

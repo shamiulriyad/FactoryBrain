@@ -258,6 +258,33 @@ async function main() {
       throw new Error(`API not built (${apiDll}). Run: dotnet build FactoryBrain.Backend/FactoryBrain.Backend.sln`);
     });
 
+    // --- 0b. Frontend build (production, no repo-root .env) ---------------
+    // Built before the database and the API start: the build is the most
+    // memory-hungry step and fails on small machines when it runs next to
+    // them. The ports are chosen now because the /api rewrite target is
+    // baked into the build.
+    const apiPort = await freePort();
+    const webPort = await freePort();
+    const apiUrl = `http://127.0.0.1:${apiPort}`;
+    const webUrl = `http://127.0.0.1:${webPort}`;
+    const webEnv = {
+      ...cleanEnv(),
+      FACTORYBRAIN_SKIP_ROOT_ENV: "1",
+      NEXT_PUBLIC_API_URL: apiUrl,
+      DOTNET_API_URL: apiUrl,
+      NEXT_TELEMETRY_DISABLED: "1",
+      // Separate build output: never touches frontend/.next (a developer's
+      // running `next start` may be serving it).
+      NEXT_DIST_DIR: "e2e/.artifacts/next",
+    };
+    const nextCli = path.join(frontend, "node_modules", "next", "dist", "bin", "next");
+    // --no-lint: ESLint runs separately (`npx next lint`); skipping it here keeps
+    // the build inside the memory of small machines (it ran out of memory with
+    // lint and type-check workers running at once). Type-checking still runs.
+    if ((await runStep("next build", process.execPath, [nextCli, "build", "--no-lint"], { cwd: frontend, env: { ...webEnv, NODE_ENV: "production" } })) !== 0) {
+      throw new Error("next build failed");
+    }
+
     // --- 1. Disposable database -------------------------------------------
     const pg = { user: "fb_e2e", password: secret(), db: "factorybrain_e2e", port: await freePort() };
     const { stdout: cid } = await run("docker", [
@@ -289,10 +316,6 @@ async function main() {
     log(`fake model on ${llmUrl}`);
 
     // --- 3. API -----------------------------------------------------------
-    const apiPort = await freePort();
-    const webPort = await freePort();
-    const apiUrl = `http://127.0.0.1:${apiPort}`;
-    const webUrl = `http://127.0.0.1:${webPort}`;
     const users = {
       admin:    { email: "admin@e2e.test",    password: secret(18) },
       operator: { email: "operator@e2e.test", password: secret(18) },
@@ -325,6 +348,8 @@ async function main() {
       QC_VISION_HTTP_URL: `${llmUrl}/__qc/detect`,
       QC_VISION_HTTP_API_KEY: QC_DETECTOR_KEY,
       QC_IMAGE_STORAGE_PATH: path.join(artifacts, "qc-images"),
+      MERCH_EXTRACTION_PROVIDER: "rules",        // the deterministic label parser (not AI); no model is involved
+      MERCH_DOCUMENT_STORAGE_PATH: path.join(artifacts, "merch-documents"),
       HTTP_PROXY: "http://127.0.0.1:9", HTTPS_PROXY: "http://127.0.0.1:9", NO_PROXY: "127.0.0.1,localhost",
     };
     const api = startProcess("api", "dotnet", [apiDll], { cwd: apiProject, env: apiEnv });
@@ -351,6 +376,12 @@ async function main() {
       throw new Error(`QC inspection migration not applied as expected (${qcSchema})`);
     }
     log(`qc inspection tables present, ${qcSchema.split("|")[1]} active defect categories: ok`);
+    // Sector 3: merchandising tables, created empty (nothing is seeded).
+    const merchSchema = await psql(`select (select count(*) from pg_tables where tablename like 'merch\\_%'), (select count(*) from merch_orders)`);
+    if (!migrations.some((m) => m.endsWith("_AddMerchandising")) || merchSchema !== "7|0") {
+      throw new Error(`Merchandising migration not applied as expected (${merchSchema})`);
+    }
+    log("merchandising tables present and empty on the fresh database: ok");
     const tamper = await run("docker", ["exec", container, "psql", "-U", pg.user, "-d", pg.db, "-tAX", "-c", "TRUNCATE audit_log"]).then(() => "allowed", (e) => (String(e.stderr).includes("append-only") ? "rejected" : `error: ${e.stderr}`));
     if (tamper !== "rejected") throw new Error(`audit_log TRUNCATE was ${tamper}`);
     log("audit_log TRUNCATE rejected by the database: ok");
@@ -391,24 +422,7 @@ async function main() {
         values ('${highId}','${highInsight}','E2E high-risk: stop line 4 for bearing swap','E2E উচ্চ ঝুঁকি','Risk tier != low',2,1,now());`);
     log(`scenario: approve=${approveId} reject=${rejectId} high=${highId}`);
 
-    // --- 6. Frontend (production build, no repo-root .env) ----------------
-    const webEnv = {
-      ...cleanEnv(),
-      FACTORYBRAIN_SKIP_ROOT_ENV: "1",
-      NEXT_PUBLIC_API_URL: apiUrl,
-      DOTNET_API_URL: apiUrl,
-      NEXT_TELEMETRY_DISABLED: "1",
-      // Separate build output: never touches frontend/.next (a developer's
-      // running `next start` may be serving it).
-      NEXT_DIST_DIR: "e2e/.artifacts/next",
-    };
-    const nextCli = path.join(frontend, "node_modules", "next", "dist", "bin", "next");
-    // --no-lint: ESLint runs separately (`npx next lint`); skipping it here keeps
-    // the build inside the memory of small machines (it ran out of memory with
-    // lint and type-check workers running at once). Type-checking still runs.
-    if ((await runStep("next build", process.execPath, [nextCli, "build", "--no-lint"], { cwd: frontend, env: { ...webEnv, NODE_ENV: "production" } })) !== 0) {
-      throw new Error("next build failed");
-    }
+    // --- 6. Frontend (the build from step 0b) -----------------------------
     const web = startProcess("web", process.execPath, [nextCli, "start", "-p", String(webPort), "-H", "127.0.0.1"], {
       cwd: frontend, env: { ...webEnv, NODE_ENV: "production" },
     });
@@ -456,7 +470,7 @@ async function main() {
  * the test processes. Only what this script sets explicitly is passed on.
  */
 function cleanEnv() {
-  const drop = /^(SMTP_|PUBLIC_APP_URL|ALLOW_SELF_REGISTRATION|AI_SETTINGS_|FACTORYBRAIN_|DOTNET_CONNECTION|ConnectionStrings__|LLM_|RAG_|PYRAG_|GOOGLE_|OPENAI|ANTHROPIC|GEMINI|SEED_|JWT_|ADMIN_API_TOKEN|NEXT_PUBLIC_|DOTNET_API_URL|BACKEND_URL|ASPNETCORE_|DOTNET_ENVIRONMENT|SIMULATOR_|CORS_|AUTH_COOKIE|FORWARDED_|TRUSTED_PROXIES|LOGIN_RATE|E2E_|HTTP_PROXY|HTTPS_PROXY|NO_PROXY|QC_)/i;
+  const drop = /^(SMTP_|PUBLIC_APP_URL|ALLOW_SELF_REGISTRATION|AI_SETTINGS_|FACTORYBRAIN_|DOTNET_CONNECTION|ConnectionStrings__|LLM_|RAG_|PYRAG_|GOOGLE_|OPENAI|ANTHROPIC|GEMINI|SEED_|JWT_|ADMIN_API_TOKEN|NEXT_PUBLIC_|DOTNET_API_URL|BACKEND_URL|ASPNETCORE_|DOTNET_ENVIRONMENT|SIMULATOR_|CORS_|AUTH_COOKIE|FORWARDED_|TRUSTED_PROXIES|LOGIN_RATE|E2E_|HTTP_PROXY|HTTPS_PROXY|NO_PROXY|QC_|MERCH_)/i;
   return Object.fromEntries(Object.entries(process.env).filter(([k]) => !drop.test(k)));
 }
 

@@ -491,6 +491,105 @@ namespace FactoryBrain.Infrastructure.Migrations
                     b.ToTable("inventory", (string)null);
                 });
 
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.LineBalanceProposal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("AppliedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("AppliedByEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ApprovalId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid?>("BaselineLayoutId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("CreatedByEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("InputHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("LineId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("StatusReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("StyleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("SubmittedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("SubmittedByEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("SubmittedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<double?>("TargetOutputPerHour")
+                        .HasColumnType("double precision");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<int>("Workstations")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Reference")
+                        .IsUnique();
+
+                    b.HasIndex("StyleId");
+
+                    b.HasIndex("LineId", "StyleId", "CreatedAt");
+
+                    b.ToTable("production_balance_proposals", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_balance_proposals_workstations", "\"Workstations\" BETWEEN 1 AND 300");
+                        });
+                });
+
             modelBuilder.Entity("FactoryBrain.Domain.Entities.LineBoardMetric", b =>
                 {
                     b.Property<string>("Id")
@@ -524,6 +623,81 @@ namespace FactoryBrain.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("line_board_metrics", (string)null);
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.LineLayout", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("CreatedByEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<bool>("IsCurrent")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LineId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid?>("ProposalId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("StyleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("SupersededAt")
+                        .HasColumnType("timestamptz");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StyleId");
+
+                    b.HasIndex("LineId", "StyleId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_line_layouts_one_current")
+                        .HasFilter("\"IsCurrent\"");
+
+                    b.ToTable("production_line_layouts", (string)null);
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.LineLayoutStation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("LayoutId")
+                        .HasColumnType("uuid");
+
+                    b.PrimitiveCollection<Guid[]>("OperationIds")
+                        .IsRequired()
+                        .HasColumnType("uuid[]");
+
+                    b.Property<int>("StationNo")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LayoutId", "StationNo")
+                        .IsUnique();
+
+                    b.ToTable("production_line_layout_stations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_layout_station_no", "\"StationNo\" BETWEEN 1 AND 300");
+                        });
                 });
 
             modelBuilder.Entity("FactoryBrain.Domain.Entities.ManualDocument", b =>
@@ -589,6 +763,75 @@ namespace FactoryBrain.Infrastructure.Migrations
                     b.HasIndex("Source");
 
                     b.ToTable("manual_documents", (string)null);
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.OperationObservation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("CycleSeconds")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("LineId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("ObservedAtUtc")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("OperatorsAssigned")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("QueueBefore")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("RecordedByEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("SampleCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("StyleId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationId");
+
+                    b.HasIndex("StyleId");
+
+                    b.HasIndex("LineId", "StyleId", "OperationId", "ObservedAtUtc");
+
+                    b.ToTable("production_operation_observations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_observations_cycle", "\"CycleSeconds\" > 0 AND \"CycleSeconds\" <= 7200");
+
+                            t.HasCheckConstraint("CK_observations_operators", "\"OperatorsAssigned\" BETWEEN 1 AND 100");
+
+                            t.HasCheckConstraint("CK_observations_queue", "\"QueueBefore\" IS NULL OR \"QueueBefore\" >= 0");
+
+                            t.HasCheckConstraint("CK_observations_samples", "\"SampleCount\" BETWEEN 1 AND 1000");
+                        });
                 });
 
             modelBuilder.Entity("FactoryBrain.Domain.Entities.OrderRecord", b =>
@@ -725,6 +968,537 @@ namespace FactoryBrain.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("products", (string)null);
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.ProductionLine", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<int>("Workstations")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("production_lines", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_production_lines_id", "\"Id\" ~ '^[a-z0-9][a-z0-9_-]{0,31}$'");
+
+                            t.HasCheckConstraint("CK_production_lines_workstations", "\"Workstations\" BETWEEN 1 AND 300");
+                        });
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.ProductionOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Buyer")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("CreatedByEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("OrderNumber")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("StyleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderNumber")
+                        .IsUnique();
+
+                    b.HasIndex("StyleId");
+
+                    b.HasIndex("Status", "DueDate");
+
+                    b.ToTable("production_orders", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_production_orders_quantity", "\"Quantity\" > 0 AND \"Quantity\" <= 10000000");
+                        });
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.ProductionOutputEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CorrectionOfId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CorrectionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<double?>("DowntimeMinutes")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("DowntimeReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("IntervalEndUtc")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<DateTime>("IntervalStartUtc")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<bool>("IsSuperseded")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LineId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("OperatorsPresent")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("ProductionDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("RecordedByEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("RecordedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("RejectQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ReworkQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ShiftCode")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("SourceRef")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Stage")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid?>("SupersededById")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CorrectionOfId");
+
+                    b.HasIndex("LineId", "IntervalStartUtc");
+
+                    b.HasIndex("ProductionDate", "LineId");
+
+                    b.HasIndex("Source", "SourceRef")
+                        .IsUnique()
+                        .HasFilter("\"SourceRef\" IS NOT NULL");
+
+                    b.HasIndex("OrderId", "Stage", "IntervalStartUtc");
+
+                    b.HasIndex("LineId", "OrderId", "Stage", "IntervalStartUtc", "IntervalEndUtc")
+                        .IsUnique()
+                        .HasDatabaseName("IX_output_events_live_interval")
+                        .HasFilter("NOT \"IsSuperseded\"");
+
+                    b.ToTable("production_output_events", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_output_downtime", "\"DowntimeMinutes\" IS NULL OR \"DowntimeMinutes\" >= 0");
+
+                            t.HasCheckConstraint("CK_output_interval", "\"IntervalEndUtc\" > \"IntervalStartUtc\"");
+
+                            t.HasCheckConstraint("CK_output_operators", "\"OperatorsPresent\" IS NULL OR \"OperatorsPresent\" BETWEEN 1 AND 500");
+
+                            t.HasCheckConstraint("CK_output_quantities", "\"Quantity\" >= 0 AND \"ReworkQuantity\" >= 0 AND \"RejectQuantity\" >= 0");
+
+                            t.HasCheckConstraint("CK_output_superseded", "\"IsSuperseded\" = (\"SupersededById\" IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.ProductionPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ActivatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("ActivatedByEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ActivationApprovalId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("ClosedReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("CreatedByEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("LineId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int>("Operators")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("OvertimeMinutesPerDay")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PlannedQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("integer");
+
+                    b.PrimitiveCollection<List<string>>("ShiftCodes")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("SubmittedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("SubmittedByEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("SubmittedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("TargetEfficiencyPct")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Reference")
+                        .IsUnique();
+
+                    b.HasIndex("OrderId", "Status");
+
+                    b.HasIndex("LineId", "Status", "StartDate", "EndDate");
+
+                    b.ToTable("production_plans", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_production_plans_dates", "\"EndDate\" >= \"StartDate\"");
+
+                            t.HasCheckConstraint("CK_production_plans_efficiency", "\"TargetEfficiencyPct\" > 0 AND \"TargetEfficiencyPct\" <= 150");
+
+                            t.HasCheckConstraint("CK_production_plans_operators", "\"Operators\" BETWEEN 1 AND 500");
+
+                            t.HasCheckConstraint("CK_production_plans_overtime", "\"OvertimeMinutesPerDay\" BETWEEN 0 AND 480");
+
+                            t.HasCheckConstraint("CK_production_plans_quantity", "\"PlannedQuantity\" > 0");
+
+                            t.HasCheckConstraint("CK_production_plans_shifts", "cardinality(\"ShiftCodes\") > 0");
+                        });
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.ProductionPlanChange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ApprovalId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<long>("BaseVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("DecidedByEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PreviousValues")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("ProposedValues")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("RequestedByEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("RequestedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlanId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_production_plan_changes_one_pending")
+                        .HasFilter("\"Status\" = 'Pending'");
+
+                    b.HasIndex("PlanId", "RequestedAt");
+
+                    b.ToTable("production_plan_changes", (string)null);
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.ProductionShift", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<int>("BreakMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<TimeOnly?>("BreakStartLocal")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<TimeOnly>("EndLocal")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<TimeOnly>("StartLocal")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<int>("Weekdays")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Code");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("production_shifts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_production_shifts_break", "\"BreakMinutes\" >= 0 AND \"BreakMinutes\" <= 240");
+
+                            t.HasCheckConstraint("CK_production_shifts_code", "\"Code\" ~ '^[a-z0-9][a-z0-9_-]{0,15}$'");
+
+                            t.HasCheckConstraint("CK_production_shifts_times", "\"StartLocal\" <> \"EndLocal\"");
+
+                            t.HasCheckConstraint("CK_production_shifts_weekdays", "\"Weekdays\" BETWEEN 1 AND 127");
+                        });
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.ProductionStyle", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<double?>("ApprovedSmv")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("ProductType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("production_styles", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_production_styles_smv", "\"ApprovedSmv\" IS NULL OR (\"ApprovedSmv\" > 0 AND \"ApprovedSmv\" <= 600)");
+                        });
                 });
 
             modelBuilder.Entity("FactoryBrain.Domain.Entities.QcDefect", b =>
@@ -1127,6 +1901,47 @@ namespace FactoryBrain.Infrastructure.Migrations
                     b.ToTable("sensor_readings", (string)null);
                 });
 
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.StyleOperation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("MachineType")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.PrimitiveCollection<int[]>("Predecessors")
+                        .IsRequired()
+                        .HasColumnType("integer[]");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<double>("Smv")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid>("StyleId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StyleId", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("production_style_operations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_style_operations_sequence", "\"Sequence\" BETWEEN 1 AND 9999");
+
+                            t.HasCheckConstraint("CK_style_operations_smv", "\"Smv\" > 0 AND \"Smv\" <= 120");
+                        });
+                });
+
             modelBuilder.Entity("FactoryBrain.Domain.Entities.SupplierRecord", b =>
                 {
                     b.Property<string>("Id")
@@ -1350,11 +2165,119 @@ namespace FactoryBrain.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.LineBalanceProposal", b =>
+                {
+                    b.HasOne("FactoryBrain.Domain.Entities.ProductionLine", null)
+                        .WithMany()
+                        .HasForeignKey("LineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FactoryBrain.Domain.Entities.ProductionStyle", null)
+                        .WithMany()
+                        .HasForeignKey("StyleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.LineLayout", b =>
+                {
+                    b.HasOne("FactoryBrain.Domain.Entities.ProductionLine", null)
+                        .WithMany()
+                        .HasForeignKey("LineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FactoryBrain.Domain.Entities.ProductionStyle", null)
+                        .WithMany()
+                        .HasForeignKey("StyleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.LineLayoutStation", b =>
+                {
+                    b.HasOne("FactoryBrain.Domain.Entities.LineLayout", null)
+                        .WithMany("Stations")
+                        .HasForeignKey("LayoutId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.OperationObservation", b =>
+                {
+                    b.HasOne("FactoryBrain.Domain.Entities.ProductionLine", null)
+                        .WithMany()
+                        .HasForeignKey("LineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FactoryBrain.Domain.Entities.StyleOperation", null)
+                        .WithMany()
+                        .HasForeignKey("OperationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FactoryBrain.Domain.Entities.ProductionStyle", null)
+                        .WithMany()
+                        .HasForeignKey("StyleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("FactoryBrain.Domain.Entities.PasswordResetToken", b =>
                 {
                     b.HasOne("FactoryBrain.Domain.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.ProductionOrder", b =>
+                {
+                    b.HasOne("FactoryBrain.Domain.Entities.ProductionStyle", null)
+                        .WithMany()
+                        .HasForeignKey("StyleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.ProductionOutputEvent", b =>
+                {
+                    b.HasOne("FactoryBrain.Domain.Entities.ProductionLine", null)
+                        .WithMany()
+                        .HasForeignKey("LineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FactoryBrain.Domain.Entities.ProductionOrder", null)
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.ProductionPlan", b =>
+                {
+                    b.HasOne("FactoryBrain.Domain.Entities.ProductionLine", null)
+                        .WithMany()
+                        .HasForeignKey("LineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FactoryBrain.Domain.Entities.ProductionOrder", null)
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.ProductionPlanChange", b =>
+                {
+                    b.HasOne("FactoryBrain.Domain.Entities.ProductionPlan", null)
+                        .WithMany()
+                        .HasForeignKey("PlanId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -1416,9 +2339,28 @@ namespace FactoryBrain.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.StyleOperation", b =>
+                {
+                    b.HasOne("FactoryBrain.Domain.Entities.ProductionStyle", null)
+                        .WithMany("Operations")
+                        .HasForeignKey("StyleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.LineLayout", b =>
+                {
+                    b.Navigation("Stations");
+                });
+
             modelBuilder.Entity("FactoryBrain.Domain.Entities.ManualDocument", b =>
                 {
                     b.Navigation("Chunks");
+                });
+
+            modelBuilder.Entity("FactoryBrain.Domain.Entities.ProductionStyle", b =>
+                {
+                    b.Navigation("Operations");
                 });
 
             modelBuilder.Entity("FactoryBrain.Domain.Entities.QcInspection", b =>

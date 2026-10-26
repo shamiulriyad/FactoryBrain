@@ -69,12 +69,18 @@ public sealed class PostgresStack : IAsyncLifetime
     public const string QcDatabase = "factorybrain_test_qc";
     /// <summary>Used only by the production-planning tests (plant time zone Asia/Dhaka).</summary>
     public const string ProductionDatabase = "factorybrain_test_production";
+    /// <summary>Used only by the merchandising tests whose extractor is the scripted TEST model.</summary>
+    public const string MerchDatabase = "factorybrain_test_merch";
+    /// <summary>Used only by the merchandising tests with automatic extraction turned off.</summary>
+    public const string MerchManualDatabase = "factorybrain_test_merch_manual";
 
     private PostgreSqlContainer? _container;
     private readonly Lazy<DbApiFactory> _local;
     private readonly Lazy<DbApiFactory> _mocked;
     private readonly Lazy<DbApiFactory> _qc;
     private readonly Lazy<DbApiFactory> _production;
+    private readonly Lazy<DbApiFactory> _merch;
+    private readonly Lazy<DbApiFactory> _merchManual;
 
     public PostgresStack()
     {
@@ -83,6 +89,9 @@ public sealed class PostgresStack : IAsyncLifetime
         _qc     = new(() => Build(DbApiFactory.QcDetector(ConnectionStringFor(QcDatabase))));
         _production = new(() => Build(DbApiFactory.Custom(ConnectionStringFor(ProductionDatabase),
             new() { ["RAG_EMBEDDING_PROVIDER"] = "local", ["PRODUCTION_TIME_ZONE"] = "Asia/Dhaka" })));
+        _merch = new(() => Build(DbApiFactory.MerchExtractor(ConnectionStringFor(MerchDatabase))));
+        _merchManual = new(() => Build(DbApiFactory.Custom(ConnectionStringFor(MerchManualDatabase),
+            new() { ["RAG_EMBEDDING_PROVIDER"] = "local", ["MERCH_EXTRACTION_PROVIDER"] = "none" })));
     }
 
     /// <summary>API host whose vision provider is the deterministic TEST detector (an http provider answered by the guard).</summary>
@@ -90,6 +99,12 @@ public sealed class PostgresStack : IAsyncLifetime
 
     /// <summary>API host for the production-planning tests: its own database, plant time zone Asia/Dhaka (UTC+6).</summary>
     public DbApiFactory Production => _production.Value.Activate();
+
+    /// <summary>API host whose document extractor is the scripted TEST model (an OpenAI-compatible endpoint answered by the guard).</summary>
+    public DbApiFactory Merch => _merch.Value.Activate();
+
+    /// <summary>API host with automatic document extraction turned off (MERCH_EXTRACTION_PROVIDER=none).</summary>
+    public DbApiFactory MerchManual => _merchManual.Value.Activate();
 
     /// <summary>API host on its own database, local hash embeddings, no outbound HTTP at all.</summary>
     public DbApiFactory Local => _local.Value.Activate();
@@ -120,7 +135,7 @@ public sealed class PostgresStack : IAsyncLifetime
         };
         await using var admin = new NpgsqlConnection(adminCs.ConnectionString);
         await admin.OpenAsync();
-        foreach (var name in new[] { MockedDatabase, SettingsDatabase, EmbeddingDatabase, QcDatabase, ProductionDatabase })
+        foreach (var name in new[] { MockedDatabase, SettingsDatabase, EmbeddingDatabase, QcDatabase, ProductionDatabase, MerchDatabase, MerchManualDatabase })
         {
             await using var create = new NpgsqlCommand($"CREATE DATABASE \"{name}\"", admin);
             await create.ExecuteNonQueryAsync();
@@ -148,6 +163,8 @@ public sealed class PostgresStack : IAsyncLifetime
         if (_mocked.IsValueCreated) await _mocked.Value.DisposeAsync();
         if (_qc.IsValueCreated)     await _qc.Value.DisposeAsync();
         if (_production.IsValueCreated) await _production.Value.DisposeAsync();
+        if (_merch.IsValueCreated) await _merch.Value.DisposeAsync();
+        if (_merchManual.IsValueCreated) await _merchManual.Value.DisposeAsync();
         if (_container is not null) await _container.DisposeAsync();
     }
 }
@@ -305,12 +322,116 @@ public sealed class DbApiFactory : WebApplicationFactory<Program>
         }));
     });
 
+    // ── Scripted TEST extraction model for the merchandising workflow ───────
+    // MERCH_EXTRACTION_PROVIDER=llm with an OpenAI-compatible LLM_BASE_URL the
+    // outbound guard answers: the real LlmDocumentExtractionProvider path
+    // (request, envelope, JSON contract, evidence checks) against a scripted
+    // model. It reports "Label: value" lines it finds in the prompt, with the
+    // line as its quote. It is not a real model and its name says so.
+
+    public const string FakeExtractorHost = "merch-llm.fake-openai.invalid";
+    public const string FakeExtractorModel = "TEST-scripted-extractor";
+    public const string ForceExtractorFailure = "FORCE-MERCH-500";
+    public const string ForceExtractorRateLimit = "FORCE-MERCH-429";
+    public const string ForceExtractorInvalid = "FORCE-MERCH-INVALID";
+    /// <summary>The model also "reports" a value whose quote is not in the document.</summary>
+    public const string ForceExtractorFabricated = "FORCE-MERCH-FABRICATED";
+
+    /// <summary>Prompts the TEST extractor received.</summary>
+    public ConcurrentQueue<string> ExtractorPrompts { get; } = new();
+
+    /// <summary>When true the extractor answers HTTP 503 (to test retry), until set back.</summary>
+    public bool ExtractorDown { get; set; }
+
+    public static DbApiFactory MerchExtractor(string connectionString) =>
+        new(connectionString, new()
+        {
+            ["RAG_EMBEDDING_PROVIDER"]    = "local",
+            ["MERCH_EXTRACTION_PROVIDER"] = "llm",
+            ["LLM_PROVIDER"]              = "openai",
+            ["LLM_MODEL"]                 = FakeExtractorModel,
+            ["LLM_BASE_URL"]              = "https://" + FakeExtractorHost,
+            ["PRODUCTION_TIME_ZONE"]      = "Asia/Dhaka",
+        }, f =>
+        {
+            f._overrides["LLM_API_KEY"] = f.ProviderKey;
+            f.InstallExtractorFake();
+        });
+
+    private static readonly (string Label, string Key, double Confidence)[] ExtractorLabels =
+    {
+        ("PO Number", "order_number", 0.97), ("Buyer", "buyer", 0.95), ("Style", "style", 0.93), ("Product", "product", 0.9),
+        ("Quantity", "quantity", 0.92), ("Delivery Date", "delivery_date", 0.88), ("Currency", "currency", 0.9),
+        ("Unit Price", "unit_price", 0.86), ("Destination", "destination", 0.4),
+    };
+
+    private void InstallExtractorFake() => Http.Fake(FakeExtractorHost, "/v1/chat/completions", (req, body) =>
+    {
+        using var doc = JsonDocument.Parse(body);
+        var prompt = doc.RootElement.GetProperty("messages")[1].GetProperty("content").GetString() ?? "";
+        ExtractorPrompts.Enqueue(prompt);
+        if (ExtractorDown || prompt.Contains(ForceExtractorFailure))
+            return OutboundHttpGuard.Json("""{"error":{"type":"server_error"}}""", HttpStatusCode.ServiceUnavailable);
+        if (prompt.Contains(ForceExtractorRateLimit))
+        {
+            var limited = OutboundHttpGuard.Json("""{"error":{"type":"rate_limit"}}""", HttpStatusCode.TooManyRequests);
+            limited.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(20));
+            return limited;
+        }
+        string content;
+        if (prompt.Contains(ForceExtractorInvalid)) content = "Sure! Here are the fields: quantity is about 12000.";
+        else
+        {
+            var fields = new List<object>();
+            var rows = new List<object>();
+            string? breakdownQuote = null;
+            int page = 1, breakdownPage = 1;
+            foreach (var raw in prompt.Split('\n'))
+            {
+                var line = raw.TrimEnd('\r');
+                var pm = System.Text.RegularExpressions.Regex.Match(line, @"^=== Page (\d+) ===$");
+                if (pm.Success) { page = int.Parse(pm.Groups[1].Value); continue; }
+                var bm = System.Text.RegularExpressions.Regex.Match(line, @"^BD:\s*(.+?)/(.+?)/(\d+)$");
+                if (bm.Success)
+                {
+                    rows.Add(new { color = bm.Groups[1].Value, size = bm.Groups[2].Value, quantity = int.Parse(bm.Groups[3].Value) });
+                    breakdownQuote ??= line;
+                    breakdownPage = page;
+                    continue;
+                }
+                foreach (var (label, key, confidence) in ExtractorLabels)
+                {
+                    if (!line.StartsWith(label + ":", StringComparison.Ordinal)) continue;
+                    fields.Add(new { key, value = line[(label.Length + 1)..].Trim(), confidence, page, evidence = line });
+                    break;
+                }
+            }
+            if (prompt.Contains(ForceExtractorFabricated))
+                fields.Add(new { key = "unit_price", value = "9.99", confidence = 0.99, page = 1, evidence = "Unit Price: 9.99 per piece (FOB Chittagong)" });
+            // Unknown keys and out-of-range confidences must be dropped by the API.
+            fields.Add(new { key = "payment_terms", value = "LC 90 days", confidence = 0.9, page = 1, evidence = "n/a" });
+            content = JsonSerializer.Serialize(rows.Count == 0
+                ? new { fields, breakdown = (object?)null }
+                : new { fields, breakdown = (object?)new { rows, confidence = 1.7, page = breakdownPage, evidence = breakdownQuote } });
+        }
+        return OutboundHttpGuard.Json(JsonSerializer.Serialize(new
+        {
+            model = FakeExtractorModel + "-2026-10",
+            choices = new[] { new { message = new { role = "assistant", content } } },
+        }));
+    });
+
+    /// <summary>Per-host merchandising document store under the temp folder, removed with the host.</summary>
+    public string MerchStoragePath { get; } = Path.Combine(Path.GetTempPath(), "factorybrain-merch-tests", Guid.NewGuid().ToString("N"));
+
     /// <summary>Per-host image store under the temp folder, removed with the host.</summary>
     public string QcStoragePath { get; } = Path.Combine(Path.GetTempPath(), "factorybrain-qc-tests", Guid.NewGuid().ToString("N"));
 
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
+        try { if (Directory.Exists(MerchStoragePath)) Directory.Delete(MerchStoragePath, recursive: true); }
+        catch (IOException) { /* best effort: temp folder */ }
         try { if (Directory.Exists(QcStoragePath)) Directory.Delete(QcStoragePath, recursive: true); }
         catch (IOException) { /* best effort: temp folder */ }
     }
@@ -424,6 +545,7 @@ public sealed class DbApiFactory : WebApplicationFactory<Program>
             ["PYRAG_API_KEY"]               = FakeRagKey,
             ["PYRAG_COLLECTION_NAME"]       = FakeRagCollection,
             ["QC_IMAGE_STORAGE_PATH"]       = QcStoragePath,
+            ["MERCH_DOCUMENT_STORAGE_PATH"] = MerchStoragePath,
         };
         foreach (var (k, v) in _overrides) env[k] = v;
         _environment = env;

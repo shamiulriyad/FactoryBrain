@@ -42,6 +42,9 @@ public static class TestEnvironment
         "PRODUCTION_TIME_ZONE", "PRODUCTION_REQUIRE_SEPARATE_APPROVER", "PRODUCTION_MAX_BACKFILL_DAYS",
         "PRODUCTION_MAX_INTERVAL_HOURS", "PRODUCTION_RATE_LOOKBACK_DAYS", "PRODUCTION_RISK_SLACK_PCT",
         "PRODUCTION_OBSERVATION_MAX_AGE_DAYS",
+        "MERCH_EXTRACTION_PROVIDER", "MERCH_EXTRACTION_MODEL", "MERCH_EXTRACTION_TIMEOUT_SECONDS", "MERCH_EXTRACTION_MAX_CHARS",
+        "MERCH_REVIEW_CONFIDENCE", "MERCH_MAX_ATTEMPTS", "MERCH_DOCUMENT_STORAGE_PATH", "MERCH_DOCUMENT_MAX_MB", "MERCH_MAX_PAGES",
+        "MERCH_WORKER_ENABLED",
     };
 
     private static readonly object Gate = new();
@@ -84,6 +87,11 @@ public static class TestEnvironment
         // tests call IQcInspectionProcessor themselves so processing is deterministic.
         foreach (var d in services.Where(d => d.ServiceType == typeof(IHostedService)
                                               && d.ImplementationType == typeof(FactoryBrain.Infrastructure.Qc.QcInspectionWorker)).ToList())
+            services.Remove(d);
+
+        // Likewise the merchandising document worker: tests call IMerchDocumentProcessor.
+        foreach (var d in services.Where(d => d.ServiceType == typeof(IHostedService)
+                                              && d.ImplementationType == typeof(FactoryBrain.Infrastructure.Merchandising.MerchDocumentWorker)).ToList())
             services.Remove(d);
     }
 

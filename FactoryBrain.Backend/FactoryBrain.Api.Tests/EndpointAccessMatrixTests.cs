@@ -54,6 +54,31 @@ public static class EndpointMatrix
         ("GET",   "/api/settings/llm",          Access.Authenticated),
         ("GET",   "/api/settings/embedding",    Access.Authenticated),
         ("GET",   "/api/vision/analyze",        Access.Authenticated),
+        ("GET",   "/api/production/config",     Access.Authenticated),
+        ("GET",   "/api/production/lines",      Access.Authenticated),
+        ("GET",   "/api/production/lines/{id}/detail", Access.Authenticated),
+        ("GET",   "/api/production/shifts",     Access.Authenticated),
+        ("GET",   "/api/production/styles",     Access.Authenticated),
+        ("GET",   "/api/production/styles/{id}", Access.Authenticated),
+        ("GET",   "/api/production/orders",     Access.Authenticated),
+        ("GET",   "/api/production/orders/{id}", Access.Authenticated),
+        ("GET",   "/api/production/orders/{id}/risk", Access.Authenticated),
+        ("GET",   "/api/production/plans",      Access.Authenticated),
+        ("GET",   "/api/production/plans/{id}", Access.Authenticated),
+        ("GET",   "/api/production/output",     Access.Authenticated),
+        ("GET",   "/api/production/summary",    Access.Authenticated),
+        ("GET",   "/api/production/observations", Access.Authenticated),
+        ("GET",   "/api/production/layouts/current", Access.Authenticated),
+        ("GET",   "/api/production/balance/proposals", Access.Authenticated),
+        ("GET",   "/api/production/balance/proposals/{id}", Access.Authenticated),
+        ("GET",   "/api/merchandising/config",  Access.Authenticated),
+        ("GET",   "/api/merchandising/overview", Access.Authenticated),
+        ("GET",   "/api/merchandising/orders",  Access.Authenticated),
+        ("GET",   "/api/merchandising/orders/{id}", Access.Authenticated),
+        ("GET",   "/api/merchandising/documents", Access.Authenticated),
+        ("GET",   "/api/merchandising/documents/{id}", Access.Authenticated),
+        ("GET",   "/api/merchandising/versions/{id}", Access.Authenticated),
+        ("GET",   "/api/merchandising/versions/{id}/file", Access.Authenticated),
         ("*",     "/hubs/factory/negotiate",    Access.Authenticated),
         ("*",     "/hubs/factory",              Access.Authenticated),
 
@@ -70,11 +95,45 @@ public static class EndpointMatrix
         ("POST",  "/api/sensors/ingest",        Access.Operator),
         ("POST",  "/api/sensors/live",          Access.Operator),
         ("POST",  "/api/vision/analyze",        Access.Operator),
+        ("POST",  "/api/production/orders",     Access.Operator),
+        ("PUT",   "/api/production/orders/{id}", Access.Operator),
+        ("POST",  "/api/production/plans",      Access.Operator),
+        ("PUT",   "/api/production/plans/{id}", Access.Operator),
+        ("POST",  "/api/production/plans/{id}/submit",   Access.Operator),
+        ("POST",  "/api/production/plans/{id}/activate", Access.Operator),
+        ("POST",  "/api/production/plans/{id}/changes/{changeId}/resolve", Access.Operator),
+        ("POST",  "/api/production/plans/{id}/withdraw", Access.Operator),
+        ("POST",  "/api/production/plans/{id}/changes/{changeId}/withdraw", Access.Operator),
+        ("POST",  "/api/production/plans/{id}/complete", Access.Operator),
+        ("POST",  "/api/production/plans/{id}/cancel",   Access.Operator),
+        ("POST",  "/api/production/output",     Access.Operator),
+        ("POST",  "/api/production/output/{id}/correct", Access.Operator),
+        ("POST",  "/api/production/output/import", Access.Operator),
+        ("POST",  "/api/production/observations", Access.Operator),
+        ("PUT",   "/api/production/layouts/current", Access.Operator),
+        ("POST",  "/api/production/balance/analyze", Access.Operator),
+        ("POST",  "/api/production/balance/proposals/{id}/submit", Access.Operator),
+        ("POST",  "/api/production/balance/proposals/{id}/apply",  Access.Operator),
+        ("POST",  "/api/merchandising/orders",  Access.Operator),
+        ("PUT",   "/api/merchandising/orders/{id}", Access.Operator),
+        ("POST",  "/api/merchandising/orders/{id}/milestones", Access.Operator),
+        ("PUT",   "/api/merchandising/milestones/{id}", Access.Operator),
+        ("POST",  "/api/merchandising/conflicts/{id}/resolve", Access.Operator),
+        ("POST",  "/api/merchandising/orders/{id}/documents", Access.Operator),
+        ("POST",  "/api/merchandising/documents/{id}/versions", Access.Operator),
+        ("POST",  "/api/merchandising/versions/{id}/retry", Access.Operator),
+        ("POST",  "/api/merchandising/versions/{id}/confirm", Access.Operator),
 
         // Configuration and index management: Admin only.
         ("GET",   "/api/audit",                 Access.Admin),
         ("POST",  "/api/qc/categories",         Access.Admin),
         ("PUT",   "/api/qc/categories/{code}",  Access.Admin),
+        ("POST",  "/api/production/lines",      Access.Admin),
+        ("PUT",   "/api/production/lines/{id}", Access.Admin),
+        ("POST",  "/api/production/shifts",     Access.Admin),
+        ("PUT",   "/api/production/shifts/{code}", Access.Admin),
+        ("POST",  "/api/production/styles",     Access.Admin),
+        ("PUT",   "/api/production/styles/{id}", Access.Admin),
         ("POST",  "/api/rag/ingest",            Access.Admin),
         ("POST",  "/api/rag/reindex",           Access.Admin),
         ("GET",   "/api/rag/reindex/plan",      Access.Admin),
@@ -91,6 +150,7 @@ public static class EndpointMatrix
     /// <summary>Concrete request target for a route template.</summary>
     public static string Url(string route) => route
         .Replace("{agentId}", "line-throughput-agent")
+        .Replace("{changeId}", "change-1")
         .Replace("{id}", "alert-1")
         .Replace("{code}", "stain");
 
@@ -182,7 +242,7 @@ public sealed class EndpointAccessMatrixTests
         // completes against the in-process host. (The settings reads now
         // come from the database; DbAiSettingsTests covers them per role.)
         using var client = _factory.ClientAs(role);
-        foreach (var path in new[] { "/api/qc/vision/status", "/api/sensors/snapshot", "/api/sensors/ingest" })
+        foreach (var path in new[] { "/api/qc/vision/status", "/api/sensors/snapshot", "/api/sensors/ingest", "/api/merchandising/config" })
         {
             using var response = await client.GetAsync(path);
             Assert.True(response.StatusCode == HttpStatusCode.OK, $"{role} GET {path} → {(int)response.StatusCode}");

@@ -44,6 +44,25 @@ public class FactoryBrainDbContext : DbContext
     public DbSet<QcInspection>        QcInspections        => Set<QcInspection>();
     public DbSet<QcInspectionFinding> QcInspectionFindings => Set<QcInspectionFinding>();
     public DbSet<QcDefectCategory>    QcDefectCategories   => Set<QcDefectCategory>();
+    public DbSet<ProductionLine>         ProductionLines         => Set<ProductionLine>();
+    public DbSet<ProductionShift>        ProductionShifts        => Set<ProductionShift>();
+    public DbSet<ProductionStyle>        ProductionStyles        => Set<ProductionStyle>();
+    public DbSet<StyleOperation>         StyleOperations         => Set<StyleOperation>();
+    public DbSet<ProductionOrder>        ProductionOrders        => Set<ProductionOrder>();
+    public DbSet<ProductionPlan>         ProductionPlans         => Set<ProductionPlan>();
+    public DbSet<ProductionPlanChange>   ProductionPlanChanges   => Set<ProductionPlanChange>();
+    public DbSet<ProductionOutputEvent>  ProductionOutputEvents  => Set<ProductionOutputEvent>();
+    public DbSet<OperationObservation>   OperationObservations   => Set<OperationObservation>();
+    public DbSet<LineLayout>             LineLayouts             => Set<LineLayout>();
+    public DbSet<LineLayoutStation>      LineLayoutStations      => Set<LineLayoutStation>();
+    public DbSet<LineBalanceProposal>    BalanceProposals        => Set<LineBalanceProposal>();
+    public DbSet<MerchOrder>             MerchOrders             => Set<MerchOrder>();
+    public DbSet<MerchMilestone>         MerchMilestones         => Set<MerchMilestone>();
+    public DbSet<MerchDocument>          MerchDocuments          => Set<MerchDocument>();
+    public DbSet<MerchDocumentVersion>   MerchDocumentVersions   => Set<MerchDocumentVersion>();
+    public DbSet<MerchDocumentPage>      MerchDocumentPages      => Set<MerchDocumentPage>();
+    public DbSet<MerchExtractedField>    MerchExtractedFields    => Set<MerchExtractedField>();
+    public DbSet<MerchConflict>          MerchConflicts          => Set<MerchConflict>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {

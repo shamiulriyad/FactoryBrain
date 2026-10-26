@@ -13,6 +13,8 @@ and render on GitHub and in the VS Code Markdown preview.
 - [7. Security boundaries](#7-security-boundaries)
 - [8. Frontend pages and the API](#8-frontend-pages-and-the-api)
 - [9. Quality inspection (QC & defect detection)](#9-quality-inspection-qc--defect-detection)
+- [10. Production planning & line efficiency](#10-production-planning--line-efficiency)
+- [11. Merchandising & document automation](#11-merchandising--document-automation)
 
 ---
 
@@ -271,7 +273,7 @@ flowchart LR
 |---|---|
 | Login, refresh, logout, current user | `/api/auth/*`. 15-minute access token in the response body (kept in memory by the frontend), 7-day rotating refresh token in an HttpOnly cookie scoped to `/api/auth`. `JWT_SIGNING_KEY` (32+ bytes) is required outside Development |
 | Default access | Fallback authorization policy: every endpoint needs a valid JWT unless it is `[AllowAnonymous]` (`/health`, login, refresh, logout) |
-| Roles | `Operator` policy (Admin or Operator) on operational writes; `Admin` policy on `POST /api/settings/llm`, `/api/rag/ingest`, `/api/rag/reindex`, the QC defect taxonomy (`POST/PUT /api/qc/categories`). The full matrix is asserted by `FactoryBrain.Api.Tests/EndpointAccessMatrixTests.cs` |
+| Roles | `Operator` policy (Admin or Operator) on operational writes; `Admin` policy on `POST /api/settings/llm`, `/api/rag/ingest`, `/api/rag/reindex`, the QC defect taxonomy (`POST/PUT /api/qc/categories`), production lines, shifts and styles (`POST/PUT /api/production/{lines,shifts,styles}`). The full matrix is asserted by `FactoryBrain.Api.Tests/EndpointAccessMatrixTests.cs` |
 | Login brute force | Per-IP fixed-window rate limiter (`login` policy) |
 | Simulation abuse | `tick` bounded (validator + at most 60 ticks per request); per-user rate limits on `POST /api/sensors/ingest`, `/api/line-board/refresh` (20/min) and `/api/sensors/live` (120/min) |
 | Input validation | FluentValidation filter on every controller |
@@ -294,6 +296,8 @@ the API's policies are the actual control.
 | Overview `/app` | `GET /api/sensors/snapshot` (polled), `/api/line-board`, `/api/brief/morning`, `/api/approvals`, `/api/floor-alerts`, `/api/qc/summary?days=7`; `POST /api/sensors/ingest`, `/api/line-board/refresh` | Operator |
 | Approvals | `GET /api/approvals`, `POST /api/approvals/{id}/approve\|reject`, `GET /api/audit?entityType=approval` (detail drawer) | Operator; High risk: Admin |
 | Floor alerts `/app/activity` | `GET /api/floor-alerts`, `PATCH /api/floor-alerts/{id}` | Operator |
+| Merchandising `/app/merchandising` (+ `/orders/{id}`, `/versions/{id}`) | `GET /api/merchandising/{config,overview,orders,documents}`, `/orders/{id}`, `/documents/{id}`, `/versions/{id}`, `/versions/{id}/file`; `POST /api/merchandising/orders`, `/orders/{id}/milestones`, `/orders/{id}/documents` and `/documents/{id}/versions` (multipart, `Idempotency-Key`), `/versions/{id}/retry`, `/versions/{id}/confirm`, `/conflicts/{id}/resolve`; `PUT` orders, milestones | Operator |
+| Production `/app/production` (+ `/lines/{id}`, `/orders/{id}`, `/plans/{id}`, `/balancing/{id}`) | `GET /api/production/{config,lines,shifts,styles,orders,plans,output,summary,observations,layouts/current,balance/proposals}`, `/lines/{id}/detail`, `/orders/{id}/risk`; `POST /api/production/{orders,plans,output,output/import,observations,balance/analyze}`, plan `submit · withdraw · activate · complete · cancel`, `changes/{id}/resolve · withdraw`, proposal `submit · apply`; `PUT` orders, plans, `layouts/current` | Operator; lines, shifts, styles: Admin |
 | Quality inspections `/app/qc`, `/app/qc/{id}` | `GET /api/qc/inspections` (search, filters, pages), `/api/qc/inspections/{id}`, `/{id}/image`, `/api/qc/summary`, `/api/qc/categories`; `POST /api/qc/inspections/{id}/review`, `/{id}/retry`; `POST/PUT /api/qc/categories` | Operator; taxonomy: Admin |
 | Sensors | `GET /api/sensors/ingest`, `/latest`, `/snapshot`; `POST /api/sensors/ingest` | Operator |
 | Ask | `POST /api/ask` (optional department/category filter), `GET /api/settings/llm` | any role |
@@ -417,3 +421,222 @@ and confidences that also queued approvals and floor alerts) now answers
 `410 Gone`. Existing `vision_results` rows are kept. `GET /api/qc/defects` and
 `POST /api/qc/flag` (the seeded weekly operation × line grid) are still served
 for API clients but no longer shown in the UI.
+
+---
+
+## 10. Production planning & line efficiency
+
+Orders, plans, output and line analysis for sewing lines. The plant enters
+its own lines, shift calendar and styles (with the factory-approved SMV and
+operation bulletin); nothing is seeded, and every figure is calculated by the
+API from those persisted rows at read time. The pure rules live in
+`FactoryBrain.Application/Production/` (unit-tested); persistence and workflow
+in `FactoryBrain.Infrastructure/Production/`; HTTP in `ProductionController`.
+
+```mermaid
+flowchart LR
+    setup["Setup (Admin)<br/>lines · shifts · styles + SMV bulletin"]
+    order["Order (Operator)"]
+    draft["Plan: draft<br/>edited freely, audited"]
+    queue["Approval queue<br/>/api/approvals (medium risk)"]
+    live["Plan: active"]
+    out["Output records<br/>manual · CSV import · integration"]
+    read["Summary · line detail · order risk<br/>computed at read time"]
+    setup --> order --> draft -->|"submit"| queue
+    queue -->|"approved, then activate<br/>(another person)"| live
+    queue -->|"rejected → back to draft"| draft
+    live -->|"change request"| queue
+    out --> read
+    live --> read
+```
+
+**Plan lifecycle.** `draft → pending_approval → active → completed`;
+`cancelled` from any non-final state; a pending plan can be withdrawn to
+draft. Submitting queues an approval through the existing queue (an Insight
+plus an `ApprovalRequest`); nothing in this module decides it. Activation
+checks the decision, the separation of duties (`PRODUCTION_REQUIRE_SEPARATE_APPROVER`,
+default on: the approver may not be the submitter) and that no other active
+plan overlaps the line's dates, all under a per-line advisory lock. Changing a
+live plan's inputs records a pending change with its own approval; the live
+values change only when the approved change is applied (a change requested
+against an older version is closed as superseded; a pending change can be
+withdrawn). Notes-only edits apply directly. Every step writes
+`production_plan_changes` (before / after JSON) and an audit row.
+
+**Output.** One record = good / rework / reject pieces at one stage
+(`cutting`, `sewing_input`, `sewing_output`, `finishing`, `packing`) for one
+order on one line over one interval. Validation: end after start, at most
+`PRODUCTION_MAX_INTERVAL_HOURS`, not in the future (5 min tolerance), not
+older than `PRODUCTION_MAX_BACKFILL_DAYS`, not spanning two shifts, downtime ≤
+interval. Production date and shift come from the interval start (an
+overnight shift belongs to the date it started). Deduplication: `(source,
+sourceRef)` is unique (a repeat with the same values returns the stored
+record with `Idempotent-Replayed: true`); live records of one line, order and
+stage may not overlap (checked under the line lock, backed by a partial
+unique index). Corrections insert a replacement and mark the original
+superseded, so late and corrected records change every summary that covers
+them. CSV import is all-or-nothing; rows without a `source_ref` are keyed by
+their natural key so a re-import is recognised. There is no ERP/MES
+connector: a future one posts to `POST /api/production/output` with
+`source=integration` and its own `sourceRef`; `GET /api/production/config`
+reports it as not connected until such records arrive.
+
+**Formulas** (units: pieces, minutes, pieces/hour; SMV minutes/piece;
+percentages rounded half away from zero to 1 decimal; a ratio with a
+non-positive denominator is not calculable and omitted, never 0):
+
+| Metric | Definition |
+|---|---|
+| Hourly target | operators × 60 × target efficiency ÷ SMV |
+| Planned output | target rate during the plan's scheduled minutes (shifts minus planned breaks, plus planned overtime), capped at the planned quantity; even spread when the style has no SMV |
+| Output variance | actual − planned good sewing output, same line, order and window |
+| Achievement % | actual ÷ planned × 100 (only when planned > 0); not efficiency |
+| Line efficiency % | Σ good × SMV ÷ Σ operators present × (interval − planned break) × 100; downtime stays in the denominator (a second figure removes it); records without operators or SMV are excluded and counted |
+| Comparison window | planned output runs to the line's last recorded interval (or now), so an hour not yet reported isn't counted as a shortfall; the response says how far it runs |
+| WIP | good out of one stage − (good + reject) out of the next, per order, as of now; buffers are never summed; negative balances are reported as inconsistent |
+| Line loading % | scheduled plan line-minutes ÷ calendar shift line-minutes of the active lines |
+| Required rate | remaining quantity ÷ remaining scheduled line-hours before the end of the due date |
+| Observed rate | good output ÷ scheduled line-hours over the last `PRODUCTION_RATE_LOOKBACK_DAYS` production days; the projection range uses the lowest / highest daily rate |
+| Delay risk | high if the projection misses the due time, medium if the required rate is within `PRODUCTION_RISK_SLACK_PCT` of the observed rate, else low; `insufficient_data` without an active plan or recorded output. A rule-based level, not a probability |
+| Bottleneck | the time-studied operation with the lowest capacity (3600 × operators ÷ mean cycle seconds), with queue counts and line output as supporting or contradicting evidence; without time studies, the busiest station of the recorded layout at standard minutes, labelled as such; otherwise none |
+| Line balance | station load = Σ SMV ÷ stations sharing the operation; cycle time = largest load; balance efficiency = Σ SMV ÷ (stations × cycle) × 100; smoothness = √Σ(cycle − load)² |
+
+**Line balancing.** Ranked Positional Weight (operation SMV + all
+successors' SMV) with precedence, one machine type per workstation, parallel
+stations for operations longer than the cycle time, and the line's declared
+workstations as the limit. The smallest feasible cycle time is found by a
+bounded two-pass search from the lower bound Σ SMV ÷ workstations; the result
+is a heuristic and says so (the lower bound is reported). Missing or invalid
+bulletins, cycles and too few workstations for the machine types are
+explained and nothing is stored. A feasible result is stored as a proposal
+next to the current layout; it is submitted as a **high-risk** approval
+(Admins decide), and applying it records it as the line's current layout only
+if the bulletin and the layout it was compared with are unchanged. It never
+reassigns people, changes schedules or sends machine commands.
+
+**Data.** `production_lines`, `production_shifts`, `production_styles`,
+`production_style_operations`, `production_orders`, `production_plans`,
+`production_plan_changes`, `production_output_events`,
+`production_operation_observations`, `production_line_layouts` (+
+`_stations`), `production_balance_proposals` (migration
+`AddProductionPlanning`, additive only). Check constraints keep quantities,
+intervals, percentages and codes valid; `xmin` guards concurrent edits.
+
+---
+
+## 11. Merchandising & document automation
+
+Buyer orders, their milestones and their documents (purchase orders, tech
+packs, measurement / spec sheets, buyer instructions). Documents are read,
+values are extracted with their quoted source, and a merchandiser decides
+every value before it becomes order data. The pure rules (value
+normalisation, evidence checks, the extraction contract, the label parser,
+conflict rules, the attention list) live in `FactoryBrain.Application/Merchandising/`
+and are unit-tested; parsing, storage, the worker and the workflow in
+`FactoryBrain.Infrastructure/Merchandising/`; HTTP in `MerchandisingController`.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor M as Merchandiser
+    participant W as /app/merchandising
+    participant C as MerchandisingController
+    participant S as MerchDocumentService
+    participant F as Document store (files)
+    participant DB as PostgreSQL
+    participant K as MerchDocumentWorker
+    participant X as Extractor (rules / llm)
+
+    M->>W: file + type for an order
+    W->>C: POST /orders/{id}/documents (multipart, Idempotency-Key)
+    C->>S: content sniffed (PDF / DOCX / CSV / text / image), size, extension
+    S->>F: original saved under a generated key (never modified)
+    S->>DB: merch_document_versions (Pending, SHA-256) + audit
+    K->>DB: claim (FOR UPDATE SKIP LOCKED) → Processing
+    K->>F: read file → text per page (PdfPig, Open XML, CSV)
+    K->>X: pages + schema
+    X-->>K: values, quotes, confidence (llm only)
+    K->>DB: pages, fields (validated; quotes checked against the text) → NeedsReview, conflicts re-checked, audit
+    M->>C: POST /versions/{id}/confirm {expectedVersion, decisions, additions, applyToOrder}
+    C->>S: order lock + xmin → Confirmed, ticked values written to the order, audit
+```
+
+**Version lifecycle.** `Pending → Processing → NeedsReview | Failed`;
+`NeedsReview | Failed → Confirmed` (only the current version; a failed one
+can be completed by hand); `Failed → Pending` (retry, unless the file itself
+is the problem: damaged, encrypted, scanned, too many pages);
+`NeedsReview → Pending` (re-extract, only while nothing was extracted). A new
+upload to a document becomes the current version; earlier versions and their
+originals stay viewable and downloadable. Confirmed is final for a version.
+
+**Extractors** (`MERCH_EXTRACTION_PROVIDER`, read at startup):
+
+| Mode | What runs | Evidence | Confidence |
+|---|---|---|---|
+| `rules` (default) | Deterministic parser of labelled values (`PO No: …`, `Delivery Date  …`, CSV rows) and colour × size tables (long form or size matrix). Not AI: unlabelled prose is not understood | the exact line | none |
+| `llm` | The language model of the AI settings (OpenAI, Anthropic, Gemini), JSON contract below | the model's quote, kept only if it occurs in the page | the model's own estimate, not calibrated |
+| `none` | Nothing: text is parsed, versions wait in `NeedsReview` with `provider_not_configured`, reviewers enter the values | — | — |
+
+There is no OCR integration: a PDF without a text layer, or an image, is
+stored and marked `Failed / ocr_required`, and can still be reviewed by hand.
+There is no email integration either; nothing is read from or sent to buyers.
+
+**`llm` contract.** The prompt carries the document text with `=== Page n ===`
+markers (cut to `MERCH_EXTRACTION_MAX_CHARS`). The answer must be
+`{"fields":[{"key","value","confidence","page","evidence"}], "breakdown":{"rows":[{"color","size","quantity"}],"confidence","page","evidence"}}`.
+Unknown keys are dropped; a confidence outside 0–1 or a non-positive page is
+discarded (never repaired); anything else is `invalid_output`. HTTP 429 is
+`provider_rate_limited`, 401/403 `provider_unauthorized`, timeouts
+`provider_timeout`; all are retryable. Neither document text nor response
+bodies are logged.
+
+**Validation** (`MerchFields`): one row per field and version. Dates: ISO,
+named months, `dd.MM.yyyy`; `a/b/yyyy` only when one part is over 12;
+two-digit years and ambiguous dates are flagged, never guessed. Quantities are
+whole numbers 1–10,000,000 (`12.000` is ambiguous); units pcs / dozen / sets /
+packs / pairs; ISO 4217 currencies (`$` and `¥` are ambiguous); prices > 0
+with at most 4 decimals; breakdown rows need colour, size and a positive
+quantity, no duplicates. Blocking problems prevent accepting a value as read
+(correct it or mark it unresolved); warnings (past date, low confidence,
+quote not found, no quote) don't. Confirmation also requires the breakdown to
+add up to the quantity of the same document.
+
+**Conflicts** (`MerchConflictDetector`, explicit rules, no model): for each
+compared field (PO number, style, quantity, unit, delivery date, currency,
+price, breakdown) the values of every current `NeedsReview` / `Confirmed`
+version, plus the order's value when a person typed it, are compared by key:
+PO numbers and styles ignore case, spaces and punctuation; a breakdown
+compares as the set of rows. Two different keys open a conflict (one open per
+order and field). A resolution needs a value and a note; it sets the order's
+value and records the exact sources it covered (fingerprint), so the same
+evidence never reopens it, while new evidence does. Conflicts whose sources
+come to agree are cleared.
+
+**Order values and provenance.** Each order field records where its value
+came from: typed (manual), confirmed from document version *n*, or chosen
+when resolving a conflict. A value whose source version has been replaced is
+flagged for re-checking. The linked Sector 2 production order is re-read on
+every request and differences (quantity, due date, style) are reported.
+
+**Missing information and summary** (`MerchAttention`, fixed rules): high —
+overdue milestone, active order past delivery, open conflict on quantity /
+delivery / style / PO / breakdown, required document missing with delivery
+within 30 days, breakdown not adding up; medium — other conflicts, documents
+to review or failed, empty style / quantity / delivery date, unresolved
+values, production-order differences; low — milestones within 7 days,
+delivery within 14 days, replaced sources. The order summary is composed from
+the same records; no model writes it.
+
+**Data.** `merch_orders` (unique buyer + PO), `merch_milestones`,
+`merch_documents`, `merch_document_versions` (one current per document,
+per-user unique `Idempotency-Key`, SHA-256, `xmin`), `merch_document_pages`,
+`merch_extracted_fields` (extracted value and quote never modified; decision
+and correction in separate columns; a quote is stored only when verified),
+`merch_conflicts` (migration `AddMerchandising`, additive only). Every audit
+row is filed under `merch_order` / the order id.
+
+**Security.** Viewers read; Operators and Admins register orders, upload,
+review, confirm, resolve and manage milestones. Files are validated by
+content, stored under generated keys re-validated on every read, and served
+only to signed-in users with the validated type, `nosniff` and a sandbox CSP
+(PDFs and images inline, other formats as downloads).

@@ -565,6 +565,21 @@ builder.Services.AddScoped<IQcInspectionProcessor, FactoryBrain.Infrastructure.Q
 if (!builder.Environment.IsEnvironment("Testing"))
     builder.Services.AddHostedService<FactoryBrain.Infrastructure.Qc.QcInspectionWorker>();
 
+// ─── Production planning & line efficiency (PRODUCTION_* env vars, read once) ─
+// Lines, shifts, styles, orders, plans and output live in PostgreSQL; every
+// metric is computed from those rows at read time. Plans and line-balance
+// proposals go live only through the approval queue plus an explicit
+// activate / apply step. See ProductionOptions for the settings.
+var productionOptions = FactoryBrain.Application.Production.ProductionOptions.FromEnvironment(Environment.GetEnvironmentVariable);
+if (productionOptions.ConfigurationError is not null)
+    Console.WriteLine($"[startup] Production: {productionOptions.ConfigurationError}");
+builder.Services.AddSingleton(productionOptions);
+builder.Services.AddScoped<IProductionSetupService, FactoryBrain.Infrastructure.Production.ProductionSetupService>();
+builder.Services.AddScoped<IProductionOrderService, FactoryBrain.Infrastructure.Production.ProductionOrderService>();
+builder.Services.AddScoped<IProductionPlanService, FactoryBrain.Infrastructure.Production.ProductionPlanService>();
+builder.Services.AddScoped<IProductionOutputService, FactoryBrain.Infrastructure.Production.ProductionOutputService>();
+builder.Services.AddScoped<IProductionAnalysisService, FactoryBrain.Infrastructure.Production.ProductionAnalysisService>();
+
 // ─── Realtime (SignalR) ────────────────────────────────────────────────────
 // FactoryHub is server-to-client only — clients don't call hub methods.
 // IRealtimeNotifier is the Application-layer seam Infrastructure services

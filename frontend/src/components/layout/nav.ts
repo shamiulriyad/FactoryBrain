@@ -8,6 +8,7 @@ import {
   BookOpenText,
   Bot,
   Factory,
+  FileStack,
   ClipboardCheck,
   Gauge,
   LayoutDashboard,
@@ -46,6 +47,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/app/approvals", labelKey: "nav.approvals", icon: ShieldCheck, role: "Viewer", keywords: "approve reject decisions queue" },
       { href: "/app/activity", labelKey: "nav.floorAlerts", icon: Activity, role: "Viewer", keywords: "alerts whatsapp floor notifications" },
       { href: "/app/production", labelKey: "nav.production", icon: Factory, role: "Viewer", keywords: "production planning plan output efficiency wip bottleneck line balancing smv sam target delay order shift" },
+      { href: "/app/merchandising", labelKey: "nav.merchandising", icon: FileStack, role: "Viewer", keywords: "merchandising buyer order po purchase order tech pack documents extraction milestones deadlines conflicts" },
       { href: "/app/qc", labelKey: "nav.qc", icon: ClipboardCheck, role: "Viewer", keywords: "quality defects rework inspections history dhu taxonomy" },
       { href: "/app/sensors", labelKey: "nav.sensors", icon: Gauge, role: "Viewer", keywords: "telemetry energy rfid readings machines" }
     ]

@@ -125,6 +125,7 @@ export const bn: Dict = {
     settings: "সেটিংস",
     vision: "পোশাক পরিদর্শন",
     production: "উৎপাদন পরিকল্পনা",
+    merchandising: "মার্চেন্ডাইজিং",
     qc: "মান পরিদর্শন",
     floorAlerts: "ফ্লোর অ্যালার্ট",
     sensors: "সেন্সর",

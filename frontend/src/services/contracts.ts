@@ -1084,3 +1084,179 @@ export type BalanceProposal = {
 
 export type BalanceAnalysis = { result: BalanceResult; proposal?: BalanceProposal | null; current?: LineLayout | null; missingInputs: string[] };
 export type ProposalActionResponse = { outcome: string; message: string; proposal: BalanceProposal };
+
+// ── Merchandising & document automation (/api/merchandising) ───────────────
+// Optional fields are omitted by the API when null.
+
+export const MERCH_DOCUMENT_TYPES = ["purchase_order", "tech_pack", "measurement_sheet", "buyer_instruction", "other"] as const;
+export type MerchDocumentType = (typeof MERCH_DOCUMENT_TYPES)[number];
+export const MERCH_VERSION_STATUSES = ["pending", "processing", "needs_review", "confirmed", "failed"] as const;
+export type MerchVersionStatus = (typeof MERCH_VERSION_STATUSES)[number];
+export const MERCH_ORDER_STATUSES = ["active", "shipped", "closed", "cancelled"] as const;
+export type MerchOrderStatus = (typeof MERCH_ORDER_STATUSES)[number];
+export type MerchMilestoneStatus = "pending" | "done" | "waived";
+export type MerchDecision = "unreviewed" | "accepted" | "corrected" | "rejected" | "unresolved";
+export type MerchFieldSource = "model" | "rules" | "reviewer";
+export type MerchEvidenceStatus = "verified" | "not_found" | "none";
+export type MerchConflictStatus = "open" | "resolved" | "cleared";
+export type MerchAttention = "needs_review" | "conflicts" | "overdue" | "missing_documents" | "failed";
+
+export type MerchExtractionStatus = { configured: boolean; mode: "llm" | "rules" | "none"; provider?: string; model?: string; reportsConfidence: boolean; reason?: string };
+export type MerchFieldDef = { key: string; label: string; type: string; description: string; requiredOnPurchaseOrder: boolean; compared: boolean };
+
+export type MerchConfig = {
+  extraction: MerchExtractionStatus;
+  ocrConfigured: boolean;
+  ocrNote: string;
+  supportedFormats: string[];
+  acceptedExtensions: string[];
+  maxFileBytes: number;
+  maxPages: number;
+  reviewConfidenceThreshold: number;
+  confidenceNote: string;
+  documentTypes: { type: MerchDocumentType; label: string }[];
+  defaultRequiredDocumentTypes: MerchDocumentType[];
+  fields: MerchFieldDef[];
+  emailIntegrationConfigured: boolean;
+  emailIntegrationNote: string;
+};
+
+export type MerchBreakdownRow = { color: string; size: string; quantity: number };
+
+export type MerchFieldSourceInfo = {
+  kind: "manual" | "document" | "conflict_resolution";
+  documentId?: string;
+  versionId?: string;
+  versionNumber?: number;
+  documentTitle?: string;
+  conflictId?: string;
+  byEmail: string;
+  at: string;
+  stale: boolean;
+};
+
+export type MerchFieldValue = { key: string; label: string; value?: string; display: string; source?: MerchFieldSourceInfo };
+
+export type MerchOrder = {
+  id: string; reference: string; buyer: string; buyerOrderNumber: string; styleRef?: string; productDescription?: string;
+  quantity?: number; unit?: string; deliveryDate?: string; currency?: string; unitPrice?: number; destination?: string;
+  breakdown?: MerchBreakdownRow[]; breakdownTotal?: number; requiredDocumentTypes: MerchDocumentType[];
+  productionOrderId?: string; status: MerchOrderStatus; notes?: string; createdAt: string; createdByEmail: string; updatedAt: string; version: number;
+};
+
+export type MerchMilestone = {
+  id: string; orderId: string; name: string; dueDate: string; status: MerchMilestoneStatus; completedOn?: string; notes?: string;
+  overdue: boolean; daysUntilDue: number; updatedAt: string; updatedByEmail?: string; version: number;
+};
+
+export type MerchOrderListItem = {
+  id: string; reference: string; buyer: string; buyerOrderNumber: string; styleRef?: string; quantity?: number; unit?: string;
+  deliveryDate?: string; daysToDelivery?: number; status: MerchOrderStatus; documentCount: number; awaitingReview: number; failedDocuments: number;
+  openConflicts: number; overdueMilestones: number; missingDocuments: number; nextMilestone?: { name: string; dueDate: string; daysUntilDue: number };
+  updatedAt: string; version: number;
+};
+
+export type MerchRequiredDocument = { type: MerchDocumentType; label: string; state: "missing" | "processing" | "needs_review" | "failed" | "confirmed"; documentId?: string; versionId?: string };
+
+export type MerchAttentionItem = {
+  kind: string; priority: "high" | "medium" | "low"; title: string; detail: string; dueDate?: string;
+  fieldKey?: string; documentId?: string; versionId?: string; conflictId?: string; milestoneId?: string;
+};
+
+export type MerchSummary = { headline: string; lines: string[]; milestonesDone: number; milestonesTotal: number; daysToDelivery?: number; basis: string };
+
+export type MerchLinkedProductionOrder = {
+  id: string; orderNumber: string; status: string; quantity: number; dueDate: string; styleCode: string; styleName: string; goodSewingOutput: number; differences: string[];
+};
+
+export type MerchVersionSummary = {
+  id: string; versionNumber: number; isCurrent: boolean; status: MerchVersionStatus; format: string; originalFileName?: string; sizeBytes: number;
+  createdAt: string; uploadedByEmail: string; changeNote?: string; failureCode?: string; extractionCode?: string; fieldCount: number;
+  blockingIssues: number; confirmedAt?: string; confirmedByEmail?: string;
+};
+
+export type MerchDocumentListItem = {
+  id: string; orderId: string; orderReference: string; buyer: string; buyerOrderNumber: string; type: MerchDocumentType; typeLabel: string;
+  title: string; versionCount: number; currentVersion?: MerchVersionSummary; updatedAt: string;
+};
+
+export type MerchConflictValue = {
+  value: string; display: string; sourceKind: "document" | "order"; documentId?: string; documentTitle?: string; documentType?: MerchDocumentType;
+  versionId?: string; versionNumber?: number; versionStatus?: MerchVersionStatus; fieldId?: string; page?: number; snippet?: string;
+};
+
+export type MerchConflict = {
+  id: string; orderId: string; orderReference: string; fieldKey: string; label: string; status: MerchConflictStatus; values: MerchConflictValue[];
+  detectedAt: string; resolvedAt?: string; resolvedByEmail?: string; resolvedValue?: string; resolutionNote?: string; version: number;
+};
+
+export type MerchOrderDetail = {
+  order: MerchOrder;
+  fields: MerchFieldValue[];
+  milestones: MerchMilestone[];
+  documents: MerchDocumentListItem[];
+  requiredDocuments: MerchRequiredDocument[];
+  conflicts: MerchConflict[];
+  attention: MerchAttentionItem[];
+  summary: MerchSummary;
+  productionOrder?: MerchLinkedProductionOrder;
+  today: string;
+};
+
+export type MerchDeadline = {
+  kind: "milestone" | "delivery"; orderId: string; orderReference: string; buyer: string; buyerOrderNumber: string; name: string;
+  dueDate: string; daysUntilDue: number; overdue: boolean; milestoneId?: string;
+};
+
+export type MerchOverview = {
+  activeOrders: number; documentsAwaitingReview: number; openConflicts: number; overdueMilestones: number; failedDocuments: number; missingRequiredDocuments: number;
+  deadlines: MerchDeadline[]; awaitingReview: MerchDocumentListItem[]; conflicts: MerchConflict[]; extraction: MerchExtractionStatus; today: string; horizonDays: number;
+};
+
+export type MerchDocumentDetail = {
+  id: string; orderId: string; orderReference: string; type: MerchDocumentType; typeLabel: string; title: string;
+  versions: MerchVersionSummary[]; createdAt: string; createdByEmail: string;
+};
+
+export type MerchIssue = { code: string; message: string; blocking: boolean };
+
+export type MerchExtractedField = {
+  id: string; key: string; label: string; source: MerchFieldSource; rawValue?: string; normalizedValue?: string; display: string;
+  confidence?: number; pageNumber?: number; snippet?: string; evidenceStatus: MerchEvidenceStatus; issues: MerchIssue[];
+  decision: MerchDecision; correctedValue?: string; effectiveValue?: string; reviewerNote?: string; reviewedAt?: string; reviewedByEmail?: string;
+};
+
+export type MerchVersionDetail = {
+  id: string; documentId: string; orderId: string; orderReference: string; buyer: string; buyerOrderNumber: string; orderVersion: number;
+  documentType: MerchDocumentType; documentTitle: string; versionNumber: number; isCurrent: boolean; changeNote?: string;
+  file: { url: string; contentType: string; format: string; sizeBytes: number; originalFileName?: string; sha256: string };
+  processing: {
+    status: MerchVersionStatus; attempts: number; processingStartedAt?: string; processedAt?: string; failureCode?: string; failureMessage?: string;
+    pageCount?: number; textLength?: number; textTruncated: boolean; extractionCode?: string; extractionMessage?: string;
+    provider?: string; model?: string; modelVersion?: string; extractionMs?: number; retryable: boolean; confidenceNote: string;
+  };
+  pages: { pageNumber: number; text: string }[];
+  fields: MerchExtractedField[];
+  missingRequiredFields: string[];
+  orderValues: MerchFieldValue[];
+  conflicts: MerchConflict[];
+  otherVersions: MerchVersionSummary[];
+  review?: { confirmedAt: string; confirmedByEmail?: string; notes?: string };
+  reviewable: boolean;
+  createdAt: string; uploadedByEmail: string; version: number;
+};
+
+export type MerchConfirmRequest = {
+  expectedVersion: number;
+  decisions: { fieldId: string; decision: Exclude<MerchDecision, "unreviewed">; correctedValue?: string; note?: string }[];
+  additions: { fieldKey: string; value?: string; decision: "accepted" | "unresolved"; note?: string }[];
+  applyToOrder: string[];
+  notes?: string;
+};
+
+export type MerchOrderWrite = {
+  buyer?: string; buyerOrderNumber?: string; styleRef?: string; productDescription?: string; quantity?: number; unit?: string;
+  deliveryDate?: string; currency?: string; unitPrice?: number; destination?: string; requiredDocumentTypes?: MerchDocumentType[];
+  productionOrderId?: string; unlinkProductionOrder?: boolean; status?: MerchOrderStatus; notes?: string; clearFields?: string[];
+  milestones?: { name: string; dueDate: string }[]; expectedVersion?: number;
+};

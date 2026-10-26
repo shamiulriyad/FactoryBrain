@@ -126,6 +126,7 @@ export const en = {
     settings: "Settings",
     vision: "Inspect a garment",
     production: "Production planning",
+    merchandising: "Merchandising",
     qc: "Quality inspections",
     floorAlerts: "Floor alerts",
     sensors: "Sensors",

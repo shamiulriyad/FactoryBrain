@@ -14,6 +14,7 @@ and render on GitHub and in the VS Code Markdown preview.
 - [8. Frontend pages and the API](#8-frontend-pages-and-the-api)
 - [9. Quality inspection (QC & defect detection)](#9-quality-inspection-qc--defect-detection)
 - [10. Production planning & line efficiency](#10-production-planning--line-efficiency)
+- [11. Merchandising & document automation](#11-merchandising--document-automation)
 
 ---
 
@@ -295,6 +296,7 @@ the API's policies are the actual control.
 | Overview `/app` | `GET /api/sensors/snapshot` (polled), `/api/line-board`, `/api/brief/morning`, `/api/approvals`, `/api/floor-alerts`, `/api/qc/summary?days=7`; `POST /api/sensors/ingest`, `/api/line-board/refresh` | Operator |
 | Approvals | `GET /api/approvals`, `POST /api/approvals/{id}/approve\|reject`, `GET /api/audit?entityType=approval` (detail drawer) | Operator; High risk: Admin |
 | Floor alerts `/app/activity` | `GET /api/floor-alerts`, `PATCH /api/floor-alerts/{id}` | Operator |
+| Merchandising `/app/merchandising` (+ `/orders/{id}`, `/versions/{id}`) | `GET /api/merchandising/{config,overview,orders,documents}`, `/orders/{id}`, `/documents/{id}`, `/versions/{id}`, `/versions/{id}/file`; `POST /api/merchandising/orders`, `/orders/{id}/milestones`, `/orders/{id}/documents` and `/documents/{id}/versions` (multipart, `Idempotency-Key`), `/versions/{id}/retry`, `/versions/{id}/confirm`, `/conflicts/{id}/resolve`; `PUT` orders, milestones | Operator |
 | Production `/app/production` (+ `/lines/{id}`, `/orders/{id}`, `/plans/{id}`, `/balancing/{id}`) | `GET /api/production/{config,lines,shifts,styles,orders,plans,output,summary,observations,layouts/current,balance/proposals}`, `/lines/{id}/detail`, `/orders/{id}/risk`; `POST /api/production/{orders,plans,output,output/import,observations,balance/analyze}`, plan `submit · withdraw · activate · complete · cancel`, `changes/{id}/resolve · withdraw`, proposal `submit · apply`; `PUT` orders, plans, `layouts/current` | Operator; lines, shifts, styles: Admin |
 | Quality inspections `/app/qc`, `/app/qc/{id}` | `GET /api/qc/inspections` (search, filters, pages), `/api/qc/inspections/{id}`, `/{id}/image`, `/api/qc/summary`, `/api/qc/categories`; `POST /api/qc/inspections/{id}/review`, `/{id}/retry`; `POST/PUT /api/qc/categories` | Operator; taxonomy: Admin |
 | Sensors | `GET /api/sensors/ingest`, `/latest`, `/snapshot`; `POST /api/sensors/ingest` | Operator |
@@ -519,3 +521,122 @@ reassigns people, changes schedules or sends machine commands.
 `_stations`), `production_balance_proposals` (migration
 `AddProductionPlanning`, additive only). Check constraints keep quantities,
 intervals, percentages and codes valid; `xmin` guards concurrent edits.
+
+---
+
+## 11. Merchandising & document automation
+
+Buyer orders, their milestones and their documents (purchase orders, tech
+packs, measurement / spec sheets, buyer instructions). Documents are read,
+values are extracted with their quoted source, and a merchandiser decides
+every value before it becomes order data. The pure rules (value
+normalisation, evidence checks, the extraction contract, the label parser,
+conflict rules, the attention list) live in `FactoryBrain.Application/Merchandising/`
+and are unit-tested; parsing, storage, the worker and the workflow in
+`FactoryBrain.Infrastructure/Merchandising/`; HTTP in `MerchandisingController`.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor M as Merchandiser
+    participant W as /app/merchandising
+    participant C as MerchandisingController
+    participant S as MerchDocumentService
+    participant F as Document store (files)
+    participant DB as PostgreSQL
+    participant K as MerchDocumentWorker
+    participant X as Extractor (rules / llm)
+
+    M->>W: file + type for an order
+    W->>C: POST /orders/{id}/documents (multipart, Idempotency-Key)
+    C->>S: content sniffed (PDF / DOCX / CSV / text / image), size, extension
+    S->>F: original saved under a generated key (never modified)
+    S->>DB: merch_document_versions (Pending, SHA-256) + audit
+    K->>DB: claim (FOR UPDATE SKIP LOCKED) → Processing
+    K->>F: read file → text per page (PdfPig, Open XML, CSV)
+    K->>X: pages + schema
+    X-->>K: values, quotes, confidence (llm only)
+    K->>DB: pages, fields (validated; quotes checked against the text) → NeedsReview, conflicts re-checked, audit
+    M->>C: POST /versions/{id}/confirm {expectedVersion, decisions, additions, applyToOrder}
+    C->>S: order lock + xmin → Confirmed, ticked values written to the order, audit
+```
+
+**Version lifecycle.** `Pending → Processing → NeedsReview | Failed`;
+`NeedsReview | Failed → Confirmed` (only the current version; a failed one
+can be completed by hand); `Failed → Pending` (retry, unless the file itself
+is the problem: damaged, encrypted, scanned, too many pages);
+`NeedsReview → Pending` (re-extract, only while nothing was extracted). A new
+upload to a document becomes the current version; earlier versions and their
+originals stay viewable and downloadable. Confirmed is final for a version.
+
+**Extractors** (`MERCH_EXTRACTION_PROVIDER`, read at startup):
+
+| Mode | What runs | Evidence | Confidence |
+|---|---|---|---|
+| `rules` (default) | Deterministic parser of labelled values (`PO No: …`, `Delivery Date  …`, CSV rows) and colour × size tables (long form or size matrix). Not AI: unlabelled prose is not understood | the exact line | none |
+| `llm` | The language model of the AI settings (OpenAI, Anthropic, Gemini), JSON contract below | the model's quote, kept only if it occurs in the page | the model's own estimate, not calibrated |
+| `none` | Nothing: text is parsed, versions wait in `NeedsReview` with `provider_not_configured`, reviewers enter the values | — | — |
+
+There is no OCR integration: a PDF without a text layer, or an image, is
+stored and marked `Failed / ocr_required`, and can still be reviewed by hand.
+There is no email integration either; nothing is read from or sent to buyers.
+
+**`llm` contract.** The prompt carries the document text with `=== Page n ===`
+markers (cut to `MERCH_EXTRACTION_MAX_CHARS`). The answer must be
+`{"fields":[{"key","value","confidence","page","evidence"}], "breakdown":{"rows":[{"color","size","quantity"}],"confidence","page","evidence"}}`.
+Unknown keys are dropped; a confidence outside 0–1 or a non-positive page is
+discarded (never repaired); anything else is `invalid_output`. HTTP 429 is
+`provider_rate_limited`, 401/403 `provider_unauthorized`, timeouts
+`provider_timeout`; all are retryable. Neither document text nor response
+bodies are logged.
+
+**Validation** (`MerchFields`): one row per field and version. Dates: ISO,
+named months, `dd.MM.yyyy`; `a/b/yyyy` only when one part is over 12;
+two-digit years and ambiguous dates are flagged, never guessed. Quantities are
+whole numbers 1–10,000,000 (`12.000` is ambiguous); units pcs / dozen / sets /
+packs / pairs; ISO 4217 currencies (`$` and `¥` are ambiguous); prices > 0
+with at most 4 decimals; breakdown rows need colour, size and a positive
+quantity, no duplicates. Blocking problems prevent accepting a value as read
+(correct it or mark it unresolved); warnings (past date, low confidence,
+quote not found, no quote) don't. Confirmation also requires the breakdown to
+add up to the quantity of the same document.
+
+**Conflicts** (`MerchConflictDetector`, explicit rules, no model): for each
+compared field (PO number, style, quantity, unit, delivery date, currency,
+price, breakdown) the values of every current `NeedsReview` / `Confirmed`
+version, plus the order's value when a person typed it, are compared by key:
+PO numbers and styles ignore case, spaces and punctuation; a breakdown
+compares as the set of rows. Two different keys open a conflict (one open per
+order and field). A resolution needs a value and a note; it sets the order's
+value and records the exact sources it covered (fingerprint), so the same
+evidence never reopens it, while new evidence does. Conflicts whose sources
+come to agree are cleared.
+
+**Order values and provenance.** Each order field records where its value
+came from: typed (manual), confirmed from document version *n*, or chosen
+when resolving a conflict. A value whose source version has been replaced is
+flagged for re-checking. The linked Sector 2 production order is re-read on
+every request and differences (quantity, due date, style) are reported.
+
+**Missing information and summary** (`MerchAttention`, fixed rules): high —
+overdue milestone, active order past delivery, open conflict on quantity /
+delivery / style / PO / breakdown, required document missing with delivery
+within 30 days, breakdown not adding up; medium — other conflicts, documents
+to review or failed, empty style / quantity / delivery date, unresolved
+values, production-order differences; low — milestones within 7 days,
+delivery within 14 days, replaced sources. The order summary is composed from
+the same records; no model writes it.
+
+**Data.** `merch_orders` (unique buyer + PO), `merch_milestones`,
+`merch_documents`, `merch_document_versions` (one current per document,
+per-user unique `Idempotency-Key`, SHA-256, `xmin`), `merch_document_pages`,
+`merch_extracted_fields` (extracted value and quote never modified; decision
+and correction in separate columns; a quote is stored only when verified),
+`merch_conflicts` (migration `AddMerchandising`, additive only). Every audit
+row is filed under `merch_order` / the order id.
+
+**Security.** Viewers read; Operators and Admins register orders, upload,
+review, confirm, resolve and manage milestones. Files are validated by
+content, stored under generated keys re-validated on every read, and served
+only to signed-in users with the validated type, `nosniff` and a sandbox CSP
+(PDFs and images inline, other formats as downloads).

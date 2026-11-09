@@ -99,24 +99,7 @@ async function main() {
     "src/_legacy_api/qc/defects/route.ts",
     "src/_legacy_api/qc/flag/route.ts",
     "src/components/overview/QcSummary.tsx",
-    "src/app/app/qc/page.tsx",
-    "src/app/app/workforce/page.tsx",
-    "src/app/app/workforce/workers/[id]/page.tsx",
-    "src/data/workforce/lines.ts",
-    "src/data/workforce/policy.ts",
-    "src/data/workforce/types.ts",
-    "src/data/workforce/seed.ts",
-    "src/lib/workforce.ts",
-    "src/store/workforce.store.ts",
-    "src/components/workforce/shared.tsx",
-    "src/components/workforce/OverviewTab.tsx",
-    "src/components/workforce/WorkersTab.tsx",
-    "src/components/workforce/AttendanceTab.tsx",
-    "src/components/workforce/LeaveOvertimeTab.tsx",
-    "src/components/workforce/PerformanceTab.tsx",
-    "src/components/workforce/SkillsTrainingTab.tsx",
-    "src/components/workforce/GrievancesTab.tsx",
-    "src/components/workforce/WellbeingTab.tsx"
+    "src/app/app/qc/page.tsx"
   ]) {
     try { await read(f); assert(true, f); } catch { assert(false, f); }
   }

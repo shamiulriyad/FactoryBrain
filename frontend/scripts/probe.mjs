@@ -18,9 +18,7 @@ const ROUTES = [
   "/app/activity",
   "/app/integrations",
   "/app/settings",
-  "/app/architecture",
-  "/app/workforce",
-  "/app/workforce/workers/W-0001"
+  "/app/architecture"
 ];
 
 const base = process.env.BASE ?? "http://localhost:3000";

@@ -15,6 +15,7 @@ and render on GitHub and in the VS Code Markdown preview.
 - [9. Quality inspection (QC & defect detection)](#9-quality-inspection-qc--defect-detection)
 - [10. Production planning & line efficiency](#10-production-planning--line-efficiency)
 - [11. Merchandising & document automation](#11-merchandising--document-automation)
+- [12. Workforce, HR, performance & wellbeing (browser-only demo)](#12-workforce-hr-performance--wellbeing-browser-only-demo)
 
 ---
 
@@ -308,10 +309,10 @@ the API's policies are the actual control.
 | Settings → AI & models | `GET/POST /api/settings/llm`, `GET/POST /api/settings/embedding`, `POST /api/settings/embedding/plan`, reindex as above | Admin |
 | Settings → Users | `GET /api/users`, `PATCH /api/users/{id}/role` | Admin |
 
-Insights, Factory graph and Integrations have no API behind them yet; they
-render a browser-only demo dataset and say so on the page. Documents can't be
-deleted or edited through the API yet, and agent runs are rule-based (the
-configured language model is used by Ask only).
+Insights, Factory graph, Integrations and Workforce (`/app/workforce`) have no
+API behind them yet; they render a browser-only demo dataset and say so on the
+page. Documents can't be deleted or edited through the API yet, and agent runs
+are rule-based (the configured language model is used by Ask only).
 
 
 ---
@@ -640,3 +641,35 @@ review, confirm, resolve and manage milestones. Files are validated by
 content, stored under generated keys re-validated on every read, and served
 only to signed-in users with the validated type, `nosniff` and a sandbox CSP
 (PDFs and images inline, other formats as downloads).
+
+---
+
+## 12. Workforce, HR, performance & wellbeing (browser-only demo)
+
+The Workforce module (`/app/workforce` and `/app/workforce/workers/[id]`) is a
+**browser-only demo** for a 6-line, 120-worker Bangladeshi RMG plant. It does
+not call the .NET backend and has no database tables. Every screen renders
+`DemoDataBanner` and the sidebar item carries the `Demo` pill.
+
+- **State & persistence.** Seeded deterministically in
+  `frontend/src/data/workforce/seed.ts` and held in `useWorkforceStore`
+  (`frontend/src/store/workforce.store.ts`), persisted to `localStorage` under
+  `bunonbrain:workforce:v1` and validated with Zod on read (corrupt or older
+  payloads fall back to the seed). An Admin can reset the store to the initial
+  seed at any time.
+- **Pure rules.** Efficiency (`pieces × SMV ÷ minutes worked`), attendance and
+  line absenteeism, statutory leave balances (illustrative values in
+  `src/data/workforce/policy.ts`), weekly overtime cap warnings (`> 60 h/week`),
+  the hours-only Workload alert (`> 60 h/week` for 3 consecutive weeks), the
+  `k ≥ 5` anonymous pulse aggregation guard, and deterministic staffing /
+  cross-training suggestions live in `frontend/src/lib/workforce.ts`. No LLM or
+  AI model is called.
+- **Role convenience & privacy.** Role checks in the UI mirror `SessionRole`
+  (`Viewer`, `Operator`, `Admin`) for convenience on demo data: Viewers see
+  aggregates and directory basics (no phone numbers, payout channels, leave
+  reasons, grievance details or wages); Operators can mark attendance, decide
+  leave, manage training, update grievances and schedule voluntary counsellor
+  referrals (case metadata only); Admins also see wage/bonus demo amounts and
+  the reset control. Wellbeing data lives in an isolated slice, never computes
+  an individual score, and never feeds performance, bonus or discipline views.
+

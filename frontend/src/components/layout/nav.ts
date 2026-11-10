@@ -19,7 +19,8 @@ import {
   ScanLine,
   ScrollText,
   Settings,
-  ShieldCheck
+  ShieldCheck,
+  UsersRound
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { RequiredRole } from "@/lib/auth";
@@ -49,7 +50,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/app/production", labelKey: "nav.production", icon: Factory, role: "Viewer", keywords: "production planning plan output efficiency wip bottleneck line balancing smv sam target delay order shift" },
       { href: "/app/merchandising", labelKey: "nav.merchandising", icon: FileStack, role: "Viewer", keywords: "merchandising buyer order po purchase order tech pack documents extraction milestones deadlines conflicts" },
       { href: "/app/qc", labelKey: "nav.qc", icon: ClipboardCheck, role: "Viewer", keywords: "quality defects rework inspections history dhu taxonomy" },
-      { href: "/app/sensors", labelKey: "nav.sensors", icon: Gauge, role: "Viewer", keywords: "telemetry energy rfid readings machines" }
+      { href: "/app/sensors", labelKey: "nav.sensors", icon: Gauge, role: "Viewer", keywords: "telemetry energy rfid readings machines" },
+      { href: "/app/workforce", labelKey: "nav.workforce", icon: UsersRound, role: "Viewer", demo: true, keywords: "workers hr attendance leave overtime wellbeing grievance skills training bonus" }
     ]
   },
   {

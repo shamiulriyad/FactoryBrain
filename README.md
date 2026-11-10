@@ -36,7 +36,6 @@ English and বাংলা.
 | 🏭 | **Production planning** | Orders, approval-gated production plans, recorded / imported output, planned vs actual, line efficiency from SMV, WIP, delivery risk, time-study bottlenecks and line-balancing proposals, all from the plant's own records |
 | 🧾 | **Merchandising** | Buyer orders and milestones; upload POs, tech packs and spec sheets (PDF, DOCX, CSV, text) in versions; values extracted with their quoted source and checked; merchandisers correct and confirm them; conflicts between documents flagged and resolved; deadlines and missing information from the stored records |
 | 🔍 | **Quality inspection** | Upload garment photos, AI defect detection with boxes (configurable vision provider), inspector review and corrections, inspection history, defect rates and DHU from reviewed records |
-| 👷 | **Workforce (demo)** | Worker directory and profiles, manual roll-call attendance, leave and overtime, neutral performance, machine skills and training, grievances and confidential wellbeing on browser-only demo data |
 | 🚨 | **Floor alerts** | Alerts stored by the backend and broadcast over SignalR (`/hubs/factory`) |
 | 🎭 | **Demo mode** | With no LLM key, Ask and agent runs return deterministic canned answers |
 | 📄 | **PDF RAG (Python)** | Standalone LangChain + Qdrant + Gemini pipeline in [`rag/`](rag/) |

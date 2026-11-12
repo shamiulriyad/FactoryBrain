@@ -33,7 +33,7 @@ const repo = path.resolve(frontend, "..");
 const apiProject = path.join(repo, "FactoryBrain.Backend", "FactoryBrain.Api");
 // E2E_API_DLL: run an API build from another folder (e.g. when a developer's
 // running API locks bin/Debug and the code under test was built elsewhere).
-const apiDll = process.env.E2E_API_DLL || path.join(apiProject, "bin", "Debug", "net9.0", "FactoryBrain.Api.dll");
+const apiDll = process.env.E2E_API_DLL || path.join(apiProject, "bin", "Debug", "net10.0", "FactoryBrain.Api.dll");
 const artifacts = path.join(here, ".artifacts");
 
 const secret = (n = 24) => randomBytes(n).toString("base64url");

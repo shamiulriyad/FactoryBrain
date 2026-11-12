@@ -131,7 +131,20 @@ export const bn: Dict = {
     sensors: "সেন্সর",
     knowledge: "জ্ঞানভান্ডার",
     audit: "অডিট লগ",
-    workforce: "কর্মীবাহিনী"
+    workforce: "কর্মীবাহিনী",
+    floorMap: "লাইভ ফ্লোর ম্যাপ",
+    alerts: "অ্যালার্ট",
+    orders: "অর্ডার ও শিপমেন্ট",
+    inventory: "ইনভেন্টরি",
+    reports: "রিপোর্ট",
+    help: "সাহায্য",
+    floors: {
+      fabric: "ফ্যাব্রিক ইন্সপেকশন",
+      cutting: "কাটিং",
+      sewing: "সেলাই",
+      qc: "ফিনিশিং ও কিউসি",
+      packing: "প্যাকিং ও ডিসপ্যাচ"
+    }
   },
   sidebar: {
     operations: "অপারেশন",
@@ -139,7 +152,44 @@ export const bn: Dict = {
     floor: "ফ্লোর",
     admin: "প্রশাসন",
     demo: "ডেমো প্রিভিউ",
-    unread: "{n}টি বাকি"
+    unread: "{n}টি বাকি",
+    monitor: "মনিটর",
+    floors: "উৎপাদন ফ্লোর",
+    plan: "পরিকল্পনা",
+    tools: "টুলস",
+    search: "লাইন, PO, অ্যালার্ট খুঁজুন",
+    searchLabel: "খুঁজুন",
+    collapse: "সাইডবার ছোট করুন",
+    expand: "সাইডবার বড় করুন",
+    close: "নেভিগেশন বন্ধ করুন",
+    switchFactory: "ফ্যাক্টরি বদলান",
+    factories: "আপনার ফ্যাক্টরি",
+    account: "অ্যাকাউন্ট",
+    language: "ভাষা",
+    languageName: "বাংলা",
+    demoTag: "ডেমো",
+    floorAria: "ফ্লোর {code}, {name}, {status}",
+    moreBelow: "আরও {n}টি",
+    countAria: "{name}, {n}টি খোলা",
+    status: {
+      ok: "ঠিক আছে",
+      watch: "নজরে",
+      act: "এখনই"
+    }
+  },
+  placeholder: {
+    notBuilt: "এই পাতাটি এখনও তৈরি হয়নি",
+    notBuiltBody: "নেভিগেশনে এর জায়গা রাখা আছে। তৈরি না হওয়া পর্যন্ত এই পাতাগুলো একই কাজে লাগবে:",
+    sampleStatus: "নমুনা অবস্থা। ফ্লোরের অবস্থা এখনও লাইভ ডেটার সাথে যুক্ত নয়।",
+    floorMapBody: "পুরো ভবনের লাইভ ম্যাপ, প্রতিটি ফ্লোরের অবস্থা ও খোলা অ্যালার্টসহ।",
+    inventoryBody: "ফ্লোর ও অর্ডার অনুযায়ী ফ্যাব্রিক, ট্রিমস ও তৈরি পণ্যের মজুদ।",
+    reportsBody: "উৎপাদন, মান ও শিপমেন্টের দৈনিক ও সাপ্তাহিক সারসংক্ষেপ।",
+    floorBody: "এই ফ্লোরের লাইভ রিডিং ও অ্যালার্ট।",
+    helpTitle: "সাহায্য",
+    helpBody: "FactoryBrain-এ কোথায় কী আছে জেনে নিন।",
+    restartTour: "আবার পরিচিতি ট্যুর দেখুন",
+    searchTip: "পাতা খুঁজতে বা প্রশ্ন করতে Ctrl K (Mac-এ ⌘K) চাপুন।",
+    contact: "অ্যাকাউন্ট বা অ্যাক্সেসের সমস্যায় আপনার ফ্যাক্টরির একজন Admin-কে জিজ্ঞাসা করুন।"
   },
   overview: {
     greetingMorning: "সুপ্রভাত, {name}।",

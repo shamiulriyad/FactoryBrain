@@ -6,7 +6,7 @@ import { LanguageToggle } from "@/components/ui/LanguageToggle";
 import { useAppStore, type Theme } from "@/store/app.store";
 import { useT } from "@/lib/useT";
 import { cn } from "@/lib/cn";
-import { currentNavItem } from "./nav";
+import { currentNavItem } from "@/lib/navigation";
 
 const THEME_OPTIONS: Array<{ value: Theme; icon: typeof Sun; label: string }> = [
   { value: "light", icon: Sun, label: "Light theme" },
@@ -28,27 +28,30 @@ export function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
         type="button"
         onClick={onOpenNav}
         aria-label="Open navigation"
-        className="md:hidden size-9 rounded-md inline-flex items-center justify-center text-fg-secondary hover:text-fg-primary hover:bg-surface-2"
+        className="md:hidden size-11 rounded-md inline-flex items-center justify-center text-fg-secondary hover:text-fg-primary hover:bg-surface-2"
       >
-        <Menu size={18} />
+        <Menu size={18} aria-hidden="true" />
       </button>
 
       <div className="min-w-0 flex items-center gap-2">
         {current && (
           <>
-            <current.icon size={16} className="hidden sm:block text-fg-tertiary shrink-0" />
-            <span className="truncate text-body font-semibold text-fg-primary">{t(current.labelKey)}</span>
+            {current.icon && <current.icon size={16} aria-hidden="true" className="hidden sm:block text-fg-tertiary shrink-0" />}
+            <span className="truncate text-body font-semibold text-fg-primary">
+              {current.floorCode ? `${current.floorCode} · ` : ""}
+              {t(current.labelKey)}
+            </span>
           </>
         )}
       </div>
 
       <div className="ml-auto flex items-center gap-2">
+        {/* On md+ the search box lives in the sidebar; phones keep this button. */}
         <button
           type="button"
-          onClick={open}
+          onClick={() => open()}
           aria-label={t("common.search")}
-          data-tour="search"
-          className="flex items-center gap-2 h-9 px-2.5 sm:px-3 rounded-[var(--radius-control)] bg-surface-2 border border-border-subtle text-fg-secondary hover:text-fg-primary hover:border-border-strong transition-colors sm:w-60"
+          className="md:hidden flex items-center gap-2 h-11 px-2.5 sm:px-3 rounded-[var(--radius-control)] bg-surface-2 border border-border-subtle text-fg-secondary hover:text-fg-primary hover:border-border-strong transition-colors sm:w-60"
         >
           <Search size={15} />
           <span className="hidden sm:inline text-caption flex-1 text-left">{t("common.search")}</span>

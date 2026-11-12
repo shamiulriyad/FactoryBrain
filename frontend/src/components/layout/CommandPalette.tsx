@@ -7,13 +7,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { CornerDownLeft, MessageSquareText, Search, Settings as SettingsIcon, X as XIcon } from "lucide-react";
+import { CornerDownLeft, Layers, MessageSquareText, Search, Settings as SettingsIcon, X as XIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAppStore } from "@/store/app.store";
 import { useT } from "@/lib/useT";
 import { hasRole, useAuthStore, type RequiredRole } from "@/lib/auth";
 import { cn } from "@/lib/cn";
-import { NAV_GROUPS } from "./nav";
+import { ALL_NAV_ITEMS, NAV_GROUPS } from "@/lib/navigation";
 
 type Item = { id: string; group: string; title: string; hint?: string; href: string; icon: LucideIcon; keywords: string };
 
@@ -52,25 +52,22 @@ export function CommandPalette() {
 
   useEffect(() => {
     if (!open) return;
-    setQ("");
+    setQ(useAppStore.getState().paletteSeed);
     setActive(0);
     setTimeout(() => inputRef.current?.focus(), 0);
   }, [open]);
 
   const all = useMemo<Item[]>(() => {
-    const pages: Item[] = NAV_GROUPS.flatMap((g) =>
-      g.items
-        .filter((it) => hasRole(user, it.role))
-        .map((it) => ({
-          id: it.href,
-          group: "Pages",
-          title: t(it.labelKey),
-          hint: it.demo ? "Demo data" : t(g.labelKey),
-          href: it.href,
-          icon: it.icon,
-          keywords: `${t(it.labelKey)} ${it.keywords ?? ""}`.toLowerCase()
-        }))
-    );
+    const groupOf = new Map(NAV_GROUPS.flatMap((g) => g.items.map((it) => [it.id, t(g.labelKey)] as const)));
+    const pages: Item[] = ALL_NAV_ITEMS.filter((it) => hasRole(user, it.role)).map((it) => ({
+      id: it.href,
+      group: "Pages",
+      title: it.floorCode ? `${it.floorCode} · ${t(it.labelKey)}` : t(it.labelKey),
+      hint: it.demo ? "Demo data" : groupOf.get(it.id),
+      href: it.href,
+      icon: it.icon ?? Layers,
+      keywords: `${t(it.labelKey)} ${it.keywords ?? ""}`.toLowerCase()
+    }));
     const settings: Item[] = SETTINGS.filter((s) => hasRole(user, s.role)).map((s) => ({
       id: `settings-${s.section}`,
       group: "Settings",

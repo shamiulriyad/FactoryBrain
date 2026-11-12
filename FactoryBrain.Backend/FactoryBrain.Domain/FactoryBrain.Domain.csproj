@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>FactoryBrain.Domain</RootNamespace>
@@ -18,7 +18,7 @@
       Infrastructure projects that use EF Core against pgvector continue
       to depend on `Pgvector.EntityFrameworkCore` directly.
     -->
-    <PackageReference Include="Pgvector" Version="0.3.0" />
+    <PackageReference Include="Pgvector" Version="0.3.2" />
   </ItemGroup>
 
 </Project>

@@ -32,6 +32,35 @@ const config: Config = {
           medium: "var(--risk-medium)",
           high: "var(--risk-high)"
         },
+        // App sidebar (always dark, independent of the page theme).
+        sb: {
+          bg: "#0d1218",
+          input: "#121820",
+          border: "#232b36",
+          divider: "#1f2731",
+          active: "#1d2531",
+          hover: "#161d26",
+          text: "#ece7df",
+          dim: "#c3c7cc",
+          muted: "#a4a9af",
+          label: "#8d949e",
+          accent: "#f2c27a",
+          ok: "#8fc9a8",
+          watch: "#f2c27a",
+          act: "#ff6b45",
+          ink: "#1a1308"
+        },
+        // FactoryBrain marketing homepage (single dark theme).
+        fb: {
+          ink: "#0f141b",
+          text: "#ece7df",
+          muted: "#a4a9af",
+          line: "rgba(236,231,223,0.14)",
+          thread: "#ff6b45",
+          lamp: "#f2c27a",
+          ok: "#8fc9a8",
+          card: "rgba(14,19,26,0.86)"
+        },
         stage: {
           suggested: "var(--stage-suggested)",
           pending: "var(--stage-pending)",
@@ -43,7 +72,10 @@ const config: Config = {
       fontFamily: {
         sans: ["Inter", "Hind Siliguri", "system-ui", "sans-serif"],
         bn: ["Hind Siliguri", "sans-serif"],
-        mono: ["JetBrains Mono", "ui-monospace", "monospace"]
+        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+        display: ["var(--font-display)", "Impact", "sans-serif"],
+        plex: ["var(--font-plex)", "system-ui", "sans-serif"],
+        plexmono: ["var(--font-plex-mono)", "ui-monospace", "monospace"]
       },
       fontSize: {
         display: ["28px", { lineHeight: "34px", fontWeight: "600" }],

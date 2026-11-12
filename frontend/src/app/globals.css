@@ -576,3 +576,133 @@
   border-radius: 12px;
 }
 .driver-popover.bunonbrain-tour .driver-popover-description { color: var(--fg-secondary); }
+
+/* ----- FactoryBrain marketing homepage (single dark theme) ----- */
+@layer base {
+  html:has(.fb-home),
+  html:has(.fb-home) body {
+    background: #0f141b;
+    color-scheme: dark;
+  }
+  html:has(.fb-home) {
+    scroll-padding-top: 72px;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    html:has(.fb-home) {
+      scroll-behavior: smooth;
+    }
+  }
+  .fb-home {
+    font-family: var(--font-plex), system-ui, sans-serif;
+    color: #ece7df;
+    font-size: 16px;
+    line-height: 1.55;
+    font-weight: 400;
+    font-variant-numeric: normal;
+    /* If the display font falls back (font-display: optional), use the
+       fallback's real weight instead of a smeared synthetic bold. */
+    font-synthesis-weight: none;
+  }
+  .fb-home *:focus-visible {
+    outline: 2px solid #f2c27a;
+    outline-offset: 3px;
+    border-radius: 3px;
+  }
+  .fb-home ::selection {
+    background: rgba(242, 194, 122, 0.35);
+  }
+}
+
+@layer components {
+  /* Dusk sky behind the transparent canvas; its lower band matches the scene fog. */
+  .fb-sky {
+    background: linear-gradient(
+      to bottom,
+      #0d131d 0%,
+      #1a2131 30%,
+      #3b3a4c 55%,
+      #5f5662 72%,
+      #5f5662 100%
+    );
+  }
+  /* Scrim so hero text always sits on a dark ground (contrast >= 4.5:1). */
+  .fb-hero-scrim {
+    background: linear-gradient(
+      to bottom,
+      rgba(15, 20, 27, 0.9) 0%,
+      rgba(15, 20, 27, 0.82) 48%,
+      rgba(15, 20, 27, 0) 72%
+    );
+  }
+  @media (min-width: 768px) {
+    .fb-hero-scrim {
+      background: linear-gradient(
+        to right,
+        rgba(15, 20, 27, 0.92) 0%,
+        rgba(15, 20, 27, 0.84) 34%,
+        rgba(15, 20, 27, 0) 60%
+      );
+    }
+  }
+  .fb-btn {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 3px;
+    padding: 0 1.15rem;
+    font-weight: 500;
+    font-size: 0.95rem;
+    line-height: 1;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+  .fb-btn-solid {
+    background: #ece7df;
+    color: #0f141b;
+  }
+  .fb-btn-solid:hover {
+    background: #ffffff;
+  }
+  .fb-btn-ghost {
+    border: 1px solid rgba(236, 231, 223, 0.45);
+    color: #ece7df;
+  }
+  .fb-btn-ghost:hover {
+    border-color: #ece7df;
+    background: rgba(236, 231, 223, 0.06);
+  }
+  .fb-cue-line {
+    animation: fb-cue 2.4s ease-in-out infinite;
+    transform-origin: top;
+  }
+  @keyframes fb-cue {
+    0% { transform: scaleY(0); opacity: 1; }
+    60% { transform: scaleY(1); opacity: 1; }
+    100% { transform: scaleY(1); opacity: 0; }
+  }
+}
+
+/* ----- App sidebar drawer (mobile) ----- */
+@keyframes sb-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sb-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+/* App sidebar: a visible, thin scrollbar so the longer menu reads as scrollable. */
+.sb-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #3a4452 transparent;
+}
+.sb-scroll::-webkit-scrollbar { width: 8px; }
+.sb-scroll::-webkit-scrollbar-track { background: transparent; }
+.sb-scroll::-webkit-scrollbar-thumb {
+  background: #3a4452;
+  border-radius: 8px;
+  border: 2px solid #0d1218;
+}
+.sb-scroll::-webkit-scrollbar-thumb:hover { background: #4b5664; }

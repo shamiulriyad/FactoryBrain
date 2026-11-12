@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState, Suspense } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { Sidebar } from "@/components/sidebar/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { CommandPalette } from "@/components/layout/CommandPalette";
-import { MobileNav } from "@/components/layout/MobileShell";
+import { MobileNav } from "@/components/sidebar/MobileNav";
+import { useFloorStatusFeed } from "@/lib/useFloorStatus";
 import { ToastProvider } from "@/components/ui/Toast";
 import { BrandMark } from "@/components/brand/BrandMark";
 import { useAppStore } from "@/store/app.store";
@@ -30,6 +31,8 @@ function Inner({ children }: { children: React.ReactNode }) {
   const { t } = useT();
   const [navOpen, setNavOpen] = useState(false);
   const closeNav = useCallback(() => setNavOpen(false), []);
+  // Keeps the sidebar's alert / approval counts (and later floor status) fresh.
+  useFloorStatusFeed();
 
   useEffect(() => {
     applyTheme();
@@ -78,7 +81,7 @@ function Inner({ children }: { children: React.ReactNode }) {
         Skip to content
       </a>
       <div className="hidden md:block h-full">
-        <Sidebar />
+        <Sidebar mode="rail" />
       </div>
       <MobileNav open={navOpen} onClose={closeNav} />
       <div className="flex-1 flex flex-col min-w-0">

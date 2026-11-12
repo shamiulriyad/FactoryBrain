@@ -27,7 +27,7 @@ const nextConfig = {
 
   // ── Frontend ↔ ASP.NET Core bridge ──────────────────────────────────────────
   // Every /api/* request from client components is transparently proxied to
-  // the .NET 9 backend. NO frontend code change is required.
+  // the .NET 10 backend. NO frontend code change is required.
   //
   // Override the backend URL via NEXT_PUBLIC_API_URL (preferred) or
   // DOTNET_API_URL (legacy fallback). Default: http://localhost:5000.

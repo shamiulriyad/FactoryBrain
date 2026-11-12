@@ -94,7 +94,7 @@ flowchart LR
 ### Prerequisites
 
 - Node.js 20+
-- .NET 9 SDK
+- .NET 10 SDK
 - PostgreSQL with the pgvector extension (local, Docker or Supabase)
 - Python 3.11 (only for `rag/`)
 
@@ -126,10 +126,6 @@ cd FactoryBrain.Backend/FactoryBrain.Api
 dotnet run                  # reads the repo-root .env
 ```
 
-> [!NOTE]
-> Only .NET 8 or 10 installed? Run `$env:DOTNET_ROLL_FORWARD = "Major"`
-> (PowerShell) first. It has to be set in the shell, not in `.env`.
-
 The API listens on `http://localhost:5000`. On startup it creates the `vector`
 extension, applies EF Core migrations and seeds demo data.
 
@@ -139,7 +135,7 @@ extension, applies EF Core migrations and seeds demo data.
 ### 4. Frontend
 
 ```bash
-cd frontend
+re
 npm install
 npm run dev                 # reads the repo-root .env
 ```
@@ -266,8 +262,6 @@ dotnet test FactoryBrain.Backend.sln
   Docker those tests are reported as skipped.
 - Every outbound HTTP call is intercepted, so no test can reach a paid LLM
   or embedding provider. The OpenAI paths run against local fakes.
-- Only the .NET 10 runtime installed? The test project rolls forward on its
-  own; the API itself still needs `DOTNET_ROLL_FORWARD=Major`.
 
 Browser end-to-end tests (Playwright), from `frontend/`, with Docker Desktop running:
 
@@ -329,7 +323,7 @@ FactoryBrain/
 │   ├── src/services/          client services and demo datasets
 │   ├── src/i18n/              English and Bangla strings
 │   └── scripts/               smoke, probe, RAG eval, sensor push
-├── FactoryBrain.Backend/      .NET 9 solution
+├── FactoryBrain.Backend/      .NET 10 solution
 │   ├── FactoryBrain.Api/             controllers, SignalR hub, middleware, Program.cs
 │   ├── FactoryBrain.Application/     interfaces, DTOs, validation, RAG scoring
 │   ├── FactoryBrain.Infrastructure/  EF Core, migrations, seed, services, embeddings

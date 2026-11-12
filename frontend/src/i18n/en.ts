@@ -132,7 +132,20 @@ export const en = {
     sensors: "Sensors",
     knowledge: "Knowledge base",
     audit: "Audit log",
-    workforce: "Workforce"
+    workforce: "Workforce",
+    floorMap: "Live floor map",
+    alerts: "Alerts",
+    orders: "Orders & shipments",
+    inventory: "Inventory",
+    reports: "Reports",
+    help: "Help",
+    floors: {
+      fabric: "Fabric inspection",
+      cutting: "Cutting",
+      sewing: "Sewing",
+      qc: "Finishing & QC",
+      packing: "Packing & dispatch"
+    }
   },
   sidebar: {
     operations: "OPERATIONS",
@@ -140,7 +153,44 @@ export const en = {
     floor: "FLOOR",
     admin: "Administration",
     demo: "Demo previews",
-    unread: "{n} pending"
+    unread: "{n} pending",
+    monitor: "Monitor",
+    floors: "Production floors",
+    plan: "Plan",
+    tools: "Tools",
+    search: "Search lines, POs, alerts",
+    searchLabel: "Search",
+    collapse: "Collapse sidebar",
+    expand: "Expand sidebar",
+    close: "Close navigation",
+    switchFactory: "Switch factory",
+    factories: "Your factories",
+    account: "Account",
+    language: "Language",
+    languageName: "English",
+    demoTag: "Demo",
+    floorAria: "Floor {code}, {name}, {status}",
+    moreBelow: "{n} more",
+    countAria: "{name}, {n} open",
+    status: {
+      ok: "OK",
+      watch: "Watch",
+      act: "Act"
+    }
+  },
+  placeholder: {
+    notBuilt: "This page isn't built yet",
+    notBuiltBody: "It has a place in the navigation so the layout is final. Until it is built, these pages cover the same ground:",
+    sampleStatus: "Sample status. Floor status isn't connected to live data yet.",
+    floorMapBody: "A live map of the building, floor by floor, with each floor's status and open alerts.",
+    inventoryBody: "Fabric, trims and finished goods on hand, by floor and by order.",
+    reportsBody: "Daily and weekly summaries of output, quality and shipments.",
+    floorBody: "Live readings and alerts for this floor.",
+    helpTitle: "Help",
+    helpBody: "Find your way around FactoryBrain.",
+    restartTour: "Take the product tour again",
+    searchTip: "Press Ctrl K (⌘K on a Mac) to search pages or ask a question.",
+    contact: "For account or access problems, ask an Admin in your factory."
   },
   overview: {
     greetingMorning: "Good morning, {name}.",

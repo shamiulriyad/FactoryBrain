@@ -10,6 +10,8 @@ type AppState = {
   locale: Locale;
   theme: Theme;
   commandPaletteOpen: boolean;
+  /** Text to pre-fill when the palette opens (from the sidebar search box). */
+  paletteSeed: string;
   resetRequired: boolean;
   /** True once the user has reached Overview after onboarding. */
   onboardedAt: string | null;
@@ -22,7 +24,7 @@ type AppState = {
   setLocale: (l: Locale) => void;
   setTheme: (t: Theme) => void;
   applyTheme: () => void;
-  openCommandPalette: () => void;
+  openCommandPalette: (seed?: string) => void;
   closeCommandPalette: () => void;
   toggleCommandPalette: () => void;
   markOnboarded: () => void;
@@ -39,6 +41,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   locale: safeGet<Locale>("bunonbrain:locale", defaultLocale),
   theme: safeGet<Theme>("bunonbrain:theme", "dark"),
   commandPaletteOpen: false,
+  paletteSeed: "",
   resetRequired: false,
   onboardedAt: safeGet<string | null>("bunonbrain:onboardedAt", null),
   tourCompleted: safeGet<boolean>("bunonbrain:tourCompleted", false),
@@ -68,9 +71,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       root.classList.remove("light");
     }
   },
-  openCommandPalette: () => set({ commandPaletteOpen: true }),
+  openCommandPalette: (seed = "") => set({ commandPaletteOpen: true, paletteSeed: seed }),
   closeCommandPalette: () => set({ commandPaletteOpen: false }),
-  toggleCommandPalette: () => set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
+  toggleCommandPalette: () => set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen, paletteSeed: "" })),
   markOnboarded: () => {
     const stamp = new Date().toISOString();
     storage.set("bunonbrain:onboardedAt", stamp);

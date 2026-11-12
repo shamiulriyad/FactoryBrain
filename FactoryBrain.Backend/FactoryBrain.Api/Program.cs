@@ -7,7 +7,7 @@
 //   http://localhost:5000/api/* by default, or to $DOTNET_API_URL when set.
 //   That makes the entire frontend (Next.js App Router + Zustand stores +
 //   GSAP/Framer Motion components) continue to talk to a familiar origin
-//   while data and compute move to a .NET 9 service.
+//   while data and compute move to a .NET 10 service.
 //
 // Configuration loading order (later overrides earlier):
 //   1. appsettings.json
@@ -824,7 +824,7 @@ if (fwdEnabled)
     // subnets) leak trusted status beyond what's intended. The
     // collections are read-only properties so we mutate them in place.
     fwdOptions.KnownProxies.Clear();
-    fwdOptions.KnownNetworks.Clear();
+    fwdOptions.KnownIPNetworks.Clear();
 
     var rawProxies = Environment.GetEnvironmentVariable("TRUSTED_PROXIES");
     var proxyEntries = string.IsNullOrWhiteSpace(rawProxies)
@@ -849,9 +849,9 @@ if (fwdEnabled)
                 fwdOptions.KnownProxies.Add(ip);
                 continue;
             }
-            if (Microsoft.AspNetCore.HttpOverrides.IPNetwork.TryParse(entry, out var net))
+            if (System.Net.IPNetwork.TryParse(entry, out var net))
             {
-                fwdOptions.KnownNetworks.Add(net);
+                fwdOptions.KnownIPNetworks.Add(net);
                 continue;
             }
             throw new InvalidOperationException(

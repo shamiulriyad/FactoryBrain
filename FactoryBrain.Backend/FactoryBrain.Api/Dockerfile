@@ -27,7 +27,7 @@
 # ─────────────────────────────────────────────────────────────────────────
 # Stage 1 — restore + publish
 # ─────────────────────────────────────────────────────────────────────────
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 
@@ -63,7 +63,7 @@ RUN rm -f /app/publish/appsettings.Development.json
 # ─────────────────────────────────────────────────────────────────────────
 # Stage 2 — runtime
 # ─────────────────────────────────────────────────────────────────────────
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 
 # Bind on 8080 inside the container. ASPNETCORE_URLS is read by
 # Kestrel/HttpSys; the leading "+" means "all interfaces".

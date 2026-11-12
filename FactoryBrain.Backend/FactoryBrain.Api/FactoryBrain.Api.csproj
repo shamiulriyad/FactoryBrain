@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>FactoryBrain.Api</RootNamespace>
@@ -12,8 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- ASP.NET Core hosting / Swagger -->
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.0" />
+    <!-- Swagger (Swashbuckle 6 uses Microsoft.OpenApi 1.x; Microsoft.AspNetCore.OpenApi 10 would pull 2.x and break it) -->
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
 
     <!-- Validation -->
@@ -21,7 +20,7 @@
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.9.0" />
 
     <!-- Security -->
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.15" />
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
 
     <!-- Config / env -->

@@ -71,7 +71,9 @@ test("logout ends the session server-side and protected routes require login aga
   const before = (await context.cookies()).find((c) => c.name === "fb_refresh")?.value;
   expect(before).toBeTruthy();
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  // Sign out lives in the account menu at the bottom of the sidebar.
+  await page.getByTestId("session-chip").getByRole("button").click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
   await page.waitForURL("**/login**");
   expect((await context.cookies()).find((c) => c.name === "fb_refresh")).toBeUndefined();
 

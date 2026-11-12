@@ -1,5 +1,5 @@
 // RAG eval — exercises the live /api/ask endpoint end-to-end against the
-// .NET 9 backend. Step 48 replaces the previous in-process simulation
+// .NET 10 backend. Step 48 replaces the previous in-process simulation
 // (which mirrored the production code in pure ESM) with a network-backed
 // golden-set eval that exercises the real retrieval pipeline.
 //

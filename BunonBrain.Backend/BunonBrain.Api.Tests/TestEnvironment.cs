@@ -90,6 +90,11 @@ public static class TestEnvironment
                                               && d.ImplementationType == typeof(BunonBrain.Infrastructure.Qc.QcInspectionWorker)).ToList())
             services.Remove(d);
 
+        // The attendance review worker: tests run the review through the API so timing is deterministic.
+        foreach (var d in services.Where(d => d.ServiceType == typeof(IHostedService)
+                                              && d.ImplementationType == typeof(BunonBrain.Infrastructure.Attendance.AttendanceReviewWorker)).ToList())
+            services.Remove(d);
+
         // Likewise the merchandising document worker: tests call IMerchDocumentProcessor.
         foreach (var d in services.Where(d => d.ServiceType == typeof(IHostedService)
                                               && d.ImplementationType == typeof(BunonBrain.Infrastructure.Merchandising.MerchDocumentWorker)).ToList())

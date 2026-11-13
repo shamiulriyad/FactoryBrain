@@ -70,12 +70,16 @@ public static class Permissions
     public const string WorkersAssign      = "workers.assign";
 
     // Attendance & shifts
-    public const string AttendanceView   = "attendance.view";
-    public const string AttendanceManage = "attendance.manage";
-    public const string ShiftsManage     = "shifts.manage";
+    public const string AttendanceView    = "attendance.view";
+    public const string AttendanceRecord  = "attendance.record";
+    public const string AttendanceManage  = "attendance.manage";
+    public const string AttendanceApprove = "attendance.approve";
+    public const string ShiftsManage      = "shifts.manage";
+    public const string ShiftsAssign      = "shifts.assign";
     public const string LeaveManage      = "leave.manage";
     public const string OvertimeView     = "overtime.view";
     public const string OvertimeManage   = "overtime.manage";
+    public const string OvertimeApprove  = "overtime.approve";
 
     // Monitoring
     public const string MonitoringView           = "monitoring.view";
@@ -164,12 +168,16 @@ public static class AccessCatalog
         P(Permissions.WorkersManage,      "Workforce", "Manage workers", "Register, edit and import workers, change their status, issue cards, and see their personal details."),
         P(Permissions.WorkersAssign,      "Workforce", "Assign workstations", "Assign workers to workstations, transfer them and end assignments, in your scope (supervisors: their lines)."),
 
-        P(Permissions.AttendanceView,   "Attendance", "View attendance", "See attendance and shift records.", reserved: true),
-        P(Permissions.AttendanceManage, "Attendance", "Manage attendance", "Record attendance and process corrections.", reserved: true),
-        P(Permissions.ShiftsManage,     "Attendance", "Manage shift assignments", "Assign workers to shifts.", reserved: true),
-        P(Permissions.LeaveManage,      "Attendance", "Manage leave", "Record and approve leave.", reserved: true),
-        P(Permissions.OvertimeView,     "Attendance", "View overtime", "See overtime requests and records.", reserved: true),
-        P(Permissions.OvertimeManage,   "Attendance", "Manage overtime", "Create and approve overtime requests.", reserved: true),
+        P(Permissions.AttendanceView,    "Attendance", "View attendance", "Attendance sessions, breaks, shifts, events and reports in your scope (supervisors: their lines)."),
+        P(Permissions.AttendanceRecord,  "Attendance", "Record punches and breaks", "Record check-ins, check-outs and breaks for workers in your scope."),
+        P(Permissions.AttendanceManage,  "Attendance", "Administer attendance", "Request corrections, use the RFID simulator, set the attendance policy, confirm payable overtime and run the missing-punch review."),
+        P(Permissions.AttendanceApprove, "Attendance", "Approve corrections", "Approve or reject attendance corrections requested by someone else."),
+        P(Permissions.ShiftsManage,      "Attendance", "Manage shifts", "Create, edit, activate and deactivate shifts and their breaks."),
+        P(Permissions.ShiftsAssign,      "Attendance", "Assign shifts", "Assign workers to shifts, one by one or by line or department, in your scope."),
+        P(Permissions.LeaveManage,       "Attendance", "Manage leave", "Record and approve leave.", reserved: true),
+        P(Permissions.OvertimeView,      "Attendance", "View overtime", "See overtime requests, approvals and actual overtime in your scope."),
+        P(Permissions.OvertimeManage,    "Attendance", "Request overtime", "Submit and cancel overtime requests for workers in your scope."),
+        P(Permissions.OvertimeApprove,   "Attendance", "Approve overtime", "Approve or reject overtime requested by someone else."),
 
         P(Permissions.MonitoringView,           "Monitoring", "View monitoring", "Floor alerts, line board and live floor status."),
         P(Permissions.MonitoringAlertsReview,   "Monitoring", "Review monitoring alerts", "Acknowledge and resolve floor alerts."),
@@ -221,7 +229,8 @@ public static class AccessCatalog
             {
                 Permissions.FactoriesView, Permissions.LinesView, Permissions.WorkersView, Permissions.WorkersDetailsView,
                 Permissions.WorkersAssign,
-                Permissions.AttendanceView, Permissions.OvertimeView,
+                Permissions.AttendanceView, Permissions.AttendanceApprove,
+                Permissions.OvertimeView, Permissions.OvertimeManage, Permissions.OvertimeApprove,
                 Permissions.MonitoringView,
                 Permissions.ProductionView, Permissions.ProductionManage, Permissions.QcView,
                 Permissions.MerchandisingView, Permissions.MerchandisingManage,
@@ -235,7 +244,8 @@ public static class AccessCatalog
             RoleScope.Line, 50, AdminTier, new[]
             {
                 Permissions.LinesView, Permissions.WorkersView, Permissions.WorkersAssign,
-                Permissions.AttendanceView,
+                Permissions.AttendanceView, Permissions.AttendanceRecord, Permissions.ShiftsAssign,
+                Permissions.OvertimeView, Permissions.OvertimeManage, Permissions.OvertimeApprove,
                 Permissions.MonitoringView, Permissions.ProductionView, Permissions.ProductionAlertsReview,
                 Permissions.QcView, Permissions.QcManage, Permissions.ApprovalsView, Permissions.MerchandisingView,
                 Permissions.KnowledgeView, Permissions.NotificationsView,
@@ -245,7 +255,7 @@ public static class AccessCatalog
             "Watches the central monitoring dashboard, camera feeds and AI results; acknowledges and escalates alerts. Cannot change attendance, salary or worker records.",
             RoleScope.Factory, 40, AdminTier, new[]
             {
-                Permissions.LinesView, Permissions.WorkersView,
+                Permissions.LinesView, Permissions.WorkersView, Permissions.AttendanceView,
                 Permissions.MonitoringView, Permissions.MonitoringAlertsReview, Permissions.MonitoringAlertsEscalate,
                 Permissions.CamerasView, Permissions.NotificationsView,
             }),
@@ -255,8 +265,9 @@ public static class AccessCatalog
             RoleScope.Factory, 40, AdminTier, new[]
             {
                 Permissions.LinesView, Permissions.WorkersView, Permissions.WorkersDetailsView, Permissions.WorkersManage,
-                Permissions.AttendanceView, Permissions.AttendanceManage, Permissions.ShiftsManage,
-                Permissions.LeaveManage, Permissions.OvertimeView, Permissions.OvertimeManage,
+                Permissions.AttendanceView, Permissions.AttendanceRecord, Permissions.AttendanceManage, Permissions.AttendanceApprove,
+                Permissions.ShiftsManage, Permissions.ShiftsAssign,
+                Permissions.LeaveManage, Permissions.OvertimeView, Permissions.OvertimeManage, Permissions.OvertimeApprove,
                 Permissions.ReportsView, Permissions.NotificationsView,
             }),
 

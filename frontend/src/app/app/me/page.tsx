@@ -19,6 +19,8 @@ import { formatDay, type Worker } from "@/lib/workers";
 import { WorkerAvatar, WorkerStatusBadge } from "@/components/workers/shared";
 import { AssignmentHistoryTable } from "@/components/assignments/shared";
 import { NOT_PRESENCE_NOTE, type Assignment } from "@/lib/assignments";
+import { OvertimeTable, SessionTable } from "@/components/attendance/shared";
+import { clock, minutes, shiftWindow, type WorkerAttendance } from "@/lib/attendance";
 
 export default function MyProfilePage() {
   return (
@@ -66,16 +68,34 @@ function Mine() {
               </p>
             </Panel>
             <MyAssignments />
-            <Panel title="Attendance, shift & breaks" icon={<CalendarClock size={14} />}>
-              <p className="text-caption text-fg-secondary">
-                Your attendance, shift, activity and break records will appear here once the attendance module is connected.
-              </p>
-            </Panel>
+            <MyAttendance />
           </>
         )}
         <p className="text-caption text-fg-tertiary">Account and password: <Link href="/app/account" className="text-accent hover:underline">Account settings</Link>.</p>
       </div>
     </div>
+  );
+}
+
+/** The signed-in worker's own shift, recent attendance, breaks and overtime (GET /api/attendance/me). */
+function MyAttendance() {
+  const mine = useResource<WorkerAttendance>("/api/attendance/me");
+  return (
+    <Panel title="Attendance, shift & breaks" icon={<CalendarClock size={14} />} testId="my-attendance" flush>
+      {mine.loading ? <div className="p-4"><SkeletonRows rows={3} /></div>
+        : mine.error || !mine.data ? <p className="p-4 text-caption text-fg-tertiary">{mine.error ? errorMessage(mine.error) : "No attendance yet."}</p>
+        : (
+          <div className="divide-y divide-border-subtle">
+            <div className="p-4 grid gap-3 sm:grid-cols-3 text-caption">
+              <Item label="Current shift">{mine.data.currentShift ? <><span className="font-mono">{mine.data.currentShift.shift.code}</span> · {shiftWindow(mine.data.currentShift.shift)}</> : "No shift assigned"}</Item>
+              <Item label="Right now">{mine.data.openSession ? `Checked in since ${clock(mine.data.openSession.checkInAt)}${mine.data.openSession.onBreak ? " (on a break)" : ""}` : "Not checked in"}</Item>
+              <Item label="Last 30 days">{`${mine.data.sessions.length} session${mine.data.sessions.length === 1 ? "" : "s"} · ${minutes(mine.data.sessions.reduce((n, x) => n + x.figures.netWorkingMinutes, 0))} worked`}</Item>
+            </div>
+            {mine.data.sessions.length > 0 && <SessionTable rows={mine.data.sessions} showWorker={false} testId="my-sessions" />}
+            {mine.data.overtime.length > 0 && <OvertimeTable rows={mine.data.overtime} testId="my-overtime" />}
+          </div>
+        )}
+    </Panel>
   );
 }
 

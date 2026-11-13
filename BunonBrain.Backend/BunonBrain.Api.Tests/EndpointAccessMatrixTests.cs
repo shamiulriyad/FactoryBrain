@@ -78,13 +78,32 @@ public static class EndpointMatrix
         ("GET",   "/api/factories/unassigned-lines",  G(P.LinesManage)),
         ("PUT",   "/api/factories/{id}/lines/{lineId}",    G(P.LinesManage)),
         ("DELETE","/api/factories/{id}/lines/{lineId}",    G(P.LinesManage)),
+        ("GET",   "/api/factories/{factoryId}/departments",                G(P.WorkersView, P.DepartmentsManage, P.LinesView)),
+        ("POST",  "/api/factories/{factoryId}/departments",                G(P.DepartmentsManage)),
+        ("PUT",   "/api/factories/{factoryId}/departments/{departmentId}", G(P.DepartmentsManage)),
+        ("GET",   "/api/factories/{factoryId}/floors",                     G(P.WorkersView, P.LinesView)),
+        ("POST",  "/api/factories/{factoryId}/floors",                     G(P.LinesManage)),
+        ("PUT",   "/api/factories/{factoryId}/floors/{floorId}",           G(P.LinesManage)),
         ("GET",   "/api/workers",                     G(P.WorkersView)),
         ("POST",  "/api/workers",                     G(P.WorkersManage)),
         ("GET",   "/api/workers/me",                  G(P.SelfView)),
+        ("GET",   "/api/workers/statistics",          G(P.WorkersView)),
+        ("GET",   "/api/workers/export",              G(P.WorkersDetailsView, P.WorkersManage)),
+        ("GET",   "/api/workers/import/template",     G(P.WorkersManage)),
+        ("POST",  "/api/workers/import",              G(P.WorkersManage)),
         ("GET",   "/api/workers/{id}",                G(P.WorkersView, P.SelfView)),
         ("PUT",   "/api/workers/{id}",                G(P.WorkersManage)),
+        ("GET",   "/api/workers/{id}/profile",        G(P.WorkersView, P.SelfView)),
+        ("PATCH", "/api/workers/{id}/status",         G(P.WorkersManage)),
         ("PUT",   "/api/workers/{id}/workstation",    G(P.WorkersAssign, P.WorkersManage)),
         ("PUT",   "/api/workers/{id}/account",        G(P.UsersUpdate)),
+        ("POST",  "/api/workers/{id}/account",        G(P.UsersCreate)),
+        ("GET",   "/api/workers/{id}/photo",          G(P.WorkersView, P.SelfView)),
+        ("PUT",   "/api/workers/{id}/photo",          G(P.WorkersManage)),
+        ("DELETE", "/api/workers/{id}/photo",         G(P.WorkersManage)),
+        ("GET",   "/api/workers/{id}/cards",          G(P.WorkersManage)),
+        ("POST",  "/api/workers/{id}/cards",          G(P.WorkersManage)),
+        ("PATCH", "/api/workers/{id}/cards/{cardId}", G(P.WorkersManage)),
         ("GET",   "/api/audit",                       G(P.AuditView)),
         ("GET",   "/api/inquiries",                   G(P.InquiriesManage)),
         ("PATCH", "/api/inquiries/{id}",              G(P.InquiriesManage)),
@@ -214,6 +233,10 @@ public static class EndpointMatrix
         .Replace("{agentId}", "line-throughput-agent")
         .Replace("{changeId}", "change-1")
         .Replace("{lineId}", "line-1")
+        .Replace("{factoryId}", "5b1f0c9e-0000-4000-8000-000000000001")
+        .Replace("{departmentId}", "5b1f0c9e-0000-4000-8000-000000000002")
+        .Replace("{floorId}", "5b1f0c9e-0000-4000-8000-000000000003")
+        .Replace("{cardId}", "5b1f0c9e-0000-4000-8000-000000000004")
         .Replace("{id}", "alert-1")
         .Replace("{code}", "stain");
 

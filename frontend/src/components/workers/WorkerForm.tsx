@@ -194,7 +194,7 @@ export function WorkerForm({ factoryId, initial, mode, submitLabel, onSubmit, on
         )}
       </Panel>
 
-      <Panel title="Work placement" subtitle="Optional. Workstation assignment and shifts come with later modules.">
+      <Panel title="Work placement" subtitle="Optional home line and floor. Assign a workstation from the worker's page after registering.">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Production floor" error={errors.floorId}>
             {({ id }) => (
@@ -212,7 +212,6 @@ export function WorkerForm({ factoryId, initial, mode, submitLabel, onSubmit, on
               </Select>
             )}
           </Field>
-          {mode === "create" && v.lineId && text("workstation", "Workstation label", { max: 32, hint: "Optional, e.g. WS-04." })}
         </div>
       </Panel>
 

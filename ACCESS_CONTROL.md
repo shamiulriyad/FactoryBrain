@@ -30,6 +30,9 @@ the server would refuse.
 | Worker status history | `worker_status_history` | Every status change (Active, Inactive, Suspended, Resigned, Terminated) with reason, effective date and who. |
 | Worker card | `worker_cards` | RFID / NFC credential. One *active* card per UID; returned cards can be re-issued, past assignments are kept. |
 | Department, production floor | `departments`, `production_floors` | Per-factory reference data for worker placement; deactivated, never deleted. |
+| Workstation | `workstations` | A table on one production line (e.g. `T-025`), with department, optional floor, position and a configurable **capacity** (1–20 workers). Deactivated, never deleted. |
+| Machine | `machines` | A machine of a factory; stands at one workstation at a time, or nowhere yet. |
+| Workstation assignment | `workstation_assignments` | One worker at one workstation from `StartAt` to `EndAt` (open while active), with the line / department / floor / machine copied at the time, who assigned and ended it, reasons, and the assignment a transfer replaced. Never deleted or reopened. A recorded placement, **not** proof of presence. |
 | Audit | `audit_log` (+ `FactoryId`) | Append-only (the database rejects UPDATE/DELETE/TRUNCATE). Factory-scoped readers see only their factories' entries. |
 
 Migration: `20261112165317_AddAccessControl`. It renames the old
@@ -86,7 +89,7 @@ active factory keeps only self-service permissions.
 | `workers.view` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | | |
 | `workers.details.view` | ✓ | ✓ | ✓ | | | ✓ | | |
 | `workers.manage` | ✓ | ✓ | | | | ✓ | | |
-| `workers.assign` | ✓ | ✓ | | ✓ | | | | |
+| `workers.assign` | ✓ | ✓ | ✓ | ✓ | | | | |
 | **Attendance** (all *R*) |
 | `attendance.view` | ✓ | ✓ | ✓ | ✓ | | ✓ | | |
 | `attendance.manage` | ✓ | ✓ | | | | ✓ | | |
@@ -167,7 +170,22 @@ active factory keeps only self-service permissions.
 10. **Temporary passwords.** Accounts created by an administrator, and admin
    resets, use a temporary password; until it is changed every permission
    check fails with `password_change_required`.
-11. **Audit.** Sign-ins and every user, role, scope, status, password, factory,
+11. **Workstation assignments.** Reading needs `workers.view` (a worker reads
+    their own with `self.view`); assigning, transferring and ending need
+    `workers.assign` with the worker *and* the workstation in scope (a
+    supervisor: their lines; never across factories). Only active workers,
+    active workstations and active machines; a machine must stand at that
+    workstation (or nowhere) and serve one assignment at a time. One active
+    primary assignment per worker and at most `Capacity` workers per
+    workstation, checked under row locks (worker → assignment → workstation)
+    and backed by a partial unique index and an exclusion constraint
+    (`EX_workstation_assignments_no_overlap`, `btree_gist`) that rejects
+    overlapping periods. A transfer closes the old assignment and opens the
+    new one at the same instant in one transaction. A worker who stops being
+    Active has their assignment ended. Configuring workstations needs
+    `lines.manage` (machines: or `devices.manage`); a workstation with
+    assignments can't be deactivated, moved, or reduced below its occupancy.
+12. **Audit.** Sign-ins and every user, role, scope, status, password, factory,
    line, department, floor, worker, card, import and export are recorded with
    actor, before/after and reason. Passwords are never logged, and worker edits
    record which fields changed, not their personal values.
@@ -210,7 +228,17 @@ Errors are RFC 7807 problem details with a stable `code`, e.g.
 | `PUT/DELETE /api/workers/{id}/photo` | `workers.manage` |
 | `GET/POST /api/workers/{id}/cards`, `PATCH /api/workers/{id}/cards/{cardId}` `{reason}` | `workers.manage` |
 | `GET /api/workers/import/template`, `POST /api/workers/import` (multipart `file`, `factoryId`, `dryRun`) | `workers.manage` |
-| `PUT /api/workers/{id}/workstation` | `workers.assign` or `workers.manage` |
+| `PUT /api/workers/{id}/workstation` `{lineId}` (home line only; a workstation label is refused, use assignments) | `workers.assign` or `workers.manage` |
+| `GET /api/workstations?search&factoryId&departmentId&floorId&lineId&occupancy&includeInactive&page&pageSize`, `GET /api/workstations/{id}` | `workers.view`, `lines.view` or `workers.assign` (assigned workers only with `workers.view`) |
+| `POST /api/workstations`, `POST /api/workstations/bulk`, `PUT /api/workstations/{id}` | `lines.manage` |
+| `GET /api/machines?factoryId&workstationId&unplaced&search` | `lines.view`, `devices.view` or `workers.assign` |
+| `POST /api/machines`, `PUT /api/machines/{id}` | `lines.manage` or `devices.manage` |
+| `GET /api/assignments?…filters…`, `GET /api/assignments/active`, `GET /api/assignments/statistics` | `workers.view` |
+| `GET /api/assignments/{id}`, `GET /api/workers/{id}/assignments` (`{id}` may be `me`) | `workers.view` (own: `self.view`) |
+| `GET /api/workstations/{id}/assignments` | `workers.view` |
+| `POST /api/assignments` `{workerId, workstationId, machineId?, startAt?, reason?, notes?}` | `workers.assign` |
+| `POST /api/assignments/{id}/transfer` `{workstationId, reason, machineId?, effectiveAt?, notes?}` | `workers.assign` |
+| `POST /api/assignments/{id}/end` `{reason, endAt?}` | `workers.assign` |
 | `PUT /api/workers/{id}/account` `{userId}` (link / unlink) | `users.update` |
 | `POST /api/workers/{id}/account` `{email, temporaryPassword}` (create a Worker login) | `users.create` |
 | `GET /api/audit?entityType&entityId&action&actorUserId&factoryId&limit&before` | `audit.view` (scoped) |
@@ -236,6 +264,11 @@ knowledge, settings, agents) are guarded by their module permissions; see
 | Edit worker | `/app/workers/{id}/edit` | `workers.manage` |
 | Import workers (CSV, preview, confirm) | `/app/workers/import` | `workers.manage` |
 | Worker statistics | `/app/workers/statistics` | `workers.view` |
+| Assignment dashboard (occupancy, line layout, recent transfers) | `/app/assignments` | `workers.view` |
+| Workstations (overview, add / add a series) | `/app/assignments/workstations` | `workers.view`, `lines.view` or `workers.assign` |
+| Workstation details (assigned workers, assign / transfer / end, machines, configure, history) | `/app/assignments/workstations/{id}` | as above; actions follow permissions |
+| Assignment history | `/app/assignments/history` | `workers.view` |
+| Worker profile → Workstation assignment (current, assign / transfer / end, timeline) | `/app/workers/{id}` | `workers.view` |
 | Account settings (profile, password, my access) | `/app/account` | everyone |
 | My profile (worker self-service) | `/app/me` | `self.view` |
 | Access denied | shown in place, or `/app/access-denied` | — |

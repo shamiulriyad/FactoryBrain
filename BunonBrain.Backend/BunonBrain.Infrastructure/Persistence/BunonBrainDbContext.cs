@@ -55,6 +55,9 @@ public class BunonBrainDbContext : DbContext
     public DbSet<WorkerCard>                   WorkerCards            => Set<WorkerCard>();
     public DbSet<Department>                   Departments            => Set<Department>();
     public DbSet<ProductionFloor>              ProductionFloors       => Set<ProductionFloor>();
+    public DbSet<Workstation>                  Workstations           => Set<Workstation>();
+    public DbSet<Machine>                      Machines               => Set<Machine>();
+    public DbSet<WorkstationAssignment>        Assignments            => Set<WorkstationAssignment>();
     public DbSet<QcInspection>        QcInspections        => Set<QcInspection>();
     public DbSet<QcInspectionFinding> QcInspectionFindings => Set<QcInspectionFinding>();
     public DbSet<QcDefectCategory>    QcDefectCategories   => Set<QcDefectCategory>();

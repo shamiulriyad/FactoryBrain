@@ -142,6 +142,7 @@ export const en = {
     website: "Website",
     workforce: "Workforce",
     workers: "Workers",
+    assignments: "Assignments",
     floorMap: "Live floor map",
     alerts: "Alerts",
     orders: "Orders & shipments",

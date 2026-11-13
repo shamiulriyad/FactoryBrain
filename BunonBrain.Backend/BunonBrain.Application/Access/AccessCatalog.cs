@@ -155,14 +155,14 @@ public static class AccessCatalog
         P(Permissions.AuditView,          "Users & access", "View audit log", "Read the audit trail for your scope."),
 
         P(Permissions.LinesView,         "Organization", "View production lines", "See the lines of your factory (supervisors: assigned lines)."),
-        P(Permissions.LinesManage,       "Organization", "Manage production lines", "Create lines and production floors and attach lines to a factory."),
+        P(Permissions.LinesManage,       "Organization", "Manage production lines", "Create lines, production floors, workstations (with their capacity) and machines, and attach lines to a factory."),
         P(Permissions.DepartmentsManage, "Organization", "Manage departments", "Create, rename and (de)activate the departments of a factory."),
         P(Permissions.SettingsManage,    "Organization", "Manage factory settings", "Factory-level configuration such as QC defect categories."),
 
-        P(Permissions.WorkersView,        "Workforce", "View workers", "The worker directory in your scope: Worker ID, name, photo, placement, designation and status. No personal or employment details."),
+        P(Permissions.WorkersView,        "Workforce", "View workers", "The worker directory in your scope: Worker ID, name, photo, placement, designation and status, and workstation assignments and their history. No personal or employment details."),
         P(Permissions.WorkersDetailsView, "Workforce", "View employment details", "Employee number, joining date, grade and status history of workers, and export of the worker list. No personal contact details."),
         P(Permissions.WorkersManage,      "Workforce", "Manage workers", "Register, edit and import workers, change their status, issue cards, and see their personal details."),
-        P(Permissions.WorkersAssign,      "Workforce", "Assign workstations", "Move workers between lines and workstations in your scope."),
+        P(Permissions.WorkersAssign,      "Workforce", "Assign workstations", "Assign workers to workstations, transfer them and end assignments, in your scope (supervisors: their lines)."),
 
         P(Permissions.AttendanceView,   "Attendance", "View attendance", "See attendance and shift records.", reserved: true),
         P(Permissions.AttendanceManage, "Attendance", "Manage attendance", "Record attendance and process corrections.", reserved: true),
@@ -216,10 +216,11 @@ public static class AccessCatalog
             AllPermissions.Where(p => !p.PlatformOnly).Select(p => p.Code).ToArray()),
 
         new RoleDefinition(SystemRoles.FactoryManager, "Factory Manager",
-            "Oversees factory operations: workforce and production performance, attendance, overtime and reports, and operational approvals.",
+            "Oversees factory operations: workforce and production performance, workstation assignments, attendance, overtime and reports, and operational approvals.",
             RoleScope.Factory, 60, AdminTier, new[]
             {
                 Permissions.FactoriesView, Permissions.LinesView, Permissions.WorkersView, Permissions.WorkersDetailsView,
+                Permissions.WorkersAssign,
                 Permissions.AttendanceView, Permissions.OvertimeView,
                 Permissions.MonitoringView,
                 Permissions.ProductionView, Permissions.ProductionManage, Permissions.QcView,

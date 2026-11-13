@@ -301,9 +301,9 @@ public sealed class DbAccessControlTests
         Assert.Equal(new[] { w.LineA1 }, lines.Body.EnumerateArray().Select(l => l.GetProperty("id").GetString()));
 
         // Within the line: allowed. To a line they don't run, or for a worker off their line: refused.
-        Is(HttpStatusCode.OK, await Put($"/api/workers/{w.Worker1}/workstation", sup, new { lineId = w.LineA1, workstation = "WS-07" }));
-        Is(HttpStatusCode.Forbidden, await Put($"/api/workers/{w.Worker1}/workstation", sup, new { lineId = w.LineA2, workstation = "WS-01" }), "line_out_of_scope");
-        Is(HttpStatusCode.NotFound, await Put($"/api/workers/{w.Worker2}/workstation", sup, new { lineId = w.LineA1, workstation = "WS-02" }));
+        Is(HttpStatusCode.OK, await Put($"/api/workers/{w.Worker1}/workstation", sup, new { lineId = w.LineA1 }));
+        Is(HttpStatusCode.Forbidden, await Put($"/api/workers/{w.Worker1}/workstation", sup, new { lineId = w.LineA2 }), "line_out_of_scope");
+        Is(HttpStatusCode.NotFound, await Put($"/api/workers/{w.Worker2}/workstation", sup, new { lineId = w.LineA1 }));
 
         // Employment details are hidden from a supervisor; no worker or user administration.
         Assert.True(Hidden(list.Body.GetProperty("items")[0], "phone"));

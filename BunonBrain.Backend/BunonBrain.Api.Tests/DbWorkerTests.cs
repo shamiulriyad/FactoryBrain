@@ -186,7 +186,7 @@ public sealed class DbWorkerTests
         body["emergencyContactPhone"] = "01800000001";
         body["emergencyContactRelation"] = "Brother";
         body["floorId"] = s.Floor;
-        body["workstation"] = "WS-04";
+        body["workstation"] = "WS-04"; // ignored: workstations are assigned through /api/assignments
         body["employmentType"] = "probation";
         // An id sent by the client is ignored: the Worker ID is the server's.
         body["workerCode"] = "W-999999";
@@ -206,7 +206,7 @@ public sealed class DbWorkerTests
         Assert.Equal("Sewing", w.Body.GetProperty("department").GetProperty("name").GetString());
         Assert.Equal("Second floor", w.Body.GetProperty("floor").GetProperty("name").GetString());
         Assert.Equal(s.Line1, w.Body.GetProperty("line").GetProperty("id").GetString());
-        Assert.Equal("WS-04", w.Str("workstation"));
+        Assert.False(w.Has("workstation"));
         Assert.False(w.Body.GetProperty("hasAccount").GetBoolean());
         Assert.False(w.Body.GetProperty("hasPhoto").GetBoolean());
         Assert.Equal("full", w.Str("detail"));
@@ -426,7 +426,7 @@ public sealed class DbWorkerTests
         Assert.False(hrProfile.Has("machine"));
         Assert.Equal(s.Factory, hrProfile.Body.GetProperty("factory").GetProperty("id").GetString());
         var sections = hrProfile.Body.GetProperty("activity").EnumerateArray().ToList();
-        Assert.Equal(new[] { "attendance", "shifts", "workstationAssignments", "activityTimeline", "breaks", "overtime", "monitoringAlerts" },
+        Assert.Equal(new[] { "attendance", "shifts", "activityTimeline", "breaks", "overtime", "monitoringAlerts" },
             sections.Select(x => x.GetProperty("key").GetString()));
         Assert.All(sections, x =>
         {
@@ -441,7 +441,9 @@ public sealed class DbWorkerTests
         var super = await NewPerson(R.SuperAdmin, null);
         var s = await NewSite(super);
         var w = await Register(s, "Before Edit", s.Line1);
-        Is(HttpStatusCode.OK, await Put($"/api/workers/{w.Id}/workstation", s.Supervisor.Token, new { lineId = s.Line1, workstation = "WS-09" }));
+        Is(HttpStatusCode.OK, await Put($"/api/workers/{w.Id}/workstation", s.Supervisor.Token, new { lineId = s.Line1 }));
+        // A workstation label is refused here: workstations are assigned through /api/assignments.
+        Is(HttpStatusCode.BadRequest, await Put($"/api/workers/{w.Id}/workstation", s.Supervisor.Token, new { lineId = s.Line1, workstation = "WS-09" }), "use_assignments");
 
         var edit = Worker(s, "After Edit", s.Line2, s.Cutting);
         edit["phone"] = "01999000111";
@@ -452,7 +454,7 @@ public sealed class DbWorkerTests
         Assert.Equal("After Edit", updated.Str("fullName"));
         Assert.Equal("Cutting", updated.Body.GetProperty("department").GetProperty("name").GetString());
         Assert.Equal(s.Line2, updated.Str("lineId"));
-        Assert.False(updated.Has("workstation")); // the workstation belonged to the old line
+        Assert.False(updated.Has("workstation")); // no assignment, so no workstation
         Assert.Equal(w.Str("workerCode"), updated.Str("workerCode")); // the Worker ID never changes
         Assert.Equal(s.Factory, updated.Str("factoryId"));
 

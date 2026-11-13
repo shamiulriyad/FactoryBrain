@@ -537,6 +537,9 @@ builder.Services.AddSingleton<IWorkerPhotoStore>(sp => new BunonBrain.Infrastruc
     workerPhotoPath, sp.GetRequiredService<ILogger<BunonBrain.Infrastructure.Workers.WorkerPhotoStore>>()));
 builder.Services.AddScoped<IWorkerService, BunonBrain.Infrastructure.Workers.WorkerService>();
 builder.Services.AddScoped<IOrganizationService, BunonBrain.Infrastructure.Workers.OrganizationService>();
+// Workstations, machines and worker ↔ workstation assignments (with transfers and history).
+builder.Services.AddScoped<IWorkstationService, BunonBrain.Infrastructure.Assignments.WorkstationService>();
+builder.Services.AddScoped<IAssignmentService, BunonBrain.Infrastructure.Assignments.AssignmentService>();
 builder.Services.AddScoped<IAuditQueryService, BunonBrain.Infrastructure.Access.AuditQueryService>();
 
 // ─── RAG tuning config (Rag: section in appsettings.json, env Rag__*) ──────
@@ -970,6 +973,11 @@ app.MapGet("/", () => Results.Ok(new
         "PUT  /api/workers/{id}",
         "GET  /api/workers/{id}/profile",
         "PATCH /api/workers/{id}/status",
+        "GET  /api/workstations",
+        "GET  /api/assignments",
+        "POST /api/assignments",
+        "POST /api/assignments/{id}/transfer",
+        "GET  /api/assignments/statistics",
         "GET  /api/audit",
         "POST /api/rag/reindex",
         "GET  /api/rag/status",

@@ -74,7 +74,6 @@ public class CreateWorkerRequestValidator : AbstractValidator<CreateWorkerReques
         WorkerFieldRules.OptionalPhone(RuleFor(x => x.EmergencyContactPhone));
         RuleFor(x => x.EmergencyContactRelation).MaximumLength(WorkerRules.RelationMax);
         RuleFor(x => x.LineId).MaximumLength(64);
-        RuleFor(x => x.Workstation).MaximumLength(WorkerRules.WorkstationMax);
         RuleFor(x => x.Grade).MaximumLength(WorkerRules.GradeMax);
     }
 }

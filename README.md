@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🧵 FactoryBrain
+# 🧵 BunonBrain
 
 **AI operations platform for Bangladeshi garment (RMG) factories**
 
@@ -103,26 +103,26 @@ flowchart LR
 One `.env` at the repo root configures everything (frontend, API and `rag/`):
 
 ```bash
-cp .env.example .env        # then fill in FACTORYBRAIN_DB, keys, etc.
+cp .env.example .env        # then fill in BUNONBRAIN_DB, keys, etc.
 ```
 
 ### 2. Database
 
-Local Docker (matches the default `FACTORYBRAIN_DB`):
+Local Docker (matches the default `BUNONBRAIN_DB`):
 
 ```bash
 docker run -d --name fb-pg -p 5432:5432 \
-  -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=factorybrain \
+  -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=bunonbrain \
   pgvector/pgvector:pg16
 ```
 
 Or use **Supabase**: take the *Session pooler* string from Dashboard → Connect
-and use the Supabase `FACTORYBRAIN_DB` line in `.env`.
+and use the Supabase `BUNONBRAIN_DB` line in `.env`.
 
 ### 3. Backend API
 
 ```bash
-cd FactoryBrain.Backend/FactoryBrain.Api
+cd BunonBrain.Backend/BunonBrain.Api
 dotnet run                  # reads the repo-root .env
 ```
 
@@ -167,18 +167,21 @@ Never commit real values. Real shell or Docker env vars always win over the file
 | App | How it finds the root `.env` | Main keys |
 |---|---|---|
 | Next.js | `frontend/next.config.mjs` loads it | `NEXT_PUBLIC_API_URL`, `DOTNET_API_URL` |
-| .NET API | `Program.cs` walks up from its working directory | `FACTORYBRAIN_DB`, `JWT_SIGNING_KEY`, `SEED_ADMIN_*`, `LLM_*`, `RAG_EMBEDDING_*`, `CORS_ORIGINS`, `SIMULATOR_ENABLED` |
+| .NET API | `Program.cs` walks up from its working directory | `BUNONBRAIN_DB`, `JWT_SIGNING_KEY`, `SEED_ADMIN_*`, `LLM_*`, `RAG_EMBEDDING_*`, `CORS_ORIGINS`, `SIMULATOR_ENABLED` |
 | Python RAG | `rag/config.py` loads `../.env` | `GOOGLE_API_KEY`, `PYRAG_*` |
 
 The Python keys carry a `PYRAG_` prefix so they never clash with the API's
 (for example, both have an LLM model setting).
 
 - Every API route except `/health` and `/api/auth/{login,refresh,logout}`
-  needs a signed-in user. Create the first account with `SEED_ADMIN_EMAIL` /
-  `SEED_ADMIN_PASSWORD`, then sign in at `/login`. Roles are checked by the API:
-  **Viewer** reads, **Operator** also runs agents, flags QC, ingests sensor data
-  and acknowledges alerts, **Admin** also changes LLM settings and manages the
-  RAG index. `ADMIN_API_TOKEN` is retired and no longer read.
+  needs a signed-in user. Create the first **Super Admin** with `SEED_ADMIN_EMAIL` /
+  `SEED_ADMIN_PASSWORD`, then sign in at `/login`. Access is role-based with
+  factory and production-line scope: eight system roles (Super Admin, Factory
+  Admin, Factory Manager, Production Supervisor, Monitoring Operator, HR /
+  Attendance Officer, IT / Device Administrator, Worker) grant module
+  permissions, and the API checks a permission on every request. See
+  [ACCESS_CONTROL.md](ACCESS_CONTROL.md) for the matrix, the rules and the
+  user / role / factory APIs. `ADMIN_API_TOKEN` is retired and no longer read.
 
 - `JWT_SIGNING_KEY` (32+ bytes) is required in Production.
 - `LLM_PROVIDER` can be `openai`, `gemini` or `anthropic`. An Admin can also
@@ -216,7 +219,8 @@ The Python keys carry a `PYRAG_` prefix so they never clash with the API's
 | `/api/auth/{login,refresh,logout,me}` | Cookie/JWT authentication |
 | `/api/ask` | Ask a question (RAG + LLM) |
 | `/api/agents`, `/api/agents/{id}/run` | List and run agents |
-| `/api/approvals`, `/api/approvals/{id}/{approve,reject}` | Server-side approval queue (Operator/Admin to decide; High risk needs Admin; reject needs a reason) |
+| `/api/approvals`, `/api/approvals/{id}/{approve,reject}` | Server-side approval queue (`approvals.decide`; High risk needs `approvals.decide_high`; reject needs a reason) |
+| `/api/users`, `/api/roles`, `/api/permissions`, `/api/factories`, `/api/workers`, `/api/account` | User, role, factory and worker-profile management, scoped by factory and line ([ACCESS_CONTROL.md](ACCESS_CONTROL.md)) |
 | `/api/audit` | Append-only audit log of decisions (Admin) |
 | `/api/brief/morning` | Morning brief |
 | `/api/line-board` | Line metrics, `POST /refresh` |
@@ -245,10 +249,10 @@ npm run sensor:live -- --entity M-101 --vibration 6.4 --temp 82   # push one sen
 npm run lint
 ```
 
-Backend integration tests, from `FactoryBrain.Backend/`:
+Backend integration tests, from `BunonBrain.Backend/`:
 
 ```bash
-dotnet test FactoryBrain.Backend.sln
+dotnet test BunonBrain.Backend.sln
 ```
 
 - They never read the repo-root `.env` and never touch your configured
@@ -303,8 +307,8 @@ python -m pytest -q
 Build the API image from the repo root:
 
 ```bash
-docker build -f FactoryBrain.Backend/FactoryBrain.Api/Dockerfile -t factorybrain-api:dev .
-docker run -p 8080:8080 -e FACTORYBRAIN_DB="..." -e JWT_SIGNING_KEY="..." factorybrain-api:dev
+docker build -f BunonBrain.Backend/BunonBrain.Api/Dockerfile -t bunonbrain-api:dev .
+docker run -p 8080:8080 -e BUNONBRAIN_DB="..." -e JWT_SIGNING_KEY="..." bunonbrain-api:dev
 ```
 
 The container listens on port 8080 and runs in Production mode. No secrets are
@@ -315,7 +319,7 @@ baked into the image.
 ## 📁 Project structure
 
 ```
-FactoryBrain/
+BunonBrain/
 ├── frontend/                  Next.js app
 │   ├── src/app/               pages (/app, /app/ask, /app/qc, ...) and admin proxy routes
 │   ├── src/components/        UI components
@@ -323,11 +327,11 @@ FactoryBrain/
 │   ├── src/services/          client services and demo datasets
 │   ├── src/i18n/              English and Bangla strings
 │   └── scripts/               smoke, probe, RAG eval, sensor push
-├── FactoryBrain.Backend/      .NET 10 solution
-│   ├── FactoryBrain.Api/             controllers, SignalR hub, middleware, Program.cs
-│   ├── FactoryBrain.Application/     interfaces, DTOs, validation, RAG scoring
-│   ├── FactoryBrain.Infrastructure/  EF Core, migrations, seed, services, embeddings
-│   └── FactoryBrain.Domain/          entities and enums
+├── BunonBrain.Backend/      .NET 10 solution
+│   ├── BunonBrain.Api/             controllers, SignalR hub, middleware, Program.cs
+│   ├── BunonBrain.Application/     interfaces, DTOs, validation, RAG scoring
+│   ├── BunonBrain.Infrastructure/  EF Core, migrations, seed, services, embeddings
+│   └── BunonBrain.Domain/          entities and enums
 ├── database/                  where the schema, migrations and seed data live
 ├── rag/                       standalone Python PDF RAG (LangChain + Qdrant + Gemini)
 ├── ARCHITECTURE.md            system diagrams

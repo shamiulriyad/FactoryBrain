@@ -1,6 +1,6 @@
 # Architecture
 
-How FactoryBrain fits together: what runs where, how a request moves through the
+How BunonBrain fits together: what runs where, how a request moves through the
 system, and where data lives. The diagrams are [Mermaid](https://mermaid.js.org/)
 and render on GitHub and in the VS Code Markdown preview.
 
@@ -89,15 +89,15 @@ Notes:
 
 ## 2. Backend layers
 
-The .NET solution in [FactoryBrain.Backend/](FactoryBrain.Backend/) follows a
+The .NET solution in [BunonBrain.Backend/](BunonBrain.Backend/) follows a
 clean-architecture split. Arrows point at the project being referenced.
 
 ```mermaid
 flowchart TB
-    api["<b>FactoryBrain.Api</b><br/>Controllers · Hubs · Middleware<br/>Program.cs wiring"]
-    infra["<b>FactoryBrain.Infrastructure</b><br/>EF Core DbContext · Migrations · Seed<br/>Services · Rag · HostedServices"]
-    app["<b>FactoryBrain.Application</b><br/>Service interfaces · DTOs<br/>Validation · Rag scoring and chunking"]
-    domain["<b>FactoryBrain.Domain</b><br/>Entities · Enums"]
+    api["<b>BunonBrain.Api</b><br/>Controllers · Hubs · Middleware<br/>Program.cs wiring"]
+    infra["<b>BunonBrain.Infrastructure</b><br/>EF Core DbContext · Migrations · Seed<br/>Services · Rag · HostedServices"]
+    app["<b>BunonBrain.Application</b><br/>Service interfaces · DTOs<br/>Validation · Rag scoring and chunking"]
+    domain["<b>BunonBrain.Domain</b><br/>Entities · Enums"]
 
     api --> infra
     api --> app
@@ -110,7 +110,7 @@ flowchart TB
 |---|---|
 | Domain | Entities such as `SensorReading`, `LineBoardMetric`, `QcDefect`, `FloorAlert`, `ManualDocument`, `PolicyDocument`, `AgentDefinition`, `ApprovalRequest`, `User` |
 | Application | `IAskService`, `IRagService`, `IRealtimeNotifier` and other seams, request/response DTOs, FluentValidation rules, `TextChunker`, `HybridScorer`, `RagSynonyms` |
-| Infrastructure | `FactoryBrainDbContext`, migrations, `DbInitializer` seed, service implementations, embedding providers, `SimulatorHostedService` |
+| Infrastructure | `BunonBrainDbContext`, migrations, `DbInitializer` seed, service implementations, embedding providers, `SimulatorHostedService` |
 | Api | Attribute-routed controllers, `FactoryHub`, auth and admin-token filters, global exception handler, rate limiter |
 
 ---
@@ -264,7 +264,7 @@ flowchart LR
 flowchart LR
     b["Browser"]
     n["Next.js server<br/>rewrite + pass-through, no credentials of its own"]
-    api["ASP.NET Core API<br/>fallback policy: authenticated<br/>Operator / Admin role policies"]
+    api["ASP.NET Core API<br/>fallback policy: authenticated<br/>permission policies + factory / line scope"]
 
     b -->|"Authorization: Bearer (in-memory access token)<br/>HttpOnly refresh cookie on /api/auth only"| n
     n -->|"same headers forwarded"| api
@@ -274,7 +274,7 @@ flowchart LR
 |---|---|
 | Login, refresh, logout, current user | `/api/auth/*`. 15-minute access token in the response body (kept in memory by the frontend), 7-day rotating refresh token in an HttpOnly cookie scoped to `/api/auth`. `JWT_SIGNING_KEY` (32+ bytes) is required outside Development |
 | Default access | Fallback authorization policy: every endpoint needs a valid JWT unless it is `[AllowAnonymous]` (`/health`, login, refresh, logout) |
-| Roles | `Operator` policy (Admin or Operator) on operational writes; `Admin` policy on `POST /api/settings/llm`, `/api/rag/ingest`, `/api/rag/reindex`, the QC defect taxonomy (`POST/PUT /api/qc/categories`), production lines, shifts and styles (`POST/PUT /api/production/{lines,shifts,styles}`). The full matrix is asserted by `FactoryBrain.Api.Tests/EndpointAccessMatrixTests.cs` |
+| Roles & permissions | Eight system roles grant module permissions (`AccessCatalog`); every action carries `[RequirePermission(...)]`, services enforce factory / line / self scope, and tokens carry a security stamp checked per request so role, scope and status changes apply at once. Details: [ACCESS_CONTROL.md](ACCESS_CONTROL.md). The full matrix is asserted by `EndpointAccessMatrixTests`, `RoleMatrixTests` and `DbAccessControlTests` |
 | Login brute force | Per-IP fixed-window rate limiter (`login` policy) |
 | Simulation abuse | `tick` bounded (validator + at most 60 ticks per request); per-user rate limits on `POST /api/sensors/ingest`, `/api/line-board/refresh` (20/min) and `/api/sensors/live` (120/min) |
 | Input validation | FluentValidation filter on every controller |
@@ -289,8 +289,10 @@ Known open findings are tracked in [docs/SECURITY_ANALYSIS.md](docs/SECURITY_ANA
 
 Every page under `/app` reads and writes through the API with the signed-in
 user's bearer token (`src/lib/api.ts` → `apiFetch`). Navigation, page access and
-buttons follow the role (`src/components/layout/nav.ts`, `RequireRole`), but
-the API's policies are the actual control.
+buttons follow the user's permissions (`src/lib/navigation.ts`, `RequirePermission`,
+`can()` in `src/lib/auth.ts`), but the API's permission checks are the actual
+control. The "Writes need" column below names the legacy tiers; the exact
+permission per endpoint is in [ACCESS_CONTROL.md](ACCESS_CONTROL.md).
 
 | Page | Endpoints | Writes need |
 |---|---|---|
@@ -307,7 +309,8 @@ the API's policies are the actual control.
 | Inspect a garment `/app/vision` | `GET /api/qc/vision/status`, `/api/qc/categories`, `/api/line-board`; `POST /api/qc/inspections` (multipart, `Idempotency-Key`) | Operator |
 | Audit log | `GET /api/audit` | Admin (page hidden for others) |
 | Settings → AI & models | `GET/POST /api/settings/llm`, `GET/POST /api/settings/embedding`, `POST /api/settings/embedding/plan`, reindex as above | Admin |
-| Settings → Users | `GET /api/users`, `PATCH /api/users/{id}/role` | Admin |
+| Users, Roles, Permissions, Factories `/app/admin/*` | `GET/POST /api/users`, `GET/PUT /api/users/{id}`, `/status`, `/roles`, `/scope`, `/reset-password`, `/activity`; `GET /api/roles`, `/api/permissions`; `/api/factories` (+ lines) | `users.*`, `roles.*`, `factories.manage`, `lines.manage` |
+| Account `/app/account`, My profile `/app/me` | `GET/PUT /api/account/profile`, `POST /api/account/password`, `GET /api/workers/me` | signed in / `self.view` |
 
 Insights, Factory graph, Integrations and Workforce (`/app/workforce`) have no
 API behind them yet; they render a browser-only demo dataset and say so on the
@@ -321,9 +324,9 @@ are rule-based (the configured language model is used by Ask only).
 
 Garment images go through submit → analyse → review, and quality metrics are
 calculated from the reviewed records. The workflow lives in
-`FactoryBrain.Infrastructure/Qc/` and `QcInspectionsController`; the pure
+`BunonBrain.Infrastructure/Qc/` and `QcInspectionsController`; the pure
 rules (image sniffing, lifecycle, provider-output normalisation, metrics) are
-in `FactoryBrain.Application/Qc/` and unit-tested.
+in `BunonBrain.Application/Qc/` and unit-tested.
 
 ```mermaid
 sequenceDiagram
@@ -431,8 +434,8 @@ Orders, plans, output and line analysis for sewing lines. The plant enters
 its own lines, shift calendar and styles (with the factory-approved SMV and
 operation bulletin); nothing is seeded, and every figure is calculated by the
 API from those persisted rows at read time. The pure rules live in
-`FactoryBrain.Application/Production/` (unit-tested); persistence and workflow
-in `FactoryBrain.Infrastructure/Production/`; HTTP in `ProductionController`.
+`BunonBrain.Application/Production/` (unit-tested); persistence and workflow
+in `BunonBrain.Infrastructure/Production/`; HTTP in `ProductionController`.
 
 ```mermaid
 flowchart LR
@@ -532,9 +535,9 @@ packs, measurement / spec sheets, buyer instructions). Documents are read,
 values are extracted with their quoted source, and a merchandiser decides
 every value before it becomes order data. The pure rules (value
 normalisation, evidence checks, the extraction contract, the label parser,
-conflict rules, the attention list) live in `FactoryBrain.Application/Merchandising/`
+conflict rules, the attention list) live in `BunonBrain.Application/Merchandising/`
 and are unit-tested; parsing, storage, the worker and the workflow in
-`FactoryBrain.Infrastructure/Merchandising/`; HTTP in `MerchandisingController`.
+`BunonBrain.Infrastructure/Merchandising/`; HTTP in `MerchandisingController`.
 
 ```mermaid
 sequenceDiagram

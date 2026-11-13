@@ -1,0 +1,334 @@
+using BunonBrain.Domain.Entities;
+using BunonBrain.Domain.Enums;
+using BunonBrain.Application.Abstractions;
+using BunonBrain.Application.Dtos.Agents;
+using BunonBrain.Application.Dtos.Approvals;
+using BunonBrain.Application.Dtos.Ask;
+using BunonBrain.Application.Dtos.Auth;
+using BunonBrain.Application.Dtos.Brief;
+using BunonBrain.Application.Dtos.FloorAlerts;
+using BunonBrain.Application.Dtos.LineBoard;
+using BunonBrain.Application.Dtos.Qc;
+using BunonBrain.Application.Dtos.Rag;
+using BunonBrain.Application.Dtos.Sensors;
+using BunonBrain.Application.Dtos.Settings;
+
+namespace BunonBrain.Application.Abstractions.Interfaces;
+
+public interface IAskService
+{
+    Task<AskAnswerResponse> AskAsync(AskRequest req, CancellationToken ct);
+}
+
+/// <summary>
+/// Server-side approval queue. Decisions are atomic state transitions
+/// (pending → approved | rejected) recorded in the append-only audit log in
+/// the same transaction.
+/// </summary>
+public interface IApprovalService
+{
+    /// <param name="status"><c>pending</c> (default) | <c>approved</c> | <c>rejected</c> | <c>all</c>.</param>
+    Task<ApprovalListResponse> ListAsync(string status, int limit, CancellationToken ct);
+    Task<ApprovalDecisionResult> DecideAsync(string id, bool approve, string? reason, ApprovalActor actor, string? traceId, CancellationToken ct);
+    Task<IReadOnlyList<AuditEntryDto>> AuditAsync(string? entityType, string? entityId, int limit, CancellationToken ct);
+}
+
+public interface IBriefService
+{
+    Task<MorningBriefResponse> BuildMorningBriefAsync(CancellationToken ct);
+}
+
+public interface IFloorAlertService
+{
+    Task<FloorAlertListResponse> ListAsync(CancellationToken ct);
+    Task<FloorAlertPatchResponse?> MarkReadAsync(string id, bool read, CancellationToken ct);
+    Task<FloorAlert> PushAsync(FloorAlert alert, CancellationToken ct);
+}
+
+public interface ILineBoardService
+{
+    Task<LineBoardResponse> BuildAsync(CancellationToken ct);
+    Task<LineBoardResponse> RefreshAsync(int? tickOverride, CancellationToken ct);
+}
+
+public interface IQcService
+{
+    Task<QcDefectsResponse> BuildAsync(CancellationToken ct);
+    Task<QcFlagResponse> FlagAsync(QcFlagRequest req, CancellationToken ct);
+}
+
+public interface ISensorService
+{
+    bool LiveConnected { get; }
+    Task<IngestResponse>  IngestAsync(IngestRequest req, CancellationToken ct);
+    Task<IngestResponse>  AcceptLiveAsync(LiveIngestRequest req, CancellationToken ct);
+    Task<LatestReadingsResponse> LatestAsync(CancellationToken ct);
+    Task<SimStatusResponse> StatusAsync(CancellationToken ct);
+    /// <summary>Current state without advancing the simulation or touching the database.</summary>
+    IngestResponse Snapshot();
+    /// <summary>Immiration from src/services/sensors.server for the sim buffer.</summary>
+    SensorSimState CurrentState { get; }
+}
+
+public interface ILlmSettingsService
+{
+    Task<LlmSettingsResponse> ReadStatusAsync(CancellationToken ct = default);
+    Task<SettingsWriteResult<LlmSettingsResponse>> UpdateAsync(
+        LlmSettingsRequest req, AuditActor actor, string? traceId, CancellationToken ct = default);
+}
+
+public interface IAgentRunService
+{
+    Task<AgentRunResponse> RunAsync(string agentId, CancellationToken ct);
+    Task<IReadOnlyList<AgentDefinition>> RosterAsync(CancellationToken ct = default);
+}
+
+public interface IRagService
+{
+    /// <summary>Chunk a doc body and emit embeddings (pgvector or in-memory).</summary>
+    /// <remarks>Pass <paramref name="embed"/> = false to build the chunks without vectors
+    /// (stored as pending), e.g. when embedding would be a paid call at startup.</remarks>
+    Task<List<DocumentChunk>> ChunkAsync(
+        string docId, string title, string body, IEnumerable<string> tags,
+        string department, string category, CancellationToken ct = default, bool embed = true);
+
+    /// <summary>Hybrid retrieval: cosine + BM25, returns top-k RAG hits.</summary>
+    Task<IReadOnlyList<AskRagHit>> RetrieveAsync(
+        string query, RagFilter? filter, int topK = 4, double similarityThreshold = 0,
+        double bm25Weight = 0.35, CancellationToken ct = default);
+
+    /// <summary>
+    /// True when the embedder metadata stored on existing manual rows
+    /// (provider / model / dims) does not match the active configuration —
+    /// i.e. a reindex is required to keep vectors consistent with the
+    /// configured <see cref="BunonBrain.Application.Abstractions.Interfaces.IRagService"/>'s
+    /// embedder.
+    /// </summary>
+    Task<bool> NeedsReindexAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Ingest a new document into the RAG index. Chunks the body with
+    /// <see cref="BunonBrain.Application.Rag.TextChunker"/>, embeds
+    /// each chunk with the configured embedder, and writes the row + its
+    /// chunks to <c>manual_documents</c>. In degraded mode the chunks are
+    /// stored with <c>Embedding = null</c> and
+    /// <c>EmbeddingProvider = "pending"</c> — they will be embedded by
+    /// the next Admin-confirmed POST /api/rag/reindex.
+    /// </summary>
+    Task<IngestOutcome> IngestAsync(IngestInput input, CancellationToken ct = default);
+
+    /// <summary>
+    /// List the manual documents currently stored in the index. Pass a
+    /// non-null <paramref name="source"/> to filter by source
+    /// (<c>manual | sop | compliance | faq</c>). Embedding vectors are
+    /// never returned.
+    /// </summary>
+    Task<IReadOnlyList<DocumentListItem>> ListDocumentsAsync(string? source, CancellationToken ct = default);
+}
+
+/// <summary>
+/// Inputs to <see cref="IRagService.IngestAsync"/>. Kept distinct from
+/// the wire DTO so the service layer doesn't drag an HTTP shape around.
+/// </summary>
+public sealed record IngestInput(
+    string Title,
+    string? TitleBn,
+    string Source,
+    IReadOnlyList<string> Tags,
+    string Content,
+    string? Url,
+    bool IsDemo
+);
+
+/// <summary>
+/// Result of a single ingest call. Mirrors
+/// <see cref="BunonBrain.Application.Dtos.Rag.IngestResponse"/> but is safe to
+/// return from the service layer (no HTTP coupling).
+/// </summary>
+public sealed record IngestOutcome(
+    string DocumentId,
+    int Chunks,
+    string Provider,
+    string Model,
+    int Dims,
+    bool Embedded,
+    string? Warning
+);
+
+public sealed record SensorSimState(
+    int Tick,
+    IReadOnlyList<LineBoardLine> Lines,
+    IReadOnlyList<LineBoardMachine> Machines,
+    IReadOnlyList<SensorReading> Readings);
+
+public sealed record LineBoardLine(string Id, double Efficiency, double Uptime, double EnergyKwh);
+public sealed record LineBoardMachine(string Id, double Vibration, double Temperature, double DutyCycle, string Status);
+
+/// <summary>
+/// Login + refresh outcome flags. The controller branches on
+/// <c>Kind</c>; the remaining fields are only populated when
+/// <c>Kind == Success</c>.
+/// </summary>
+/// <summary><see cref="Deactivated"/>: the password was right but the account is deactivated.</summary>
+public enum AuthOutcome { Success, Invalid, Expired, Deactivated }
+
+/// <summary>
+/// Login outcome. <see cref="AuthOutcome.Success"/> carries the issued
+/// access token, the lifetime in seconds, and the raw refresh-cookie
+/// value the caller should stamp as <c>fb_refresh</c>. <see cref="AuthOutcome.Invalid"/>
+/// is returned for BOTH unknown-email and wrong-password — the
+/// controller emits one canonical 401 envelope so an attacker can't
+/// enumerate accounts.
+/// </summary>
+public sealed record LoginResult(
+    AuthOutcome Kind,
+    string?     AccessToken,
+    int         ExpiresInSeconds,
+    UserInfo?   User,
+    string?     RefreshTokenRaw);
+
+/// <summary>
+/// Refresh outcome. <see cref="AuthOutcome.Success"/> carries the
+/// freshly-rotated access token + lifetime + the new raw refresh
+/// cookie value (the old cookie must be cleared). <see cref="AuthOutcome.Invalid"/>
+/// covers both missing and tampered cookies; <see cref="AuthOutcome.Expired"/>
+/// covers a cookie whose stored expiry has passed. The controller
+/// maps both failure kinds to the same 401 + clear-cookie envelope.
+/// </summary>
+public sealed record RefreshResult(
+    AuthOutcome Kind,
+    string?     AccessToken,
+    int         ExpiresInSeconds,
+    UserInfo?   User,
+    string?     RefreshTokenRaw);
+
+/// <summary>
+/// Authentication service. Implementations live in
+/// <c>BunonBrain.Infrastructure.Services.AuthService</c> and depend on
+/// the <see cref="User"/> aggregate, an <see cref="IPasswordHasher{T}"/>,
+/// and a JWT issuer.
+/// </summary>
+public interface IAuthService
+{
+    /// <summary>
+    /// Verify the supplied credentials and (on success) issue a fresh
+    /// access token + 7-day refresh token. Refresh token is stored as
+    /// SHA-256(raw) on the user; the raw value is returned so the
+    /// controller can stamp it in the <c>fb_refresh</c> cookie.
+    /// </summary>
+    Task<LoginResult> LoginAsync(string email, string password, CancellationToken ct);
+
+    /// <summary>
+    /// Look up the user by <paramref name="presentedRefreshToken"/>
+    /// (hashed then matched), validate expiry, then rotate the stored
+    /// hash + extend the expiry by another 7 days. The old token is
+    /// immediately invalid.
+    /// </summary>
+    Task<RefreshResult> RefreshAsync(string presentedRefreshToken, CancellationToken ct);
+
+    /// <summary>
+    /// If the presented refresh token matches a user, clear that user's
+    /// <c>RefreshTokenHash</c> + expiry. Always succeeds — calling with
+    /// an unknown or expired cookie is a no-op.
+    /// </summary>
+    Task LogoutAsync(string presentedRefreshToken, CancellationToken ct);
+
+    /// <summary>
+    /// Resolve the currently-authenticated user by id (the <c>sub</c>
+    /// claim on the access token). Returns null when the user no
+    /// longer exists.
+    /// </summary>
+    Task<UserInfo?> MeAsync(Guid userId, CancellationToken ct);
+}
+
+/// <summary>
+/// Issues HS256-signed JWT access tokens and parses them back into a
+/// <see cref="TokenPrincipal"/>. Lifetime is 15 minutes by spec.
+/// </summary>
+public interface ITokenService
+{
+    /// <summary>Issue a fresh access token carrying <paramref name="access"/> (roles, permissions, scope, security stamp).</summary>
+    string IssueAccessToken(BunonBrain.Application.Access.AccessSnapshot access, out int expiresInSeconds);
+
+    /// <summary>
+    /// Parse and validate <paramref name="jwt"/>. Returns null on any
+    /// failure (bad signature, wrong issuer/audience, expired past the
+    /// 30 s clock skew tolerance, or malformed). Never throws.
+    /// </summary>
+    TokenPrincipal? ValidateAccessToken(string jwt);
+}
+
+/// <summary>
+/// Decoded JWT principal — the user id, email, and roles taken straight
+/// from the validated token. Returned by
+/// <see cref="ITokenService.ValidateAccessToken"/> on success.
+/// </summary>
+public sealed record TokenPrincipal(Guid UserId, string Email, IReadOnlyList<string> Roles);
+
+/// <summary>
+/// Server-to-client realtime notifications. Implemented in
+/// <c>BunonBrain.Api.Realtime</c> over SignalR's
+/// <c>IHubContext&lt;FactoryHub&gt;</c>; services consume only this
+/// abstraction so <c>BunonBrain.Infrastructure</c> never references
+/// SignalR. All methods MUST swallow + log any failure — a notifier
+/// outage must never fail the REST write that triggered it.
+/// </summary>
+public interface IRealtimeNotifier
+{
+    /// <summary>Broadcast after a successful <c>POST /api/sensors/ingest</c>.</summary>
+    Task SensorReadingAsync(IngestResponse payload, CancellationToken ct);
+
+    /// <summary>Broadcast after a successful <c>POST /api/line-board/refresh</c>.</summary>
+    Task LineBoardUpdatedAsync(LineBoardResponse payload, CancellationToken ct);
+
+    /// <summary>Broadcast after <see cref="IFloorAlertService.PushAsync"/> persists a new alert.</summary>
+    Task FloorAlertAsync(FloorAlert payload, CancellationToken ct);
+}
+
+/// <summary>
+/// Small wrapper over
+/// <c>Microsoft.AspNetCore.Identity.PasswordHasher&lt;User&gt;</c> so the
+/// Application layer doesn't depend on Microsoft.Extensions.Identity
+/// directly — Infrastructure provides the implementation.
+/// </summary>
+public interface IPasswordHasher
+{
+    /// <summary>Produce a self-contained hash string (PBKDF2 + salt + format marker).</summary>
+    string Hash(User user, string password);
+
+    /// <summary>True when <paramref name="provided"/> matches <paramref name="hashed"/>.</summary>
+    bool Verify(User user, string hashed, string provided);
+}
+
+/// <summary>
+/// Self-service account flows: sign-up (no roles until an administrator
+/// grants them), forgot / reset password with a one-time emailed link, and
+/// the signed-in user's own profile and password. Every change is written
+/// to the audit log. Managing other users is <see cref="IUserAdminService"/>.
+/// </summary>
+public interface IAccountService
+{
+    bool SelfRegistrationEnabled { get; }
+    Task<RegisterResult> RegisterAsync(string email, string password, string? traceId, CancellationToken ct);
+    /// <summary>Queues a reset email when the account exists; does the same visible work either way.</summary>
+    Task RequestPasswordResetAsync(string email, string? traceId, CancellationToken ct);
+    Task<ResetOutcome> ResetPasswordAsync(string token, string newPassword, string? traceId, CancellationToken ct);
+    Task<BunonBrain.Application.Dtos.Access.AccountProfile?> GetProfileAsync(Guid userId, CancellationToken ct);
+    Task<BunonBrain.Application.Dtos.Access.AccessResult<BunonBrain.Application.Dtos.Access.AccountProfile>> UpdateProfileAsync(
+        Guid userId, BunonBrain.Application.Dtos.Access.UpdateProfileRequest request, string? traceId, CancellationToken ct);
+    /// <summary>Change your own password (current password required). Clears "must change password" and signs out other sessions.</summary>
+    Task<BunonBrain.Application.Dtos.Access.AccessResult<bool>> ChangePasswordAsync(
+        Guid userId, BunonBrain.Application.Dtos.Access.ChangePasswordRequest request, string? traceId, CancellationToken ct);
+}
+
+/// <summary>Sends one email. Implementations never log the body (it may carry a reset link).</summary>
+public interface IEmailSender
+{
+    Task SendAsync(EmailMessage message, CancellationToken ct);
+}
+
+/// <summary>Hands an email to the background dispatcher so the request doesn't wait on SMTP.</summary>
+public interface IEmailQueue
+{
+    void Enqueue(EmailMessage message);
+}

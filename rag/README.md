@@ -1,10 +1,10 @@
 # PDF RAG - LangChain + Qdrant + Gemini
 
-Standalone Python RAG over PDFs, inside FactoryBrain. Quick start (Bangla):
+Standalone Python RAG over PDFs, inside BunonBrain. Quick start (Bangla):
 [`../docs/rag-pdf-setup.txt`](../docs/rag-pdf-setup.txt).
 
-**Not wired into the app.** The FactoryBrain backend has its own RAG
-(pgvector + hybrid BM25, in `FactoryBrain.Backend/.../Rag/`), and it does not call
+**Not wired into the app.** The BunonBrain backend has its own RAG
+(pgvector + hybrid BM25, in `BunonBrain.Backend/.../Rag/`), and it does not call
 this service. Use `rag/` from the CLI (`ingest.py` / `ask.py`), or run `main.py`
 as an HTTP service if you want to integrate it later.
 

@@ -540,6 +540,14 @@ builder.Services.AddScoped<IOrganizationService, BunonBrain.Infrastructure.Worke
 // Workstations, machines and worker ↔ workstation assignments (with transfers and history).
 builder.Services.AddScoped<IWorkstationService, BunonBrain.Infrastructure.Assignments.WorkstationService>();
 builder.Services.AddScoped<IAssignmentService, BunonBrain.Infrastructure.Assignments.AssignmentService>();
+// Shifts, attendance (one event pipeline for manual punches, the RFID simulator
+// and physical readers), breaks, corrections and overtime. The review worker
+// closes sessions with a missing check-out every 5 minutes.
+builder.Services.AddScoped<IShiftService, BunonBrain.Infrastructure.Attendance.ShiftService>();
+builder.Services.AddScoped<IAttendanceService, BunonBrain.Infrastructure.Attendance.AttendanceService>();
+builder.Services.AddScoped<IOvertimeService, BunonBrain.Infrastructure.Attendance.OvertimeService>();
+if (!builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddHostedService<BunonBrain.Infrastructure.Attendance.AttendanceReviewWorker>();
 builder.Services.AddScoped<IAuditQueryService, BunonBrain.Infrastructure.Access.AuditQueryService>();
 
 // ─── RAG tuning config (Rag: section in appsettings.json, env Rag__*) ──────
@@ -978,6 +986,14 @@ app.MapGet("/", () => Results.Ok(new
         "POST /api/assignments",
         "POST /api/assignments/{id}/transfer",
         "GET  /api/assignments/statistics",
+        "GET  /api/shifts",
+        "POST /api/shift-assignments",
+        "POST /api/attendance/check-in",
+        "GET  /api/attendance",
+        "GET  /api/attendance/statistics",
+        "POST /api/breaks/start",
+        "POST /api/overtime/request",
+        "POST /api/simulator/rfid/check-in",
         "GET  /api/audit",
         "POST /api/rag/reindex",
         "GET  /api/rag/status",

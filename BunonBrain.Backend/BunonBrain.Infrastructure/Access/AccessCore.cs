@@ -121,6 +121,13 @@ internal static class AccessAudit
     public const string EntityWorkstation = "workstation";
     public const string EntityMachine = "machine";
     public const string EntityAssignment = "workstation_assignment";
+    public const string EntityShift = "shift";
+    public const string EntityShiftAssignment = "shift_assignment";
+    public const string EntityAttendanceSession = "attendance_session";
+    public const string EntityAttendanceCorrection = "attendance_correction";
+    public const string EntityOvertime = "overtime_request";
+    public const string EntityAttendancePolicy = "attendance_policy";
+    public const string EntityAttendanceReader = "attendance_reader";
 
     public static AuditLogEntry Entry(AuditActor actor, string action, string entityType, string entityId,
         string? from, string? to, string reason, string? traceId, Guid? factoryId) => new()

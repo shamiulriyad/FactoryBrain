@@ -141,6 +141,7 @@ export const bn: Dict = {
     website: "ওয়েবসাইট",
     workforce: "কর্মীবাহিনী",
     workers: "কর্মী তালিকা",
+    assignments: "ওয়ার্কস্টেশন বরাদ্দ",
     floorMap: "লাইভ ফ্লোর ম্যাপ",
     alerts: "অ্যালার্ট",
     orders: "অর্ডার ও শিপমেন্ট",

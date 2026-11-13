@@ -226,10 +226,7 @@ export function workerBody(input: WorkerInput, factoryId?: string): Record<strin
     lineId: v(input.lineId),
     grade: v(input.grade)
   };
-  if (factoryId) {
-    body.factoryId = factoryId;
-    body.workstation = v(input.workstation);
-  }
+  if (factoryId) body.factoryId = factoryId;
   return body;
 }
 

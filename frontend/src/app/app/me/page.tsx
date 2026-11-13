@@ -5,7 +5,7 @@
 // added here when those modules ship; the permission (self.view) is in place.
 
 import Link from "next/link";
-import { CalendarClock, IdCard, MapPin } from "lucide-react";
+import { CalendarClock, History, IdCard, MapPin } from "lucide-react";
 import { RequirePermission } from "@/components/auth/RequireRole";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
@@ -17,6 +17,8 @@ import { useT } from "@/lib/useT";
 import { P } from "@/lib/access";
 import { formatDay, type Worker } from "@/lib/workers";
 import { WorkerAvatar, WorkerStatusBadge } from "@/components/workers/shared";
+import { AssignmentHistoryTable } from "@/components/assignments/shared";
+import { NOT_PRESENCE_NOTE, type Assignment } from "@/lib/assignments";
 
 export default function MyProfilePage() {
   return (
@@ -58,9 +60,12 @@ function Mine() {
             </Panel>
             <Panel title="Assigned workstation" icon={<MapPin size={14} />}>
               <p className="text-body text-fg-primary" data-testid="my-workstation">
-                {me.data.lineId ? <>Line <strong>{me.data.line?.name ?? me.data.lineId}</strong>{me.data.workstation ? <> · workstation <strong>{me.data.workstation}</strong></> : null}</> : "Not assigned yet."}
+                {me.data.workstation
+                  ? <>Workstation <strong className="font-mono">{me.data.workstation}</strong> · line <strong>{me.data.line?.name ?? me.data.lineId}</strong></>
+                  : me.data.lineId ? <>Line <strong>{me.data.line?.name ?? me.data.lineId}</strong>, no workstation assigned.</> : "Not assigned yet."}
               </p>
             </Panel>
+            <MyAssignments />
             <Panel title="Attendance, shift & breaks" icon={<CalendarClock size={14} />}>
               <p className="text-caption text-fg-secondary">
                 Your attendance, shift, activity and break records will appear here once the attendance module is connected.
@@ -71,6 +76,17 @@ function Mine() {
         <p className="text-caption text-fg-tertiary">Account and password: <Link href="/app/account" className="text-accent hover:underline">Account settings</Link>.</p>
       </div>
     </div>
+  );
+}
+
+/** The signed-in worker's own assignment history (GET /api/workers/me/assignments). */
+function MyAssignments() {
+  const history = useResource<Assignment[]>("/api/workers/me/assignments");
+  if (history.loading || history.error || !history.data || history.data.length === 0) return null;
+  return (
+    <Panel title="My assignment history" icon={<History size={14} />} subtitle={NOT_PRESENCE_NOTE} flush>
+      <AssignmentHistoryTable rows={history.data} testId="my-assignments" />
+    </Panel>
   );
 }
 

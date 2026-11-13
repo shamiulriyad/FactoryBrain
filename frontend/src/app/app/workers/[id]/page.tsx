@@ -26,6 +26,7 @@ import { ErrorState, SkeletonRows } from "@/components/ui/Status";
 import { useToast } from "@/components/ui/Toast";
 import { generateTemporaryPassword } from "@/components/access/shared";
 import { Fact, StatusChangeDialog, Val, WorkerAvatar, WorkerStatusBadge } from "@/components/workers/shared";
+import { WorkerAssignmentsPanel } from "@/components/assignments/WorkerAssignmentsPanel";
 import { useResource } from "@/lib/useResource";
 import { apiJson, errorMessage, isApiError } from "@/lib/api";
 import { useCan } from "@/lib/auth";
@@ -195,7 +196,7 @@ function Details({ profile, reload }: { profile: WorkerProfile; reload: () => Pr
           </dl>
         </Panel>
 
-        <Panel title="Work information" icon={<MapPin size={14} />} subtitle="Current placement. Workstation and machine management arrive with later modules.">
+        <Panel title="Work information" icon={<MapPin size={14} />} subtitle="Current placement, from the active workstation assignment.">
           <dl className="grid gap-3 sm:grid-cols-2">
             <Fact label="Production floor"><Val>{w.floor?.name}</Val></Fact>
             <Fact label="Production line"><Val>{w.line ? <>{w.line.name} <span className="font-mono text-caption text-fg-tertiary">{w.line.id}</span></> : w.lineId}</Val></Fact>
@@ -205,6 +206,8 @@ function Details({ profile, reload }: { profile: WorkerProfile; reload: () => Pr
         </Panel>
 
         <CredentialsPanel profile={profile} reload={reload} />
+
+        <WorkerAssignmentsPanel className="lg:col-span-2" worker={w} onChanged={() => void reload()} />
 
         {profile.statusHistory && (
           <Panel title="Status history" icon={<History size={14} />} className="lg:col-span-2" flush>

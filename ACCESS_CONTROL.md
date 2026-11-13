@@ -90,13 +90,17 @@ active factory keeps only self-service permissions.
 | `workers.details.view` | ✓ | ✓ | ✓ | | | ✓ | | |
 | `workers.manage` | ✓ | ✓ | | | | ✓ | | |
 | `workers.assign` | ✓ | ✓ | ✓ | ✓ | | | | |
-| **Attendance** (all *R*) |
-| `attendance.view` | ✓ | ✓ | ✓ | ✓ | | ✓ | | |
+| **Attendance & shifts** |
+| `attendance.view` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | | |
+| `attendance.record` | ✓ | ✓ | | ✓ | | ✓ | | |
 | `attendance.manage` | ✓ | ✓ | | | | ✓ | | |
+| `attendance.approve` | ✓ | ✓ | ✓ | | | ✓ | | |
 | `shifts.manage` | ✓ | ✓ | | | | ✓ | | |
-| `leave.manage` | ✓ | ✓ | | | | ✓ | | |
-| `overtime.view` | ✓ | ✓ | ✓ | | | ✓ | | |
-| `overtime.manage` | ✓ | ✓ | | | | ✓ | | |
+| `shifts.assign` | ✓ | ✓ | | ✓ | | ✓ | | |
+| `leave.manage` *R* | ✓ | ✓ | | | | ✓ | | |
+| `overtime.view` | ✓ | ✓ | ✓ | ✓ | | ✓ | | |
+| `overtime.manage` | ✓ | ✓ | ✓ | ✓ | | ✓ | | |
+| `overtime.approve` | ✓ | ✓ | ✓ | ✓ | | ✓ | | |
 | **Monitoring** |
 | `monitoring.view` | ✓ | ✓ | ✓ | ✓ | ✓ | | | |
 | `monitoring.alerts.review` | ✓ | ✓ | | | ✓ | | | |
@@ -185,8 +189,38 @@ active factory keeps only self-service permissions.
     Active has their assignment ended. Configuring workstations needs
     `lines.manage` (machines: or `devices.manage`); a workstation with
     assignments can't be deactivated, moved, or reduced below its occupancy.
-12. **Audit.** Sign-ins and every user, role, scope, status, password, factory,
-   line, department, floor, worker, card, import and export are recorded with
+12. **Shifts, attendance, breaks and overtime.** Shifts are per factory
+    (times in the factory's time zone, overnight when the end is at or
+    before the start, working days, grace periods, breaks); configuring them
+    needs `shifts.manage`, and a shift with current or future assignments
+    can't be deactivated. Assigning workers needs `shifts.assign` with the
+    worker in scope (a supervisor: their lines); each worker is assigned in
+    their own row-locked transaction, an overlapping earlier assignment is
+    ended the day before, a later one is a conflict, and the exclusion
+    constraint `EX_worker_shift_assignments_no_overlap` rejects overlapping
+    dates. Punches (`attendance.record`), simulator taps (`attendance.manage`)
+    and reader events (`devices.manage`, worker found by an active card UID)
+    all go through one pipeline: the worker row is locked, an idempotency key
+    already seen returns the first result, a repeat inside the duplicate
+    window is stored as *Duplicate*, and refused events are stored as
+    *Rejected* with a code. `attendance_events` is append-only (database
+    triggers), and simulator events must carry `IsSimulated` (check
+    constraint). One open session and one active break per worker (partial
+    unique indexes). A session that should have ended is flagged
+    *MissingCheckOut* by the 5-minute review sweep or by the worker's next
+    punch; no time is invented. Corrections need `attendance.manage` to
+    request and `attendance.approve` to decide, by someone other than the
+    requester; originals are kept. Overtime: `overtime.manage` requests and
+    cancels, `overtime.approve` approves or rejects (not your own), approved
+    minutes are at most the requested minutes, actual minutes come from
+    attendance inside the approved window (breaks excluded), and payable
+    minutes are confirmed by `attendance.manage` (HR), up to the lower of
+    approved and actual; nothing feeds salary automatically. Policy limits
+    (daily / weekly overtime) only warn.
+13. **Audit.** Sign-ins and every user, role, scope, status, password, factory,
+   line, department, floor, worker, card, import, export, shift, shift
+   assignment, manual punch, correction, overtime decision, attendance policy
+   and reader change are recorded with
    actor, before/after and reason. Passwords are never logged, and worker edits
    record which fields changed, not their personal values.
 
@@ -239,6 +273,28 @@ Errors are RFC 7807 problem details with a stable `code`, e.g.
 | `POST /api/assignments` `{workerId, workstationId, machineId?, startAt?, reason?, notes?}` | `workers.assign` |
 | `POST /api/assignments/{id}/transfer` `{workstationId, reason, machineId?, effectiveAt?, notes?}` | `workers.assign` |
 | `POST /api/assignments/{id}/end` `{reason, endAt?}` | `workers.assign` |
+| `GET /api/shifts?factoryId`, `GET /api/shifts/{id}` | `attendance.view`, `shifts.manage` or `shifts.assign` |
+| `POST /api/shifts`, `PUT /api/shifts/{id}` (edit, activate, deactivate) | `shifts.manage` |
+| `GET /api/shift-assignments?…filters…` | `attendance.view` or `shifts.assign` |
+| `POST /api/shift-assignments` `{shiftId, effectiveFrom, effectiveTo?, workerIds? or lineId? or departmentId?, reason?}` | `shifts.assign` |
+| `POST /api/shift-assignments/{id}/end` `{effectiveTo, reason}` | `shifts.assign` |
+| `GET /api/workers/{id}/shift-assignments` (`{id}` may be `me`) | `attendance.view` (own: `self.view`) |
+| `POST /api/attendance/check-in`, `/check-out` `{workerId, occurredAt?, idempotencyKey?, note?}` | `attendance.record` |
+| `POST /api/breaks/start`, `/end` `{workerId, breakType?, occurredAt?, idempotencyKey?}` | `attendance.record` |
+| `POST /api/attendance/events` `{readerId, cardUid, eventType, occurredAt, idempotencyKey}` (real readers only) | `devices.manage` |
+| `GET /api/attendance?…filters, sort, page…`, `/statistics`, `/events`, `/report`, `/report/export`; `GET /api/breaks` | `attendance.view` |
+| `GET /api/attendance/{workerId}` (`me` allowed), `GET /api/attendance/sessions/{id}` | `attendance.view` (own: `self.view`) |
+| `POST /api/attendance/{sessionId}/correction`, `POST /api/attendance/corrections`, `POST /api/attendance/review/run` | `attendance.manage` |
+| `GET /api/attendance/corrections` | `attendance.manage` or `attendance.approve` |
+| `POST /api/attendance/corrections/{id}/approve`, `/reject` | `attendance.approve` (not the requester) |
+| `GET /api/attendance/policy?factoryId` / `PUT` | `attendance.view` or `shifts.manage` / `attendance.manage` |
+| `GET /api/attendance/readers` / `POST`, `PUT /api/attendance/readers/{id}` | `attendance.manage` or `devices.view` / `devices.manage` |
+| `GET /api/overtime?…filters…` | `overtime.view` or `overtime.approve` |
+| `GET /api/overtime/{id}` | `overtime.view` or `overtime.approve` (own: `self.view`) |
+| `POST /api/overtime/request`, `/{id}/submit`, `/{id}/cancel` | `overtime.manage` |
+| `POST /api/overtime/{id}/approve` `{approvedMinutes?, note?}`, `/{id}/reject` `{reason}` | `overtime.approve` (not the requester) |
+| `POST /api/overtime/{id}/confirm-payable` `{payableMinutes, note?}` | `attendance.manage` |
+| `GET /api/simulator/rfid/readers`, `/events`; `POST /api/simulator/rfid/check-in`, `/check-out`, `/break-start`, `/break-end` | `attendance.manage` |
 | `PUT /api/workers/{id}/account` `{userId}` (link / unlink) | `users.update` |
 | `POST /api/workers/{id}/account` `{email, temporaryPassword}` (create a Worker login) | `users.create` |
 | `GET /api/audit?entityType&entityId&action&actorUserId&factoryId&limit&before` | `audit.view` (scoped) |
@@ -269,6 +325,17 @@ knowledge, settings, agents) are guarded by their module permissions; see
 | Workstation details (assigned workers, assign / transfer / end, machines, configure, history) | `/app/assignments/workstations/{id}` | as above; actions follow permissions |
 | Assignment history | `/app/assignments/history` | `workers.view` |
 | Worker profile → Workstation assignment (current, assign / transfer / end, timeline) | `/app/workers/{id}` | `workers.view` |
+| Attendance dashboard (present, absent, late, checked in, missing punches, breaks, OT, corrections, events by source) | `/app/attendance` | `attendance.view` |
+| Attendance records (search, filters, sort, pages, export, request correction) | `/app/attendance/records` | `attendance.view` |
+| Worker attendance details (shift, sessions, breaks, overtime, corrections, shift history) | `/app/attendance/workers/{id}` | `attendance.view` (own: `self.view`) |
+| Break management (running, overdue, history) | `/app/attendance/breaks` | `attendance.view` |
+| Attendance corrections (approve / reject) | `/app/attendance/corrections` | `attendance.manage` or `attendance.approve` |
+| Shift management and attendance policy | `/app/attendance/shifts` | `attendance.view`, `shifts.manage` or `shifts.assign` |
+| Worker shift assignment (one, several, a line, a department; end) | `/app/attendance/shift-assignments` | `attendance.view` or `shifts.assign` |
+| Overtime requests | `/app/attendance/overtime` | `overtime.view` or `overtime.approve` |
+| Overtime approval dashboard (pending, running, payable to confirm) | `/app/attendance/overtime/approvals` | `overtime.approve` |
+| RFID attendance simulator (SIMULATED) | `/app/attendance/simulator` | `attendance.manage` |
+| Attendance reports (per-worker totals, CSV) | `/app/attendance/reports` | `attendance.view` |
 | Account settings (profile, password, my access) | `/app/account` | everyone |
 | My profile (worker self-service) | `/app/me` | `self.view` |
 | Access denied | shown in place, or `/app/access-denied` | — |
@@ -297,9 +364,17 @@ temporary password to `/app/account`, and starts users without an overview
   hold single-plant data without a factory column. They are permission-gated,
   and Production Supervisors are line-limited on QC writes, but their records
   are not yet partitioned by factory.
-- Attendance, shifts, leave, overtime, cameras, device logs and
-  notifications are reserved permissions: the roles carry them, but those
-  modules aren't built yet.
+- Leave, cameras, device logs, alert escalation and notifications are
+  reserved permissions: the roles carry them, but those modules aren't built
+  yet. Attendance doesn't yet account for leave or holidays: a scheduled
+  worker with no attendance counts as absent.
+- Attendance: a reader event with an unknown card UID is refused (404
+  `card_not_recognised`) and not stored, since there is no worker to attach
+  it to. Overtime limits from the attendance policy only warn. Payable
+  overtime is a confirmed number for payroll; no salary is calculated.
+- Factory shifts (`shifts`) are separate from production planning's
+  plant-wide `production_shifts`; a factory shift can name a production
+  shift code to link the two.
 - System roles are fixed; custom roles are not supported (by design for now).
 - Token freshness is cached for 30 s per API instance: on a multi-instance
   deployment another instance may accept an old token for up to 30 s.

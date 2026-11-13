@@ -333,12 +333,13 @@ public sealed class WorkerUnitTests
     }
 
     [Fact]
-    public void Factory_manager_sees_employment_details_but_changes_nothing()
+    public void Factory_manager_sees_employment_details_and_assigns_workstations_but_edits_no_worker_records()
     {
         var p = PermsOf(R.FactoryManager);
         Assert.Contains(P.WorkersView, p);
         Assert.Contains(P.WorkersDetailsView, p);
-        foreach (var forbidden in new[] { P.WorkersManage, P.WorkersAssign, P.DepartmentsManage }) Assert.DoesNotContain(forbidden, p);
+        Assert.Contains(P.WorkersAssign, p);
+        foreach (var forbidden in new[] { P.WorkersManage, P.DepartmentsManage, P.LinesManage }) Assert.DoesNotContain(forbidden, p);
     }
 
     [Fact]

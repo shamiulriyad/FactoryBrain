@@ -75,27 +75,3 @@ public class UserProductionLineAssignment
     public DateTimeOffset AssignedAt { get; set; } = DateTimeOffset.UtcNow;
     public Guid? AssignedByUserId { get; set; }
 }
-
-/// <summary>
-/// A worker's employment profile. Separate from <see cref="User"/>: a worker
-/// needs no login account, and at most one account can be linked
-/// (<see cref="UserId"/>) so the worker can see their own records.
-/// </summary>
-public class WorkerProfile
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid FactoryId { get; set; }
-    /// <summary>Unique within the factory.</summary>
-    public string EmployeeCode { get; set; } = default!;
-    public string FullName { get; set; } = default!;
-    public string? Designation { get; set; }
-    public string? LineId { get; set; }
-    public string? Workstation { get; set; }
-    public string? Phone { get; set; }
-    public DateOnly? JoinedOn { get; set; }
-    public string? Grade { get; set; }
-    public bool IsActive { get; set; } = true;
-    public Guid? UserId { get; set; }
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
-    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
-}

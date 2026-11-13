@@ -115,6 +115,9 @@ internal static class AccessAudit
     public const string EntityFactory = "factory";
     public const string EntityWorker = "worker";
     public const string EntityLine = "production_line";
+    public const string EntityDepartment = "department";
+    public const string EntityFloor = "production_floor";
+    public const string EntityWorkerCard = "worker_card";
 
     public static AuditLogEntry Entry(AuditActor actor, string action, string entityType, string entityId,
         string? from, string? to, string reason, string? traceId, Guid? factoryId) => new()

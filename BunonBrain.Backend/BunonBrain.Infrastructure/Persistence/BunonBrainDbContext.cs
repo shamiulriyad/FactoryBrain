@@ -51,6 +51,10 @@ public class BunonBrainDbContext : DbContext
     public DbSet<UserFactoryAssignment>        UserFactories          => Set<UserFactoryAssignment>();
     public DbSet<UserProductionLineAssignment> UserLines              => Set<UserProductionLineAssignment>();
     public DbSet<WorkerProfile>                Workers                => Set<WorkerProfile>();
+    public DbSet<WorkerStatusChange>           WorkerStatusHistory    => Set<WorkerStatusChange>();
+    public DbSet<WorkerCard>                   WorkerCards            => Set<WorkerCard>();
+    public DbSet<Department>                   Departments            => Set<Department>();
+    public DbSet<ProductionFloor>              ProductionFloors       => Set<ProductionFloor>();
     public DbSet<QcInspection>        QcInspections        => Set<QcInspection>();
     public DbSet<QcInspectionFinding> QcInspectionFindings => Set<QcInspectionFinding>();
     public DbSet<QcDefectCategory>    QcDefectCategories   => Set<QcDefectCategory>();
@@ -79,6 +83,8 @@ public class BunonBrainDbContext : DbContext
         base.OnModelCreating(mb);
         mb.HasPostgresExtension("vector");
         mb.ApplyConfigurationsFromAssembly(typeof(BunonBrainDbContext).Assembly);
+        // Worker IDs (W-001, …) come from this sequence: a value is never handed out twice.
+        mb.HasSequence<long>(Configurations.WorkerProfileConfiguration.NumberSequence).StartsAt(1).IncrementsBy(1);
 
         // The pgvector column on document_chunks is intentionally mapped as
         // "vector" with no fixed dimension. The dimension lives in the

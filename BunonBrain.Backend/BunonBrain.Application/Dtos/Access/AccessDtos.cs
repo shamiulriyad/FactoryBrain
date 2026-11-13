@@ -9,7 +9,8 @@ public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSi
 
 public sealed record LineRef(string Id, string Name, Guid? FactoryId);
 
-public sealed record WorkerRef(Guid Id, string EmployeeCode, string FullName);
+/// <summary>Short reference to a worker: the permanent Worker ID (e.g. <c>W-001</c>) and name.</summary>
+public sealed record WorkerRef(Guid Id, string WorkerCode, string FullName);
 
 /// <summary>Outcome of an access-management command. Controllers map it to HTTP.</summary>
 public enum AccessOutcome { Ok, Created, NotFound, Forbidden, Conflict, Invalid }
@@ -154,45 +155,6 @@ public sealed record UpdateFactoryRequest(string Name, string? Location);
 public sealed record SetFactoryStatusRequest(bool IsActive);
 
 public sealed record FactoryLineDto(string Id, string Name, int Workstations, bool IsActive, Guid? FactoryId);
-
-// ─── Workers ───────────────────────────────────────────────────────────────
-
-/// <summary>
-/// A worker profile (separate from any login account). Employment details
-/// (<see cref="Phone"/>, <see cref="JoinedOn"/>, <see cref="Grade"/>) are
-/// null unless the caller may manage workers or it is their own profile.
-/// </summary>
-public sealed record WorkerDto(
-    Guid Id,
-    Guid FactoryId,
-    string EmployeeCode,
-    string FullName,
-    string? Designation,
-    string? LineId,
-    string? Workstation,
-    bool IsActive,
-    bool HasAccount,
-    Guid? UserId,
-    string? Phone,
-    DateOnly? JoinedOn,
-    string? Grade,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
-
-public sealed record WorkerListQuery(Guid? FactoryId = null, string? LineId = null, string? Search = null, int Page = 1, int PageSize = 25);
-
-public sealed record CreateWorkerRequest(
-    Guid FactoryId, string EmployeeCode, string FullName, string? Designation,
-    string? LineId, string? Workstation, string? Phone, DateOnly? JoinedOn, string? Grade);
-
-public sealed record UpdateWorkerRequest(
-    string FullName, string? Designation, string? Phone, DateOnly? JoinedOn, string? Grade, bool IsActive);
-
-/// <summary>PUT /api/workers/{id}/workstation.</summary>
-public sealed record AssignWorkstationRequest(string? LineId, string? Workstation);
-
-/// <summary>PUT /api/workers/{id}/account: link (or with null, unlink) a login account.</summary>
-public sealed record LinkWorkerAccountRequest(Guid? UserId);
 
 // ─── Audit ─────────────────────────────────────────────────────────────────
 

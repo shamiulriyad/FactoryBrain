@@ -528,7 +528,15 @@ builder.Services.AddScoped<IAccessSnapshotLoader, BunonBrain.Infrastructure.Acce
 builder.Services.AddScoped<IUserAdminService, BunonBrain.Infrastructure.Access.UserAdminService>();
 builder.Services.AddScoped<IRoleCatalogService, BunonBrain.Infrastructure.Access.RoleCatalogService>();
 builder.Services.AddScoped<IFactoryService, BunonBrain.Infrastructure.Access.FactoryService>();
-builder.Services.AddScoped<IWorkerService, BunonBrain.Infrastructure.Access.WorkerService>();
+// Worker management: worker records (separate from login accounts), their
+// departments / floors, RFID cards, CSV import and export. Profile photos go
+// to the file store (WORKER_PHOTO_STORAGE_PATH), everything else to PostgreSQL.
+var workerPhotoPath = BunonBrain.Infrastructure.Workers.WorkerPhotoStore.ResolvePath(
+    Environment.GetEnvironmentVariable, builder.Environment.ContentRootPath);
+builder.Services.AddSingleton<IWorkerPhotoStore>(sp => new BunonBrain.Infrastructure.Workers.WorkerPhotoStore(
+    workerPhotoPath, sp.GetRequiredService<ILogger<BunonBrain.Infrastructure.Workers.WorkerPhotoStore>>()));
+builder.Services.AddScoped<IWorkerService, BunonBrain.Infrastructure.Workers.WorkerService>();
+builder.Services.AddScoped<IOrganizationService, BunonBrain.Infrastructure.Workers.OrganizationService>();
 builder.Services.AddScoped<IAuditQueryService, BunonBrain.Infrastructure.Access.AuditQueryService>();
 
 // ─── RAG tuning config (Rag: section in appsettings.json, env Rag__*) ──────
@@ -950,8 +958,18 @@ app.MapGet("/", () => Results.Ok(new
         "GET  /api/factories",
         "POST /api/factories",
         "GET  /api/factories/{id}/lines",
+        "GET  /api/factories/{id}/departments",
+        "GET  /api/factories/{id}/floors",
         "GET  /api/workers",
+        "POST /api/workers",
         "GET  /api/workers/me",
+        "GET  /api/workers/statistics",
+        "GET  /api/workers/export",
+        "POST /api/workers/import",
+        "GET  /api/workers/{id}",
+        "PUT  /api/workers/{id}",
+        "GET  /api/workers/{id}/profile",
+        "PATCH /api/workers/{id}/status",
         "GET  /api/audit",
         "POST /api/rag/reindex",
         "GET  /api/rag/status",

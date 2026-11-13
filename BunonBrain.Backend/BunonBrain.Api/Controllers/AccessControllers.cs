@@ -226,69 +226,6 @@ public class FactoriesController : ControllerBase
 }
 
 /// <summary>
-/// Worker profiles — separate from login accounts. Scoped by factory, by
-/// assigned line (Production Supervisor) and to oneself (Worker, via /me).
-/// </summary>
-[ApiController]
-[Route("api/workers")]
-public class WorkersController : ControllerBase
-{
-    private readonly IWorkerService _workers;
-    public WorkersController(IWorkerService workers) { _workers = workers; }
-
-    [HttpGet]
-    [RequirePermission(Permissions.WorkersView)]
-    public async Task<IActionResult> List([FromQuery] Guid? factoryId, [FromQuery] string? lineId, [FromQuery] string? search,
-        [FromQuery] int? page, [FromQuery] int? pageSize, CancellationToken ct)
-        => Ok(await _workers.ListAsync(this.Caller(), new WorkerListQuery(factoryId, lineId, search, page ?? 1, pageSize ?? 25), ct));
-
-    /// <summary>GET /api/workers/me — the caller's own worker profile (404 when the account isn't linked to one).</summary>
-    [HttpGet("me")]
-    [RequirePermission(Permissions.SelfView)]
-    public async Task<IActionResult> Me(CancellationToken ct)
-    {
-        var mine = await _workers.MineAsync(this.Caller(), ct);
-        return mine is null
-            ? AccessResults.Problem(this, 404, "Not found", "worker_profile_not_linked", "Your account is not linked to a worker profile.")
-            : Ok(mine);
-    }
-
-    [HttpGet("{id}")]
-    [RequirePermission(Permissions.WorkersView, Permissions.SelfView)]
-    public async Task<IActionResult> Get([FromRoute] string id, CancellationToken ct)
-        => AccessResults.TryId(id, out var wid) ? AccessResults.From(this, await _workers.GetAsync(this.Caller(), wid, ct)) : NotFoundWorker();
-
-    [HttpPost]
-    [RequirePermission(Permissions.WorkersManage)]
-    public async Task<IActionResult> Create([FromBody] CreateWorkerRequest body, CancellationToken ct)
-        => AccessResults.From(this, await _workers.CreateAsync(this.Caller(), body, AccessResults.TraceId(this), ct), w => $"/api/workers/{w.Id}");
-
-    [HttpPut("{id}")]
-    [RequirePermission(Permissions.WorkersManage)]
-    public async Task<IActionResult> Update([FromRoute] string id, [FromBody] UpdateWorkerRequest body, CancellationToken ct)
-        => AccessResults.TryId(id, out var wid)
-            ? AccessResults.From(this, await _workers.UpdateAsync(this.Caller(), wid, body, AccessResults.TraceId(this), ct))
-            : NotFoundWorker();
-
-    [HttpPut("{id}/workstation")]
-    [RequirePermission(Permissions.WorkersAssign, Permissions.WorkersManage)]
-    public async Task<IActionResult> AssignWorkstation([FromRoute] string id, [FromBody] AssignWorkstationRequest body, CancellationToken ct)
-        => AccessResults.TryId(id, out var wid)
-            ? AccessResults.From(this, await _workers.AssignWorkstationAsync(this.Caller(), wid, body, AccessResults.TraceId(this), ct))
-            : NotFoundWorker();
-
-    /// <summary>PUT /api/workers/{id}/account — link or unlink a login account.</summary>
-    [HttpPut("{id}/account")]
-    [RequirePermission(Permissions.UsersUpdate)]
-    public async Task<IActionResult> LinkAccount([FromRoute] string id, [FromBody] LinkWorkerAccountRequest body, CancellationToken ct)
-        => AccessResults.TryId(id, out var wid)
-            ? AccessResults.From(this, await _workers.LinkAccountAsync(this.Caller(), wid, body, AccessResults.TraceId(this), ct))
-            : NotFoundWorker();
-
-    private IActionResult NotFoundWorker() => AccessResults.Problem(this, 404, "Not found", "worker_not_found", "Worker not found.");
-}
-
-/// <summary>
 /// The signed-in user's own account. Needs only a valid session (no
 /// permission), so it works while a temporary password is pending.
 /// </summary>

@@ -64,9 +64,10 @@ public static class Permissions
     public const string SettingsManage    = "settings.manage";
 
     // Workforce
-    public const string WorkersView   = "workers.view";
-    public const string WorkersManage = "workers.manage";
-    public const string WorkersAssign = "workers.assign";
+    public const string WorkersView        = "workers.view";
+    public const string WorkersDetailsView = "workers.details.view";
+    public const string WorkersManage      = "workers.manage";
+    public const string WorkersAssign      = "workers.assign";
 
     // Attendance & shifts
     public const string AttendanceView   = "attendance.view";
@@ -154,13 +155,14 @@ public static class AccessCatalog
         P(Permissions.AuditView,          "Users & access", "View audit log", "Read the audit trail for your scope."),
 
         P(Permissions.LinesView,         "Organization", "View production lines", "See the lines of your factory (supervisors: assigned lines)."),
-        P(Permissions.LinesManage,       "Organization", "Manage production lines", "Create lines and attach them to a factory."),
-        P(Permissions.DepartmentsManage, "Organization", "Manage departments", "Create and edit departments.", reserved: true),
+        P(Permissions.LinesManage,       "Organization", "Manage production lines", "Create lines and production floors and attach lines to a factory."),
+        P(Permissions.DepartmentsManage, "Organization", "Manage departments", "Create, rename and (de)activate the departments of a factory."),
         P(Permissions.SettingsManage,    "Organization", "Manage factory settings", "Factory-level configuration such as QC defect categories."),
 
-        P(Permissions.WorkersView,   "Workforce", "View workers", "See worker profiles in your scope. Employment details need Manage workers."),
-        P(Permissions.WorkersManage, "Workforce", "Manage workers", "Create and edit worker profiles and employment information."),
-        P(Permissions.WorkersAssign, "Workforce", "Assign workstations", "Move workers between lines and workstations in your scope."),
+        P(Permissions.WorkersView,        "Workforce", "View workers", "The worker directory in your scope: Worker ID, name, photo, placement, designation and status. No personal or employment details."),
+        P(Permissions.WorkersDetailsView, "Workforce", "View employment details", "Employee number, joining date, grade and status history of workers, and export of the worker list. No personal contact details."),
+        P(Permissions.WorkersManage,      "Workforce", "Manage workers", "Register, edit and import workers, change their status, issue cards, and see their personal details."),
+        P(Permissions.WorkersAssign,      "Workforce", "Assign workstations", "Move workers between lines and workstations in your scope."),
 
         P(Permissions.AttendanceView,   "Attendance", "View attendance", "See attendance and shift records.", reserved: true),
         P(Permissions.AttendanceManage, "Attendance", "Manage attendance", "Record attendance and process corrections.", reserved: true),
@@ -217,7 +219,7 @@ public static class AccessCatalog
             "Oversees factory operations: workforce and production performance, attendance, overtime and reports, and operational approvals.",
             RoleScope.Factory, 60, AdminTier, new[]
             {
-                Permissions.FactoriesView, Permissions.LinesView, Permissions.WorkersView,
+                Permissions.FactoriesView, Permissions.LinesView, Permissions.WorkersView, Permissions.WorkersDetailsView,
                 Permissions.AttendanceView, Permissions.OvertimeView,
                 Permissions.MonitoringView,
                 Permissions.ProductionView, Permissions.ProductionManage, Permissions.QcView,
@@ -251,7 +253,7 @@ public static class AccessCatalog
             "Worker profiles and employment information, attendance and corrections, shifts, leave and overtime.",
             RoleScope.Factory, 40, AdminTier, new[]
             {
-                Permissions.LinesView, Permissions.WorkersView, Permissions.WorkersManage,
+                Permissions.LinesView, Permissions.WorkersView, Permissions.WorkersDetailsView, Permissions.WorkersManage,
                 Permissions.AttendanceView, Permissions.AttendanceManage, Permissions.ShiftsManage,
                 Permissions.LeaveManage, Permissions.OvertimeView, Permissions.OvertimeManage,
                 Permissions.ReportsView, Permissions.NotificationsView,

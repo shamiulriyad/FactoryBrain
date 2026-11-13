@@ -460,7 +460,7 @@ public sealed class UserAdminService : IUserAdminService
         var lines = await _db.ProductionLines.AsNoTracking().Where(l => lineIds.Contains(l.Id)).OrderBy(l => l.Id)
             .Select(l => new LineRef(l.Id, l.Name, l.FactoryId)).ToListAsync(ct);
         var worker = await _db.Workers.AsNoTracking().Where(w => w.UserId == userId)
-            .Select(w => new WorkerRef(w.Id, w.EmployeeCode, w.FullName)).FirstOrDefaultAsync(ct);
+            .Select(w => new WorkerRef(w.Id, w.WorkerCode, w.FullName)).FirstOrDefaultAsync(ct);
 
         var manage = CanManage(caller, userId, roles) && (caller.IsPlatform || !roles.Contains(SystemRoles.SuperAdmin));
         var can = new UserCapabilities(

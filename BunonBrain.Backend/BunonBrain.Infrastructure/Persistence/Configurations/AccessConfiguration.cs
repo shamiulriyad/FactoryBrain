@@ -97,28 +97,3 @@ public class UserProductionLineAssignmentConfiguration : IEntityTypeConfiguratio
         b.HasOne<ProductionLine>().WithMany().HasForeignKey(x => x.LineId).OnDelete(DeleteBehavior.Cascade);
     }
 }
-
-public class WorkerProfileConfiguration : IEntityTypeConfiguration<WorkerProfile>
-{
-    public void Configure(EntityTypeBuilder<WorkerProfile> b)
-    {
-        b.ToTable("workers");
-        b.HasKey(x => x.Id);
-        b.Property(x => x.EmployeeCode).HasMaxLength(32).IsRequired();
-        b.Property(x => x.FullName).HasMaxLength(120).IsRequired();
-        b.Property(x => x.Designation).HasMaxLength(80);
-        b.Property(x => x.LineId).HasMaxLength(32);
-        b.Property(x => x.Workstation).HasMaxLength(32);
-        b.Property(x => x.Phone).HasMaxLength(32);
-        b.Property(x => x.Grade).HasMaxLength(32);
-        b.Property(x => x.CreatedAt).HasColumnType("timestamptz");
-        b.Property(x => x.UpdatedAt).HasColumnType("timestamptz");
-        b.HasIndex(x => new { x.FactoryId, x.EmployeeCode }).IsUnique();
-        b.HasIndex(x => x.LineId);
-        // One login account ↔ at most one worker profile.
-        b.HasIndex(x => x.UserId).IsUnique().HasFilter("\"UserId\" IS NOT NULL");
-        b.HasOne<Factory>().WithMany().HasForeignKey(x => x.FactoryId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<ProductionLine>().WithMany().HasForeignKey(x => x.LineId).OnDelete(DeleteBehavior.SetNull);
-        b.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.SetNull);
-    }
-}

@@ -154,44 +154,6 @@ public class UpdateFactoryRequestValidator : AbstractValidator<UpdateFactoryRequ
     }
 }
 
-public class CreateWorkerRequestValidator : AbstractValidator<CreateWorkerRequest>
-{
-    public CreateWorkerRequestValidator()
-    {
-        RuleFor(x => x.FactoryId).NotEmpty();
-        RuleFor(x => x.EmployeeCode).NotEmpty().MaximumLength(32).Matches("^[A-Za-z0-9][A-Za-z0-9-_/]*$")
-            .WithMessage("Employee code: letters, digits, '-', '_' and '/', up to 32 characters.");
-        RuleFor(x => x.FullName).NotEmpty().MaximumLength(AccessFieldRules.NameMax);
-        RuleFor(x => x.Designation).MaximumLength(80);
-        RuleFor(x => x.LineId).MaximumLength(64);
-        RuleFor(x => x.Workstation).MaximumLength(32);
-        RuleFor(x => x.Phone).MaximumLength(AccessFieldRules.PhoneMax).Matches(AccessFieldRules.PhonePattern)
-            .When(x => !string.IsNullOrEmpty(x.Phone));
-        RuleFor(x => x.Grade).MaximumLength(32);
-    }
-}
-
-public class UpdateWorkerRequestValidator : AbstractValidator<UpdateWorkerRequest>
-{
-    public UpdateWorkerRequestValidator()
-    {
-        RuleFor(x => x.FullName).NotEmpty().MaximumLength(AccessFieldRules.NameMax);
-        RuleFor(x => x.Designation).MaximumLength(80);
-        RuleFor(x => x.Phone).MaximumLength(AccessFieldRules.PhoneMax).Matches(AccessFieldRules.PhonePattern)
-            .When(x => !string.IsNullOrEmpty(x.Phone));
-        RuleFor(x => x.Grade).MaximumLength(32);
-    }
-}
-
-public class AssignWorkstationRequestValidator : AbstractValidator<AssignWorkstationRequest>
-{
-    public AssignWorkstationRequestValidator()
-    {
-        RuleFor(x => x.LineId).MaximumLength(64);
-        RuleFor(x => x.Workstation).MaximumLength(32);
-    }
-}
-
 /// <summary>Shared limits for access-management requests.</summary>
 public static class AccessFieldRules
 {

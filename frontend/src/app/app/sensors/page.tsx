@@ -14,7 +14,8 @@ import { SkeletonRows } from "@/components/ui/Status";
 import { useToast } from "@/components/ui/Toast";
 import { useResource, announceDataChanged } from "@/lib/useResource";
 import { apiJson, errorMessage } from "@/lib/api";
-import { canOperate, useAuthStore } from "@/lib/auth";
+import { useCan } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { useT } from "@/lib/useT";
 import { cn } from "@/lib/cn";
@@ -26,7 +27,7 @@ const MACHINE_TONE: Record<string, "success" | "warning" | "danger" | "neutral">
 export default function SensorsPage() {
   const { locale } = useT();
   const toast = useToast();
-  const operator = canOperate(useAuthStore((s) => s.user));
+  const operator = useCan(P.DevicesManage);
   const status = useResource<SensorStatus>("/api/sensors/ingest", { pollMs: 10_000 });
   const snapshot = useResource<SensorSnapshot>("/api/sensors/snapshot", { pollMs: 10_000 });
   const latest = useResource<LatestReadings>("/api/sensors/latest", { pollMs: 15_000 });

@@ -25,8 +25,8 @@ test.beforeEach(async ({ page }) => {
   await prepare(page);
 });
 
-test("the queue is served by the API and a viewer cannot decide", async ({ page }) => {
-  await login(page, "viewer", "/app/approvals");
+test("the queue is served by the API and a supervisor (view only) cannot decide", async ({ page }) => {
+  await login(page, "supervisor", "/app/approvals");
   for (const id of [env.approveId, env.rejectId, env.highRiskId]) {
     await expect(card(page, id)).toBeVisible();
   }
@@ -54,7 +54,7 @@ test("an operator approves a medium-risk item and the audit log records it", asy
   expect(audit[0]).toMatchObject({
     action: "approval.approved",
     actorEmail: creds("operator").email,
-    actorRole: "Operator",
+    actorRole: "FactoryManager",
     fromState: "pending_approval",
     toState: "approved",
   });
@@ -78,21 +78,21 @@ test("rejecting needs a reason, which is shown and audited", async ({ page }) =>
 
   const audit = await auditFor(env.rejectId);
   expect(audit).toHaveLength(1);
-  expect(audit[0]).toMatchObject({ action: "approval.rejected", toState: "rejected", reason, actorRole: "Operator" });
+  expect(audit[0]).toMatchObject({ action: "approval.rejected", toState: "rejected", reason, actorRole: "FactoryManager" });
 });
 
-test("a high-risk approval needs an Admin, in the UI and on the server", async ({ page, browser }) => {
+test("a high-risk approval needs approvals.decide_high, in the UI and on the server", async ({ page, browser }) => {
   // Operator: the UI disables the action and says why…
   await login(page, "operator", "/app/approvals");
   const c = card(page, env.highRiskId);
   await expect(c.getByTestId("approval-approve")).toBeDisabled();
-  await expect(c.getByTestId("approval-blocked")).toHaveText("High-risk approvals need an Admin.");
+  await expect(c.getByTestId("approval-blocked")).toHaveText("High-risk approvals need a Factory Admin.");
 
   // …and the server refuses the same call made directly, so the UI is not the only guard.
   const operatorApi = await apiAs("operator");
   const direct = await operatorApi.post(`/api/approvals/${env.highRiskId}/approve`, { data: {} });
   expect(direct.status()).toBe(403);
-  expect((await direct.json()).detail).toBe("High-risk approvals can only be decided by an Admin.");
+  expect((await direct.json()).detail).toBe("High-risk approvals can only be decided by a Factory Admin or Super Admin (approvals.decide_high).");
   await operatorApi.dispose();
   expect(await auditFor(env.highRiskId)).toHaveLength(0);
 
@@ -113,7 +113,7 @@ test("a high-risk approval needs an Admin, in the UI and on the server", async (
 
   const audit = await auditFor(env.highRiskId);
   expect(audit).toHaveLength(1);
-  expect(audit[0]).toMatchObject({ action: "approval.approved", actorRole: "Admin", actorEmail: creds("admin").email });
+  expect(audit[0]).toMatchObject({ action: "approval.approved", actorRole: "SuperAdmin", actorEmail: creds("admin").email });
 });
 
 test("a decided approval cannot be decided again", async () => {

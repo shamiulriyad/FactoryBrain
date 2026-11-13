@@ -1,7 +1,7 @@
 import { Big_Shoulders_Display, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 
 /**
- * FactoryBrain typefaces, shared by the marketing homepage and the app
+ * BunonBrain typefaces, shared by the marketing homepage and the app
  * sidebar so each font file is downloaded once.
  */
 export const displayFont = Big_Shoulders_Display({

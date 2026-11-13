@@ -22,7 +22,8 @@ import { useToast } from "@/components/ui/Toast";
 import { InspectionImage, overlaysFor } from "@/components/qc/InspectionImage";
 import { useResource, announceDataChanged } from "@/lib/useResource";
 import { errorMessage, isApiError } from "@/lib/api";
-import { canOperate, isAdmin, useAuthStore } from "@/lib/auth";
+import { useAuthStore, can } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import {
@@ -51,8 +52,8 @@ export default function InspectionDetailPage() {
   const id = params?.id ?? "";
   const toast = useToast();
   const user = useAuthStore((s) => s.user);
-  const operator = canOperate(user);
-  const admin = isAdmin(user);
+  const operator = can(user, P.QcManage);
+  const admin = can(user, P.AuditView);
 
   const [poll, setPoll] = useState(true);
   const res = useResource<QcInspectionDetail>(id ? `/api/qc/inspections/${encodeURIComponent(id)}` : null, { pollMs: poll ? 3000 : undefined });

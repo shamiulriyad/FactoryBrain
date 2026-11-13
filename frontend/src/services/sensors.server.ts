@@ -56,7 +56,7 @@ export type ServerSimState = {
 
 declare global {
   // eslint-disable-next-line no-var
-  var __factoryBrainSimState: ServerSimState | undefined;
+  var __bunonBrainSimState: ServerSimState | undefined;
 }
 
 function clamp(n: number, lo: number, hi: number) {
@@ -93,10 +93,10 @@ function seedServerSim(): ServerSimState {
 }
 
 export function getServerSimState(): ServerSimState {
-  if (!globalThis.__factoryBrainSimState) {
-    globalThis.__factoryBrainSimState = seedServerSim();
+  if (!globalThis.__bunonBrainSimState) {
+    globalThis.__bunonBrainSimState = seedServerSim();
   }
-  return globalThis.__factoryBrainSimState;
+  return globalThis.__bunonBrainSimState;
 }
 
 export function emitSensorTick(state: ServerSimState): SensorReading[] {

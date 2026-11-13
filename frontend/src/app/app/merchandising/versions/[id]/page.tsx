@@ -24,7 +24,8 @@ import { useToast } from "@/components/ui/Toast";
 import { BreakdownTable, VersionStatusBadge, useMerchConfig } from "@/components/merchandising/shared";
 import { announceDataChanged, useResource } from "@/lib/useResource";
 import { errorMessage, isApiError } from "@/lib/api";
-import { canOperate, useAuthStore } from "@/lib/auth";
+import { useAuthStore, can } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import {
@@ -52,7 +53,7 @@ export default function VersionReviewPage() {
   const id = params?.id ?? "";
   const toast = useToast();
   const user = useAuthStore((s) => s.user);
-  const operator = canOperate(user);
+  const operator = can(user, P.MerchandisingManage);
   const config = useMerchConfig();
   const [poll, setPoll] = useState(true);
   const res = useResource<MerchVersionDetail>(id ? merchPaths.version(id) : null, { pollMs: poll ? 2500 : undefined });

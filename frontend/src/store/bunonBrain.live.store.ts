@@ -49,7 +49,7 @@ type State = {
   setError: (e: string | null) => void;
 };
 
-export const useFactoryBrainLiveStore = create<State>((set) => ({
+export const useBunonBrainLiveStore = create<State>((set) => ({
   snapshot: null,
   fetching: false,
   error: null,

@@ -1,6 +1,22 @@
-import { expect, request, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, request, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 
-export type Role = "admin" | "operator" | "viewer";
+/**
+ * Signed-in personas (see e2e/run-e2e.mjs):
+ * admin = Super Admin; operator = Factory Manager + Production Supervisor
+ * (operational writes); viewer = Monitoring Operator; supervisor = Production
+ * Supervisor with no lines (reads production, QC, merchandising, approvals,
+ * knowledge; writes nothing there); manager = Factory Manager.
+ */
+export type Role = "admin" | "operator" | "viewer" | "supervisor" | "manager";
+
+/** The role names the UI shows for each persona (highest role first). */
+export const ROLE_NAME: Record<Role, string> = {
+  admin: "Super Admin",
+  operator: "Factory Manager",
+  viewer: "Monitoring Operator",
+  supervisor: "Production Supervisor",
+  manager: "Factory Manager",
+};
 
 function need(name: string): string {
   const v = process.env[name];
@@ -43,7 +59,7 @@ export async function login(page: Page, role: Role, next = "/app") {
   const { email, password } = creds(role);
   await page.goto(`/login?next=${encodeURIComponent(next)}`);
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL((u) => u.pathname === next || u.pathname.startsWith(next + "/"));
   // The top bar shows who is signed in once the session is established.
@@ -75,4 +91,13 @@ export async function fakeLlmStats(): Promise<{
   const body = await res.json();
   await ctx.dispose();
   return body;
+}
+
+/**
+ * Open every collapsed sidebar group (Tools and Production floors start
+ * collapsed), so nav items can be checked for visibility.
+ */
+export async function expandNav(scope: Page | Locator) {
+  const closed = scope.locator('[data-testid^="nav-group-"][aria-expanded="false"]:visible');
+  while ((await closed.count()) > 0) await closed.first().click();
 }

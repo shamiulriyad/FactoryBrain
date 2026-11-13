@@ -25,41 +25,61 @@ const config: Config = {
           secondary: "var(--fg-secondary)",
           tertiary: "var(--fg-tertiary)"
         },
-        // Brand + risk — bound to vars
-        accent: "var(--accent)",
+        // Brand palette (src/app/globals.css → --brand-*). Use these, never raw hex.
+        brand: {
+          navy: "rgb(var(--brand-navy) / <alpha-value>)",
+          "navy-deep": "rgb(var(--brand-navy-deep) / <alpha-value>)",
+          emerald: "rgb(var(--brand-emerald) / <alpha-value>)",
+          "emerald-light": "rgb(var(--brand-emerald-light) / <alpha-value>)",
+          "emerald-ink": "rgb(var(--brand-emerald-ink) / <alpha-value>)",
+          white: "rgb(var(--brand-white) / <alpha-value>)",
+          offwhite: "rgb(var(--brand-offwhite) / <alpha-value>)",
+          border: "rgb(var(--brand-border) / <alpha-value>)",
+          text: "rgb(var(--brand-text) / <alpha-value>)",
+          body: "rgb(var(--brand-body) / <alpha-value>)",
+          muted: "rgb(var(--brand-muted) / <alpha-value>)",
+          success: "rgb(var(--brand-success) / <alpha-value>)",
+          warning: "rgb(var(--brand-warning) / <alpha-value>)",
+          error: "rgb(var(--brand-error) / <alpha-value>)",
+          info: "rgb(var(--brand-info) / <alpha-value>)"
+        },
+        // Theme accent + risk — bound to vars (accent supports opacity: bg-accent/15)
+        accent: "rgb(var(--accent-rgb) / <alpha-value>)",
         risk: {
           low: "var(--risk-low)",
           medium: "var(--risk-medium)",
           high: "var(--risk-high)"
         },
-        // App sidebar (always dark, independent of the page theme).
+        // App sidebar (always deep navy, independent of the page theme) → --sb-* tokens.
         sb: {
-          bg: "#0d1218",
-          input: "#121820",
-          border: "#232b36",
-          divider: "#1f2731",
-          active: "#1d2531",
-          hover: "#161d26",
-          text: "#ece7df",
-          dim: "#c3c7cc",
-          muted: "#a4a9af",
-          label: "#8d949e",
-          accent: "#f2c27a",
-          ok: "#8fc9a8",
-          watch: "#f2c27a",
-          act: "#ff6b45",
-          ink: "#1a1308"
+          bg: "rgb(var(--sb-bg) / <alpha-value>)",
+          input: "rgb(var(--sb-input) / <alpha-value>)",
+          border: "rgb(var(--sb-border) / <alpha-value>)",
+          divider: "rgb(var(--sb-divider) / <alpha-value>)",
+          active: "rgb(var(--sb-active) / <alpha-value>)",
+          hover: "rgb(var(--sb-hover) / <alpha-value>)",
+          text: "rgb(var(--sb-text) / <alpha-value>)",
+          dim: "rgb(var(--sb-dim) / <alpha-value>)",
+          muted: "rgb(var(--sb-muted) / <alpha-value>)",
+          label: "rgb(var(--sb-label) / <alpha-value>)",
+          accent: "rgb(var(--sb-accent) / <alpha-value>)",
+          ok: "rgb(var(--sb-ok) / <alpha-value>)",
+          watch: "rgb(var(--sb-watch) / <alpha-value>)",
+          act: "rgb(var(--sb-act) / <alpha-value>)",
+          ink: "rgb(var(--sb-ink) / <alpha-value>)"
         },
-        // FactoryBrain marketing homepage (single dark theme).
+        // Marketing homepage → --home-* tokens (navy by default; .fb-light / .fb-offwhite flip them).
         fb: {
-          ink: "#0f141b",
-          text: "#ece7df",
-          muted: "#a4a9af",
-          line: "rgba(236,231,223,0.14)",
-          thread: "#ff6b45",
-          lamp: "#f2c27a",
-          ok: "#8fc9a8",
-          card: "rgba(14,19,26,0.86)"
+          ink: "rgb(var(--home-ink) / <alpha-value>)",
+          text: "rgb(var(--home-text) / <alpha-value>)",
+          muted: "rgb(var(--home-muted) / <alpha-value>)",
+          line: "var(--home-line)",
+          thread: "rgb(var(--home-thread) / <alpha-value>)",
+          lamp: "rgb(var(--home-lamp) / <alpha-value>)",
+          warn: "rgb(var(--home-warn) / <alpha-value>)",
+          ok: "rgb(var(--home-ok) / <alpha-value>)",
+          card: "var(--home-card)",
+          field: "var(--home-field)"
         },
         stage: {
           suggested: "var(--stage-suggested)",
@@ -102,9 +122,9 @@ const config: Config = {
         xl: "12px"
       },
       boxShadow: {
-        card: "0 1px 0 inset rgba(255,255,255,0.04), 0 1px 2px rgba(0,0,0,0.4)",
-        glass: "0 24px 48px rgba(0,0,0,0.4)",
-        pop: "0 1px 0 inset rgba(255,255,255,0.06), 0 8px 24px rgba(0,0,0,0.4)"
+        card: "var(--shadow-card)",
+        glass: "var(--glass-shadow)",
+        pop: "var(--shadow-pop)"
       },
       backdropBlur: {
         md: "12px"

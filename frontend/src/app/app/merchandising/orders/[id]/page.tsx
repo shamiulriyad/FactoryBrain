@@ -21,7 +21,8 @@ import { AttentionList, BreakdownTable, DueText, ExtractionNotice, OrderStatusBa
 import { MilestoneModal, OrderFormModal, ResolveConflictModal, UploadModal } from "@/components/merchandising/forms";
 import { announceDataChanged, useOnDataChanged, useResource } from "@/lib/useResource";
 import { errorMessage, isApiError } from "@/lib/api";
-import { canOperate, isAdmin, useAuthStore } from "@/lib/auth";
+import { useAuthStore, can } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { formatDateTime } from "@/lib/format";
 import { SOURCE_LABEL, describeCode, fmtQty, isInProgress } from "@/lib/merchandising";
 import { merchPaths, updateMerchOrder } from "@/services/merchandising.api";
@@ -32,8 +33,8 @@ export default function MerchOrderPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
   const user = useAuthStore((s) => s.user);
-  const operator = canOperate(user);
-  const admin = isAdmin(user);
+  const operator = can(user, P.MerchandisingManage);
+  const admin = can(user, P.AuditView);
   const config = useMerchConfig();
   const [poll, setPoll] = useState(false);
   const res = useResource<MerchOrderDetail>(id ? merchPaths.order(id) : null, { pollMs: poll ? 3000 : undefined });

@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowDown, ArrowUp, RefreshCw, ScrollText, Search } from "lucide-react";
-import { RequireRole } from "@/components/auth/RequireRole";
+import { RequirePermission } from "@/components/auth/RequireRole";
+import { P } from "@/lib/access";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { Button } from "@/components/ui/Button";
@@ -26,7 +27,10 @@ const ENTITY_TYPES = [
   { value: "approval", label: "Approvals" },
   { value: "settings", label: "AI settings" },
   { value: "rag_index", label: "RAG index" },
-  { value: "user", label: "Users" }
+  { value: "user", label: "Users" },
+  { value: "factory", label: "Factories" },
+  { value: "worker", label: "Workers" },
+  { value: "production_line", label: "Production lines" }
 ];
 const LIMITS = [50, 100, 200];
 const PAGE_SIZE = 25;
@@ -34,15 +38,17 @@ const PAGE_SIZE = 25;
 function actionTone(action: string): BadgeTone {
   if (/rejected|failed|cleared/.test(action)) return "danger";
   if (/approved|completed/.test(action)) return "success";
-  if (/role_changed|updated|password/.test(action)) return "warning";
+  if (/deactivated/.test(action)) return "danger";
+  if (/created|activated|attached|linked/.test(action)) return "success";
+  if (/roles?_changed|scope_changed|updated|password/.test(action)) return "warning";
   return "neutral";
 }
 
 export default function AuditPage() {
   return (
-    <RequireRole role="Admin" what="The audit log">
+    <RequirePermission perms={[P.AuditView]} what="The audit log">
       <AuditLog />
-    </RequireRole>
+    </RequirePermission>
   );
 }
 

@@ -12,7 +12,8 @@ import {
   type ApprovalFilter,
   type ServerApproval,
 } from "@/services/approvals.api";
-import { canOperate, isAdmin, useAuthStore } from "@/lib/auth";
+import { useAuthStore, can } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { apiJson, errorMessage } from "@/lib/api";
 import { useOnDataChanged } from "@/lib/useResource";
 import { formatDateTime, formatRelative } from "@/lib/format";
@@ -59,8 +60,8 @@ export default function ApprovalsPage() {
   const toast = useToast();
   const search = useSearchParams();
   const user = useAuthStore((s) => s.user);
-  const mayDecide = canOperate(user);
-  const admin = isAdmin(user);
+  const mayDecide = can(user, P.ApprovalsDecide);
+  const admin = can(user, P.ApprovalsDecideHigh);
 
   const [rows, setRows] = useState<ServerApproval[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
@@ -159,7 +160,7 @@ export default function ApprovalsPage() {
   const blockedReason = useCallback((a: ServerApproval): string | null => {
     if (a.status !== "pending_approval") return null;
     if (!mayDecide) return t("auth.forbidden") as string;
-    if (a.riskTier === "high" && !admin) return "High-risk approvals need an Admin.";
+    if (a.riskTier === "high" && !admin) return "High-risk approvals need a Factory Admin.";
     return null;
   }, [mayDecide, admin, t]);
 

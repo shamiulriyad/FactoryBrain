@@ -21,7 +21,8 @@ import { SkeletonRows } from "@/components/ui/Status";
 import { useToast } from "@/components/ui/Toast";
 import { announceDataChanged, useOnDataChanged, useResource } from "@/lib/useResource";
 import { errorMessage } from "@/lib/api";
-import { canOperate, useAuthStore } from "@/lib/auth";
+import { useCan } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { formatDateTime } from "@/lib/format";
 import { fmt, fmtHours, fmtPct, fmtSigned, plantDateTime } from "@/lib/production";
 import { planAction, productionPaths, resolvePlanChange } from "@/services/production.api";
@@ -34,7 +35,7 @@ type Pending = { kind: "submit" | "complete" | "cancel"; title: string; needsRea
 export default function PlanPage() {
   const id = useParams<{ id: string }>()?.id ?? "";
   const toast = useToast();
-  const operator = canOperate(useAuthStore((s) => s.user));
+  const operator = useCan(P.ProductionManage);
   const res = useResource<PlanDetail>(id ? productionPaths.plan(id) : null);
   useOnDataChanged(() => void res.reload());
   const config = useProductionConfig();

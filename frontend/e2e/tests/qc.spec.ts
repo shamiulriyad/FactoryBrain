@@ -48,8 +48,8 @@ async function finding(page: Page, label: string) {
   return page.getByTestId("qc-predictions").getByTestId("qc-finding").filter({ hasText: label });
 }
 
-test("a Viewer can browse but not submit or review", async ({ page }) => {
-  await login(page, "viewer", "/app/vision");
+test("a Factory Manager (view only) can browse but not submit or review", async ({ page }) => {
+  await login(page, "manager", "/app/vision");
   await expect(page.getByTestId("qc-submit-forbidden")).toBeVisible();
   await expect(page.getByTestId("qc-submit")).toBeDisabled();
   await page.goto("/app/qc");
@@ -57,7 +57,7 @@ test("a Viewer can browse but not submit or review", async ({ page }) => {
   await expect(page.getByTestId("qc-new-inspection")).toHaveCount(0);
 
   // The API enforces it too, whatever the UI shows.
-  const api = await apiAs("viewer");
+  const api = await apiAs("manager");
   const res = await api.post("/api/qc/inspections", {
     multipart: { productType: "Polo", stage: "final", image: { name: "x.png", mimeType: "image/png", buffer: png(8, 8) } }
   });
@@ -146,8 +146,8 @@ test("history and quality metrics show the persisted review", async ({ page }) =
   await expect(page.getByTestId("qc-by-line")).toContainText("line-2");
 });
 
-test("a Viewer opens the reviewed inspection without any review controls", async ({ page }) => {
-  await login(page, "viewer", "/app/qc");
+test("a Factory Manager opens the reviewed inspection without any review controls", async ({ page }) => {
+  await login(page, "manager", "/app/qc");
   await page.goto(inspectionUrl);
   await expect(page.getByTestId("qc-detail")).toHaveAttribute("data-status", "reviewed");
   await expect(page.getByTestId("qc-image").locator("img")).toBeVisible();

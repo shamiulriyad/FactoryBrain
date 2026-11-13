@@ -7,11 +7,11 @@ import nextEnv from '@next/env';
 // loadEnvConfig(frontend/) and cached it by the time this file runs, so
 // forceReload (4th arg) is needed. Values in the real process env still win.
 //
-// FACTORYBRAIN_SKIP_ROOT_ENV=1 skips the repo-root .env entirely. The
+// BUNONBRAIN_SKIP_ROOT_ENV=1 skips the repo-root .env entirely. The
 // end-to-end harness (e2e/run-e2e.mjs) sets it so test builds are configured
 // only by the variables it passes, never by a developer's real .env.
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-if (process.env.FACTORYBRAIN_SKIP_ROOT_ENV !== '1') {
+if (process.env.BUNONBRAIN_SKIP_ROOT_ENV !== '1') {
   nextEnv.loadEnvConfig(repoRoot, process.env.NODE_ENV !== 'production', undefined, true);
 }
 

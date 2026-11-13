@@ -11,18 +11,19 @@ import { CornerDownLeft, Layers, MessageSquareText, Search, Settings as Settings
 import type { LucideIcon } from "lucide-react";
 import { useAppStore } from "@/store/app.store";
 import { useT } from "@/lib/useT";
-import { hasRole, useAuthStore, type RequiredRole } from "@/lib/auth";
+import { can, useAuthStore } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { cn } from "@/lib/cn";
 import { ALL_NAV_ITEMS, NAV_GROUPS } from "@/lib/navigation";
 
 type Item = { id: string; group: string; title: string; hint?: string; href: string; icon: LucideIcon; keywords: string };
 
-const SETTINGS: Array<{ section: string; title: string; hint: string; role: RequiredRole; keywords: string }> = [
-  { section: "advanced", title: "AI & models", hint: "Language model, API keys, embeddings, reindex", role: "Viewer", keywords: "llm openai gemini anthropic key embedding" },
-  { section: "users", title: "Users & roles", hint: "Your access; Admins change roles", role: "Viewer", keywords: "user role admin operator viewer" },
-  { section: "appearance", title: "Appearance", hint: "Theme and language", role: "Viewer", keywords: "theme dark light language bangla" },
-  { section: "profile", title: "Business profile", hint: "Plant name (this browser)", role: "Viewer", keywords: "name city plant" },
-  { section: "dataReset", title: "Reset this browser", hint: "Clear local preferences", role: "Viewer", keywords: "reset clear demo" }
+const SETTINGS: Array<{ section: string; title: string; hint: string; perms: string[]; keywords: string }> = [
+  { section: "advanced", title: "AI & models", hint: "Language model, API keys, embeddings, reindex", perms: [P.KnowledgeView, P.PlatformSettingsManage], keywords: "llm openai gemini anthropic key embedding" },
+  { section: "users", title: "Users & roles", hint: "Your access, and user administration", perms: [], keywords: "user role admin access permissions" },
+  { section: "appearance", title: "Appearance", hint: "Theme and language", perms: [], keywords: "theme dark light language bangla" },
+  { section: "profile", title: "Business profile", hint: "Plant name (this browser)", perms: [], keywords: "name city plant" },
+  { section: "dataReset", title: "Reset this browser", hint: "Clear local preferences", perms: [], keywords: "reset clear demo" }
 ];
 
 export function CommandPalette() {
@@ -59,7 +60,7 @@ export function CommandPalette() {
 
   const all = useMemo<Item[]>(() => {
     const groupOf = new Map(NAV_GROUPS.flatMap((g) => g.items.map((it) => [it.id, t(g.labelKey)] as const)));
-    const pages: Item[] = ALL_NAV_ITEMS.filter((it) => hasRole(user, it.role)).map((it) => ({
+    const pages: Item[] = ALL_NAV_ITEMS.filter((it) => can(user, ...it.perms)).map((it) => ({
       id: it.href,
       group: "Pages",
       title: it.floorCode ? `${it.floorCode} · ${t(it.labelKey)}` : t(it.labelKey),
@@ -68,7 +69,7 @@ export function CommandPalette() {
       icon: it.icon ?? Layers,
       keywords: `${t(it.labelKey)} ${it.keywords ?? ""}`.toLowerCase()
     }));
-    const settings: Item[] = SETTINGS.filter((s) => hasRole(user, s.role)).map((s) => ({
+    const settings: Item[] = SETTINGS.filter((s) => can(user, ...s.perms)).map((s) => ({
       id: `settings-${s.section}`,
       group: "Settings",
       title: s.title,

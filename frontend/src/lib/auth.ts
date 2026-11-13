@@ -11,17 +11,30 @@
 //     returns a fresh access token. A page reload therefore costs one refresh
 //     call, not a new login.
 //
-// Role checks in the UI (e.g. hiding admin controls) are convenience only;
-// the API enforces them with its Operator / Admin policies.
+// Permission checks in the UI (hiding menu items and buttons) are
+// convenience only; the API enforces every permission and every factory /
+// line scope on each request.
 
 import { create } from "zustand";
+import type { Permission, RoleId } from "@/lib/access";
 
-export type SessionRole = "Admin" | "Operator" | "Viewer";
+export type FactoryRef = { id: string; code: string; name: string };
 
 export type SessionUser = {
   id: string;
   email: string;
-  role: SessionRole | string;
+  fullName?: string | null;
+  /** Highest-ranked role, for display. */
+  role: RoleId | string;
+  roles: (RoleId | string)[];
+  /** Effective permissions; what the server enforces. */
+  permissions: (Permission | string)[];
+  /** Platform, Factory, Line or Self. */
+  scope: "Platform" | "Factory" | "Line" | "Self" | string;
+  factories: FactoryRef[];
+  lineIds: string[];
+  /** A temporary password must be changed before anything else works. */
+  mustChangePassword: boolean;
 };
 
 type AuthState = {
@@ -63,7 +76,7 @@ function clearSession(reason: "expired" | "signed_out" = "expired") {
 
 export type LoginResult =
   | { ok: true; user: SessionUser }
-  | { ok: false; reason: "invalid" | "rate_limited" | "unavailable"; retryAfterSeconds?: number };
+  | { ok: false; reason: "invalid" | "deactivated" | "rate_limited" | "unavailable"; retryAfterSeconds?: number };
 
 export async function login(email: string, password: string): Promise<LoginResult> {
   let res: Response;
@@ -88,6 +101,7 @@ export async function login(email: string, password: string): Promise<LoginResul
     return { ok: false, reason: "rate_limited", retryAfterSeconds: Number.isFinite(retry) ? retry : undefined };
   }
   if (res.status === 400 || res.status === 401) return { ok: false, reason: "invalid" };
+  if (res.status === 403) return { ok: false, reason: "deactivated" };
   return { ok: false, reason: "unavailable" };
 }
 
@@ -108,7 +122,7 @@ export type RegisterResult =
   | { ok: true; user: SessionUser }
   | { ok: false; reason: "taken" | "disabled" | "invalid" | "rate_limited" | "unavailable"; message?: string; retryAfterSeconds?: number };
 
-/** Create an account (always a Viewer). On success the user is signed in, exactly like login(). */
+/** Create an account (no roles until an administrator grants them). On success the user is signed in, exactly like login(). */
 export async function register(email: string, password: string): Promise<RegisterResult> {
   let res: Response;
   try {
@@ -247,22 +261,20 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
   return res;
 }
 
-/** True when the signed-in user's role may perform operational writes. */
-export function canOperate(user: SessionUser | null): boolean {
-  return user?.role === "Admin" || user?.role === "Operator";
+/** True when the user holds at least one of the permissions (any-of, like the API's policies). */
+export function can(user: SessionUser | null | undefined, ...anyOf: (Permission | string)[]): boolean {
+  if (!user || user.mustChangePassword) return false;
+  if (anyOf.length === 0) return true;
+  return anyOf.some((p) => user.permissions?.includes(p));
 }
 
-/** True when the signed-in user's role may change configuration. */
-export function isAdmin(user: SessionUser | null): boolean {
-  return user?.role === "Admin";
+/** Hook form of can(): re-renders when the session changes. */
+export function useCan(...anyOf: (Permission | string)[]): boolean {
+  const user = useAuthStore((s) => s.user);
+  return can(user, ...anyOf);
 }
 
-/** Minimum role a page or action needs, mirroring the API's policies. */
-export type RequiredRole = "Viewer" | "Operator" | "Admin";
-
-export function hasRole(user: SessionUser | null, required: RequiredRole): boolean {
-  if (!user) return false;
-  if (required === "Admin") return isAdmin(user);
-  if (required === "Operator") return canOperate(user);
-  return true;
+/** Display name: full name, else the email. */
+export function displayName(user: Pick<SessionUser, "email" | "fullName"> | null | undefined): string {
+  return user?.fullName?.trim() || user?.email || "";
 }

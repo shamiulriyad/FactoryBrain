@@ -13,13 +13,14 @@ import { AgentAvatar } from "@/components/agents/AgentAvatar";
 import { RunButton, RunResult, useAgentRun } from "@/components/agents/AgentRun";
 import { useResource } from "@/lib/useResource";
 import { errorMessage } from "@/lib/api";
-import { canOperate, useAuthStore } from "@/lib/auth";
+import { useCan } from "@/lib/auth";
+import { P } from "@/lib/access";
 import type { AgentDefinition } from "@/services/contracts";
 
 export default function AgentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { t, locale } = useT();
-  const operator = canOperate(useAuthStore((s) => s.user));
+  const operator = useCan(P.AgentsRun);
   const roster = useResource<AgentDefinition[]>("/api/agents");
   const { run, runningId, runs } = useAgentRun();
   const agent = roster.data?.find((a) => a.id === id) ?? null;

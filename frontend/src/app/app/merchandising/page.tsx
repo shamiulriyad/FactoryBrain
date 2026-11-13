@@ -25,7 +25,8 @@ import { DueText, ExtractionNotice, OrderStatusBadge, VersionStatusBadge, useMer
 import { OrderFormModal } from "@/components/merchandising/forms";
 import { useOnDataChanged, useResource } from "@/lib/useResource";
 import { errorMessage } from "@/lib/api";
-import { canOperate, useAuthStore } from "@/lib/auth";
+import { useAuthStore, can } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { ORDER_STATUS_LABEL, VERSION_STATUS_LABEL, days, describeCode, fmtQty, isInProgress } from "@/lib/merchandising";
@@ -46,7 +47,7 @@ const PAGE_SIZE = 20;
 
 export default function MerchandisingPage() {
   const user = useAuthStore((s) => s.user);
-  const operator = canOperate(user);
+  const operator = can(user, P.MerchandisingManage);
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("overview");
   const [registering, setRegistering] = useState(false);

@@ -12,7 +12,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Callout } from "@/components/ui/Callout";
 import { Tabs } from "@/components/ui/Tabs";
-import { canOperate, isAdmin, useAuthStore } from "@/lib/auth";
+import { useAuthStore, can } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { errorMessage } from "@/lib/api";
 import { ProductionOverview } from "@/components/production/ProductionOverview";
 import { HistoryPanel, OrdersPanel, PlansPanel } from "@/components/production/panels";
@@ -26,8 +27,8 @@ const TABS: Tab[] = ["overview", "orders", "plans", "balancing", "history", "set
 
 export default function ProductionPage() {
   const user = useAuthStore((s) => s.user);
-  const operator = canOperate(user);
-  const admin = isAdmin(user);
+  const operator = can(user, P.ProductionManage);
+  const admin = can(user, P.ProductionSetup, P.LinesManage);
   const [tab, setTab] = useState<Tab>("overview");
   const config = useProductionConfig();
   const md = useMasterData();

@@ -19,7 +19,8 @@ import { useToast } from "@/components/ui/Toast";
 import { ReindexOutcomeView, ReindexPlanView, reindexFailure } from "@/components/rag/ReindexPlanView";
 import { apiJson, errorMessage, isApiError } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
-import { isAdmin, useAuthStore } from "@/lib/auth";
+import { useCan } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { useT } from "@/lib/useT";
 import { cn } from "@/lib/cn";
@@ -55,7 +56,7 @@ const STATE_BADGE: Record<DocState, { tone: "success" | "warning" | "danger"; la
 
 export default function KnowledgePage() {
   const { locale } = useT();
-  const admin = isAdmin(useAuthStore((s) => s.user));
+  const admin = useCan(P.KnowledgeManage);
   const [source, setSource] = useState<string>("");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<RagDocument | null>(null);

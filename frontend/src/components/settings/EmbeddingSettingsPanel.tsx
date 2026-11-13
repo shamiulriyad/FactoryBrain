@@ -21,7 +21,8 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { ReindexOutcomeView, ReindexPlanView, reindexFailure } from "@/components/rag/ReindexPlanView";
 import { apiJson, errorMessage } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
-import { isAdmin, useAuthStore } from "@/lib/auth";
+import { useCan } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { formatDateTime } from "@/lib/format";
 import { useT } from "@/lib/useT";
 import { cn } from "@/lib/cn";
@@ -34,7 +35,7 @@ const HOSTED = new Set(["openai", "gemini"]);
 
 export function EmbeddingSettingsPanel() {
   const { t, locale } = useT();
-  const admin = isAdmin(useAuthStore((s) => s.user));
+  const admin = useCan(P.PlatformSettingsManage);
   const status = useResource<EmbeddingStatus>("/api/settings/embedding");
   const s = status.data;
 

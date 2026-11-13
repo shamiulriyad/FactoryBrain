@@ -21,7 +21,8 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError, apiJson, errorMessage } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
-import { isAdmin, useAuthStore } from "@/lib/auth";
+import { useCan } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { formatDateTime } from "@/lib/format";
 import { useT } from "@/lib/useT";
 import { cn } from "@/lib/cn";
@@ -49,7 +50,7 @@ type Provider = (typeof LLM_PROVIDERS)[number];
 export function LlmSettingsPanel() {
   const { t, locale } = useT();
   const toast = useToast();
-  const admin = isAdmin(useAuthStore((s) => s.user));
+  const admin = useCan(P.PlatformSettingsManage);
   const status = useResource<LlmStatus>("/api/settings/llm");
   const s = status.data;
 

@@ -16,7 +16,8 @@ import { Callout } from "@/components/ui/Callout";
 import { SkeletonRows } from "@/components/ui/Status";
 import { useOnDataChanged, useResource } from "@/lib/useResource";
 import { errorMessage } from "@/lib/api";
-import { canOperate, useAuthStore } from "@/lib/auth";
+import { useCan } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { ORDER_STATUS_LABEL, STAGE_LABEL, fmt, fmtHours, plantDateTime } from "@/lib/production";
 import { productionPaths } from "@/services/production.api";
 import type { OrderDetail } from "@/services/contracts";
@@ -26,7 +27,7 @@ import { KeyValue, RiskLevelBadge, WipList, useMasterData, useProductionConfig }
 
 export default function OrderPage() {
   const id = useParams<{ id: string }>()?.id ?? "";
-  const operator = canOperate(useAuthStore((s) => s.user));
+  const operator = useCan(P.ProductionManage);
   const res = useResource<OrderDetail>(id ? productionPaths.order(id) : null);
   useOnDataChanged(() => void res.reload());
   const config = useProductionConfig();

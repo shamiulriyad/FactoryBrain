@@ -39,7 +39,7 @@ const safeGet = <T,>(key: string, fallback: T): T => storage.get<T>(key, fallbac
 
 export const useAppStore = create<AppState>((set, get) => ({
   locale: safeGet<Locale>("bunonbrain:locale", defaultLocale),
-  theme: safeGet<Theme>("bunonbrain:theme", "dark"),
+  theme: safeGet<Theme>("bunonbrain:theme", "light"),
   commandPaletteOpen: false,
   paletteSeed: "",
   resetRequired: false,
@@ -105,7 +105,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         for (const k of Object.keys(window.localStorage)) {
           if (
             k.startsWith("bunonbrain:") ||
-            k.startsWith("factoryBrain:") ||
+            k.startsWith("bunonBrain:") ||
             k.startsWith("thalamus:")
           ) {
             window.localStorage.removeItem(k);

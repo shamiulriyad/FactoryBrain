@@ -11,7 +11,7 @@ type Props = {
   stroke?: string;
 };
 
-export function Sparkline({ values, width = 120, height = 32, stroke = "#7CE0C6" }: Props) {
+export function Sparkline({ values, width = 120, height = 32, stroke = "var(--accent)" }: Props) {
   const id = useId();
   if (!values.length) return <div style={{ width, height }} />;
   const min = Math.min(...values);

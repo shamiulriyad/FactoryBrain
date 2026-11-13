@@ -16,7 +16,8 @@ import { ConfirmDialog } from "@/components/ui/Modal";
 import { Tabs } from "@/components/ui/Tabs";
 import { SkeletonRows } from "@/components/ui/Status";
 import { useToast } from "@/components/ui/Toast";
-import { canOperate, isAdmin, useAuthStore } from "@/lib/auth";
+import { useAuthStore, can } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { useMounted } from "@/lib/persist";
 import { useT } from "@/lib/useT";
 import { useWorkforceStore } from "@/store/workforce.store";
@@ -42,8 +43,8 @@ export default function WorkforcePage() {
   const toast = useToast();
 
   const user = useAuthStore((s) => s.user);
-  const operator = canOperate(user);
-  const admin = isAdmin(user);
+  const operator = can(user, P.WorkersAssign, P.WorkersManage);
+  const admin = can(user, P.WorkersManage);
   const actorEmail = user?.email ?? "operator@bunonbrain.demo";
 
   const state = useWorkforceStore();

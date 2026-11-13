@@ -19,12 +19,13 @@ import { refreshPendingApprovals, usePendingApprovals } from "@/services/approva
 import { isSeedAlert, setUnreadFrom } from "@/services/floorAlerts.api";
 import { useBusinessStore } from "@/store/business.store";
 import { useAppStore } from "@/store/app.store";
-import { useFactoryBrainLiveStore } from "@/store/factoryBrain.live.store";
+import { useBunonBrainLiveStore } from "@/store/bunonBrain.live.store";
 import { formatRelative } from "@/lib/format";
 import { useMounted } from "@/lib/persist";
 import { apiJson, errorMessage } from "@/lib/api";
 import { useResource, announceDataChanged } from "@/lib/useResource";
-import { canOperate, useAuthStore } from "@/lib/auth";
+import { useAuthStore, can } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { cn } from "@/lib/cn";
 import type { FloorAlertList, LineBoard, LineBoardRow, SensorSnapshot } from "@/services/contracts";
 import type { SensorReading } from "@/data/sensors";
@@ -55,7 +56,7 @@ export default function OverviewPage() {
   const toast = useToast();
   const mounted = useMounted();
   const user = useAuthStore((s) => s.user);
-  const operator = canOperate(user);
+  const operator = can(user, P.ProductionManage);
   const profile = useBusinessStore((s) => s.profile);
   const plantName = mounted ? profile.businessName || profile.factoryName || "" : "";
 
@@ -69,7 +70,7 @@ export default function OverviewPage() {
   const [advancing, setAdvancing] = useState<null | "sensors" | "board">(null);
 
   // Publish the snapshot for other views (QC page refreshes on tick changes).
-  const setLive = useFactoryBrainLiveStore((s) => s.setSnapshot);
+  const setLive = useBunonBrainLiveStore((s) => s.setSnapshot);
   const tick = snapshot.data?.tick;
   useEffect(() => {
     const d = snapshot.data;

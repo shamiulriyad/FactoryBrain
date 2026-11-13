@@ -20,7 +20,8 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/Toast";
 import { useResource, announceDataChanged } from "@/lib/useResource";
 import { errorMessage, isApiError } from "@/lib/api";
-import { canOperate, useAuthStore } from "@/lib/auth";
+import { useCan } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { SAFE_TOKEN, STAGE_LABEL, formatBytes, sniffImageType, validateImageFile } from "@/lib/qcInspection";
 import { createInspection } from "@/services/qc.api";
 import { QC_STAGES, type LineBoard, type QcCategory, type QcStage, type QcVisionStatus } from "@/services/contracts";
@@ -32,7 +33,7 @@ type Errors = Partial<Record<"image" | "productType" | "stage" | "lineId" | "pro
 export default function VisionInspectPage() {
   const router = useRouter();
   const toast = useToast();
-  const operator = canOperate(useAuthStore((s) => s.user));
+  const operator = useCan(P.QcManage);
   const status = useResource<QcVisionStatus>("/api/qc/vision/status");
   const categories = useResource<QcCategory[]>("/api/qc/categories");
   const lines = useResource<LineBoard>("/api/line-board");

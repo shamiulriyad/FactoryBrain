@@ -17,7 +17,8 @@ import { SkeletonRows } from "@/components/ui/Status";
 import { useToast } from "@/components/ui/Toast";
 import { announceDataChanged, useOnDataChanged, useResource } from "@/lib/useResource";
 import { errorMessage } from "@/lib/api";
-import { canOperate, useAuthStore } from "@/lib/auth";
+import { useCan } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { cn } from "@/lib/cn";
 import { fmt, fmtPct, plantDateTime } from "@/lib/production";
 import { applyProposal, productionPaths, submitProposal } from "@/services/production.api";
@@ -28,7 +29,7 @@ import { ApprovalLine, NoteList, ProposalStatusBadge, useProductionConfig } from
 export default function ProposalPage() {
   const id = useParams<{ id: string }>()?.id ?? "";
   const toast = useToast();
-  const operator = canOperate(useAuthStore((s) => s.user));
+  const operator = useCan(P.ProductionManage);
   const config = useProductionConfig();
   const res = useResource<BalanceProposal>(id ? productionPaths.proposal(id) : null);
   useOnDataChanged(() => void res.reload());

@@ -1,15 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { Logo, LogoSymbol } from "@/components/brand/Logo";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, useMemo } from "react";
 import { ChevronDown, PanelLeftClose, Search, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { appFontVariables } from "@/lib/fonts";
-import { hasRole, useAuthStore } from "@/lib/auth";
+import { can, useAuthStore } from "@/lib/auth";
+import { SCOPE_LABEL } from "@/lib/access";
 import { useT } from "@/lib/useT";
 import { useAppStore } from "@/store/app.store";
-import { FACTORIES, FOOTER_ITEMS, NAV_GROUPS, isActivePath, navTestId, type NavItem } from "@/lib/navigation";
+import { FOOTER_ITEMS, NAV_GROUPS, isActivePath, navTestId, type NavItem, type FactoryOption } from "@/lib/navigation";
 import { useFloorStatus, usePendingCount } from "@/lib/useFloorStatus";
 import { AccountMenu } from "./AccountMenu";
 import { FactorySwitcher } from "./FactorySwitcher";
@@ -19,7 +21,7 @@ import { SidebarItem, type HintHandler } from "./SidebarItem";
 /* Collapsed / expanded, remembered per browser                        */
 /* ------------------------------------------------------------------ */
 
-const STORAGE_KEY = "factorybrain:sidebar";
+const STORAGE_KEY = "bunonbrain:sidebar";
 const NARROW = "(max-width: 1023.98px)";
 
 function readPreference(): boolean | null {
@@ -65,18 +67,45 @@ function useCollapsed(): [boolean, () => void] {
 }
 
 /* ------------------------------------------------------------------ */
+/* Collapsible groups                                                  */
+/* ------------------------------------------------------------------ */
+
+const GROUPS_KEY = "bunonbrain:sidebar-groups";
+/** Long groups start closed so the menu fits a laptop screen; people open what they use. */
+const DEFAULT_CLOSED: Record<string, boolean> = { floors: true, tools: true };
+
+/** Which nav groups are closed, remembered in this browser (best effort). */
+function useClosedGroups(): [Record<string, boolean>, (id: string) => void] {
+  const [closed, setClosed] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = window.localStorage.getItem(GROUPS_KEY);
+      if (raw) return JSON.parse(raw) as Record<string, boolean>;
+    } catch {
+      /* storage unavailable */
+    }
+    return DEFAULT_CLOSED;
+  });
+  const toggle = useCallback((id: string) => {
+    setClosed((cur) => {
+      const next = { ...cur, [id]: !cur[id] };
+      try {
+        window.localStorage.setItem(GROUPS_KEY, JSON.stringify(next));
+      } catch {
+        /* storage unavailable */
+      }
+      return next;
+    });
+  }, []);
+  return [closed, toggle];
+}
+
+/* ------------------------------------------------------------------ */
 /* Logo                                                                */
 /* ------------------------------------------------------------------ */
 
-function LogoMark({ size = 26 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 26 26" aria-hidden="true" focusable="false" className="shrink-0">
-      <rect x="3.5" y="2.5" width="19" height="21" rx="1.5" fill="none" stroke="#ece7df" strokeWidth="1.6" />
-      <path d="M3.5 8.2h19M3.5 13h19M3.5 17.8h19" stroke="#ece7df" strokeWidth="1.2" opacity="0.55" />
-      <rect x="5.2" y="9.4" width="15.6" height="2.4" fill="#f2c27a" />
-      <circle cx="16.5" cy="10.6" r="1.5" fill="#ff6b45" />
-    </svg>
-  );
+/** The sidebar is always deep navy, so it uses the on-dark symbol. */
+function LogoMark({ size = 28 }: { size?: number }) {
+  return <LogoSymbol size={size} tone="onDark" />;
 }
 
 /* ------------------------------------------------------------------ */
@@ -96,13 +125,21 @@ export function Sidebar({ mode, onClose }: { mode: "rail" | "drawer"; onClose?: 
   const openPalette = useAppStore((s) => s.openCommandPalette);
   const { statuses, alertCount } = useFloorStatus();
   const pendingCount = usePendingCount();
-  const [factory, setFactory] = useState(FACTORIES[0]);
+  // The factories this account is assigned to (a Super Admin reaches all of them).
+  const factories = useMemo<FactoryOption[]>(() => {
+    if (user?.scope === "Platform") return [{ id: "all", code: "ALL", name: "All factories", detail: "Platform administration" }];
+    const list = (user?.factories ?? []).map((f) => ({ id: f.id, code: f.code.slice(0, 3), name: f.name, detail: SCOPE_LABEL[user?.scope ?? ""] ?? "" }));
+    return list.length ? list : [{ id: "none", code: "—", name: "No factory", detail: "Ask an administrator" }];
+  }, [user]);
+  const [factoryId, setFactoryId] = useState<string | null>(null);
+  const factory = factories.find((f) => f.id === factoryId) ?? factories[0];
   const searchRef = useRef<HTMLInputElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const [hiddenBelow, setHiddenBelow] = useState(0);
   const [scrolledDown, setScrolledDown] = useState(false);
   const [query, setQuery] = useState("");
   const [hint, setHint] = useState<{ text: string; style: CSSProperties } | null>(null);
+  const [closedGroups, toggleGroup] = useClosedGroups();
 
   const onHint: HintHandler = useCallback((text, anchor) => {
     if (!text || !anchor) return setHint(null);
@@ -136,7 +173,7 @@ export function Sidebar({ mode, onClose }: { mode: "rail" | "drawer"; onClose?: 
     const ro = new ResizeObserver(keepActiveInView);
     ro.observe(nav);
     return () => ro.disconnect();
-  }, [pathname, collapsed, user, measureOverflow]);
+  }, [pathname, collapsed, user, closedGroups, measureOverflow]);
 
   const scrollMenu = () => {
     const nav = navRef.current;
@@ -227,10 +264,7 @@ export function Sidebar({ mode, onClose }: { mode: "rail" | "drawer"; onClose?: 
               onClick={onClose}
               className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sb-accent"
             >
-              <LogoMark />
-              <span className="truncate font-display text-[22px] font-bold leading-none tracking-[0.01em] text-sb-text">
-                FactoryBrain
-              </span>
+              <Logo height={30} tone="onDark" label="BunonBrain" />
             </Link>
             {mode === "drawer" ? (
               <button type="button" onClick={onClose} aria-label={t("sidebar.close")} className={iconButton} data-drawer-close>
@@ -256,7 +290,8 @@ export function Sidebar({ mode, onClose }: { mode: "rail" | "drawer"; onClose?: 
       <div className="shrink-0 space-y-2 pb-3">
         <FactorySwitcher
           current={factory}
-          onChange={setFactory}
+          factories={factories}
+          onChange={(f) => setFactoryId(f.id)}
           collapsed={collapsed}
           label={t("sidebar.switchFactory")}
           menuLabel={t("sidebar.factories")}
@@ -330,21 +365,37 @@ export function Sidebar({ mode, onClose }: { mode: "rail" | "drawer"; onClose?: 
         )}
       >
         {NAV_GROUPS.map((group) => {
-          const items = group.items.filter((it) => hasRole(user, it.role));
+          const items = group.items.filter((it) => can(user, ...it.perms));
           if (items.length === 0) return null;
           const headingId = `sb-${mode}-${group.id}`;
+          // The group holding the current page always stays open.
+          const holdsActive = items.some((it) => isActivePath(pathname, it.href));
+          const open = collapsed || holdsActive || !closedGroups[group.id];
           return (
             <div key={group.id} className={cn("pt-2", collapsed ? "px-0" : "px-3")}>
               {collapsed ? (
                 <div aria-hidden="true" className="mx-auto mb-2 h-px w-6 bg-sb-divider" />
               ) : (
-                <p id={headingId} className="mb-1 px-2.5 font-plexmono text-[11px] font-medium uppercase leading-5 tracking-[0.1em] text-sb-label">
-                  {t(group.labelKey)}
-                </p>
+                <button
+                  type="button"
+                  id={headingId}
+                  onClick={() => toggleGroup(group.id)}
+                  disabled={holdsActive}
+                  aria-expanded={open}
+                  aria-controls={`${headingId}-list`}
+                  className="mb-1 flex w-full items-center gap-1.5 rounded-md px-2.5 py-0.5 text-left font-plexmono text-[11px] font-medium uppercase leading-5 tracking-[0.1em] text-sb-label transition-colors hover:text-sb-text disabled:cursor-default disabled:hover:text-sb-label focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sb-accent"
+                  data-testid={`nav-group-${group.id}`}
+                >
+                  <span className="flex-1">{t(group.labelKey)}</span>
+                  {!open && <span className="normal-case tracking-normal text-sb-muted">{items.length}</span>}
+                  <ChevronDown size={13} aria-hidden="true" className={cn("shrink-0 transition-transform", !open && "-rotate-90")} />
+                </button>
               )}
-              <ul className="space-y-0.5" aria-labelledby={collapsed ? undefined : headingId} aria-label={collapsed ? t(group.labelKey) : undefined}>
-                {items.map(renderItem)}
-              </ul>
+              {open && (
+                <ul id={`${headingId}-list`} className="space-y-0.5" aria-labelledby={collapsed ? undefined : headingId} aria-label={collapsed ? t(group.labelKey) : undefined}>
+                  {items.map(renderItem)}
+                </ul>
+              )}
             </div>
           );
         })}
@@ -370,7 +421,7 @@ export function Sidebar({ mode, onClose }: { mode: "rail" | "drawer"; onClose?: 
 
       {/* Footer, pinned to the bottom. */}
       <div className={cn("shrink-0 space-y-0.5 border-t border-sb-divider py-2", collapsed ? "px-0" : "px-3")}>
-        <ul className="space-y-0.5">{FOOTER_ITEMS.filter((it) => hasRole(user, it.role)).map(renderItem)}</ul>
+        <ul className="space-y-0.5">{FOOTER_ITEMS.filter((it) => can(user, ...it.perms)).map(renderItem)}</ul>
         <AccountMenu collapsed={collapsed} factoryName={factory.name} onHint={onHint} />
       </div>
 

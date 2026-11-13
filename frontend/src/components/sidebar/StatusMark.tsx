@@ -32,7 +32,7 @@ export function StatusShape({
   return (
     <span
       aria-hidden="true"
-      className={cn("inline-block shrink-0", SHAPE[status], ring && "shadow-[0_0_0_2px_#0d1218]", className)}
+      className={cn("inline-block shrink-0", SHAPE[status], ring && "shadow-[0_0_0_2px_rgb(var(--sb-bg))]", className)}
       style={{ width: px, height: px }}
     />
   );

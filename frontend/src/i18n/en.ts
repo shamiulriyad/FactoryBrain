@@ -115,6 +115,12 @@ export const en = {
     summaryOpen: "Open QC grid"
   },
   nav: {
+    users: "Users",
+    roles: "Roles",
+    permissions: "Permissions",
+    factories: "Factories & lines",
+    me: "My profile",
+    account: "Account",
     overview: "Overview",
     ask: "Ask BunonBrain",
     brain: "Factory Brain",
@@ -132,6 +138,8 @@ export const en = {
     sensors: "Sensors",
     knowledge: "Knowledge base",
     audit: "Audit log",
+    inquiries: "Website inquiries",
+    website: "Website",
     workforce: "Workforce",
     floorMap: "Live floor map",
     alerts: "Alerts",
@@ -187,7 +195,7 @@ export const en = {
     reportsBody: "Daily and weekly summaries of output, quality and shipments.",
     floorBody: "Live readings and alerts for this floor.",
     helpTitle: "Help",
-    helpBody: "Find your way around FactoryBrain.",
+    helpBody: "Find your way around BunonBrain.",
     restartTour: "Take the product tour again",
     searchTip: "Press Ctrl K (⌘K on a Mac) to search pages or ask a question.",
     contact: "For account or access problems, ask an Admin in your factory."

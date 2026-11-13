@@ -23,7 +23,7 @@ let styleId = "";
 let orderId = "";
 let planId = "";
 
-async function as(browser: Browser, role: "admin" | "operator" | "viewer", next: string) {
+async function as(browser: Browser, role: "admin" | "operator" | "supervisor", next: string) {
   const context = await browser.newContext();
   const page = await context.newPage();
   await prepare(page);
@@ -32,16 +32,16 @@ async function as(browser: Browser, role: "admin" | "operator" | "viewer", next:
 }
 
 /** Sign in on the production page, then open one of its tabs. */
-async function loginTo(page: Page, role: "admin" | "operator" | "viewer", tab: string) {
+async function loginTo(page: Page, role: "admin" | "operator" | "supervisor", tab: string) {
   await login(page, role, "/app/production");
   await page.goto(`/app/production?tab=${tab}`);
 }
 
 // Each user has one refresh-token slot: an API login as the user whose browser
 // session is open would sign that session out. Reads therefore go through the
-// Viewer, and a user's own approvals through their browser session.
+// supervisor (read-only here), and a user's own approvals through their browser session.
 async function planDetail() {
-  const api = await apiAs("viewer");
+  const api = await apiAs("supervisor");
   const res = await api.get(`/api/production/plans/${planId}`);
   expect(res.status()).toBe(200);
   const body = await res.json();
@@ -65,8 +65,8 @@ async function approveInBrowser(page: Page, approvalId: string) {
   await expect(card).toHaveCount(0);
 }
 
-test("a Viewer reads production pages but has no write controls, and the API refuses writes", async ({ page }) => {
-  await login(page, "viewer", "/app/production");
+test("a Production Supervisor reads production pages but has no write controls, and the API refuses writes", async ({ page }) => {
+  await login(page, "supervisor", "/app/production");
   await expect(page.getByRole("heading", { name: "Production planning" })).toBeVisible();
   await expect(page.getByTestId("production-setup-gaps")).toBeVisible();
   await expect(page.getByTestId("output-record")).toHaveCount(0);
@@ -75,7 +75,7 @@ test("a Viewer reads production pages but has no write controls, and the API ref
   await expect(page.getByTestId("line-new")).toHaveCount(0);
   await expect(page.getByTestId("production-sources")).toContainText("integration: not connected");
 
-  const api = await apiAs("viewer");
+  const api = await apiAs("supervisor");
   expect((await api.post("/api/production/output", { data: {} })).status()).toBe(403);
   expect((await api.post("/api/production/lines", { data: { id: "x", name: "x", workstations: 1 } })).status()).toBe(403);
   await api.dispose();
@@ -305,12 +305,12 @@ test("a line-balance proposal needs an Admin's approval before it becomes the re
   await page.getByTestId("proposal-submit").click();
   await expect(page.getByTestId("proposal-status")).toHaveText("Waiting for approval");
 
-  const api = await apiAs("viewer");
+  const api = await apiAs("supervisor");
   const approvalId = (await (await api.get(`/api/production/balance/proposals/${proposalId}`)).json()).approval.id;
   await api.dispose();
   // High risk: the Operator can't decide it (the API's 403 is covered by the backend tests)…
   await page.goto("/app/approvals");
-  await expect(page.locator(`[data-approval-card="${approvalId}"]`).getByTestId("approval-blocked")).toHaveText("High-risk approvals need an Admin.");
+  await expect(page.locator(`[data-approval-card="${approvalId}"]`).getByTestId("approval-blocked")).toHaveText("High-risk approvals need a Factory Admin.");
   // …an Admin can.
   expect(await adminApproves(approvalId)).toBe(200);
   await page.goto(`/app/production/balancing/${proposalId}`);
@@ -323,7 +323,7 @@ test("a line-balance proposal needs an Admin's approval before it becomes the re
 });
 
 test("the history tab filters and pages through persisted records", async ({ page }: { page: Page }) => {
-  await loginTo(page, "viewer", "history");
+  await loginTo(page, "supervisor", "history");
   await page.getByTestId("history-line").selectOption(lineId);
   await expect(page.getByTestId("history-row")).toHaveCount(4);
   await page.getByTestId("history-stage").selectOption("cutting");

@@ -13,7 +13,9 @@ import { useAppStore } from "@/store/app.store";
 import { useBusinessStore } from "@/store/business.store";
 import { useMounted } from "@/lib/persist";
 import { Tour } from "@/components/tour/Tour";
-import { refreshSession, useAuthStore } from "@/lib/auth";
+import { can, refreshSession, useAuthStore, type SessionUser } from "@/lib/auth";
+import { currentNavItem, ALL_NAV_ITEMS } from "@/lib/navigation";
+import { AccessDenied } from "@/components/auth/RequireRole";
 import { useT } from "@/lib/useT";
 
 function Inner({ children }: { children: React.ReactNode }) {
@@ -27,6 +29,7 @@ function Inner({ children }: { children: React.ReactNode }) {
   const onboarded = useBusinessStore((s) => s.onboardingComplete);
   const pathname = usePathname();
   const authStatus = useAuthStore((s) => s.status);
+  const user = useAuthStore((s) => s.user);
   const endedReason = useAuthStore((s) => s.endedReason);
   const { t } = useT();
   const [navOpen, setNavOpen] = useState(false);
@@ -63,6 +66,19 @@ function Inner({ children }: { children: React.ReactNode }) {
     router.replace(`/login?next=${encodeURIComponent(next)}${reason}`);
   }, [authStatus, endedReason, pathname, search, router]);
 
+  // A temporary password must be replaced first (the API refuses everything else).
+  const mustChange = !!user?.mustChangePassword;
+  useEffect(() => {
+    if (authStatus === "authenticated" && mustChange && pathname !== "/app/account")
+      router.replace("/app/account?changePassword=1");
+  }, [authStatus, mustChange, pathname, router]);
+
+  // People who can't open the overview (e.g. a Worker) start on their own home page.
+  const home = homeFor(user);
+  useEffect(() => {
+    if (authStatus === "authenticated" && !mustChange && pathname === "/app" && home !== "/app") router.replace(home);
+  }, [authStatus, mustChange, pathname, home, router]);
+
   if (authStatus !== "authenticated") {
     return (
       <div className="flex h-screen w-screen flex-col items-center justify-center gap-3 bg-canvas" role="status" aria-live="polite">
@@ -87,13 +103,30 @@ function Inner({ children }: { children: React.ReactNode }) {
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar onOpenNav={() => setNavOpen(true)} />
         <main id="main" tabIndex={-1} className="flex-1 overflow-y-auto focus:outline-none" data-app-route-key={search?.get("focus") ?? undefined}>
-          {children}
+          <PageGate user={user} pathname={pathname}>{children}</PageGate>
         </main>
       </div>
       <CommandPalette />
       <Tour />
     </div>
   );
+}
+
+/** The first page the user may open: overview, else their own profile, else account settings. */
+function homeFor(user: SessionUser | null): string {
+  const overview = ALL_NAV_ITEMS.find((i) => i.href === "/app");
+  if (overview && can(user, ...overview.perms)) return "/app";
+  if (can(user, "self.view")) return "/app/me";
+  return "/app/account";
+}
+
+/** Shows Access denied instead of a page whose nav entry the user can't open (deep links included). */
+function PageGate({ user, pathname, children }: { user: SessionUser | null; pathname: string | null; children: React.ReactNode }) {
+  const item = currentNavItem(pathname);
+  if (pathname === "/app" && homeFor(user) !== "/app") return null; // redirecting
+  if (item && item.perms.length > 0 && !user?.mustChangePassword && !can(user, ...item.perms))
+    return <AccessDenied required={item.perms} />;
+  return <>{children}</>;
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

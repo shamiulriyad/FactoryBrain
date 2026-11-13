@@ -60,8 +60,8 @@ export function FloorRail() {
                 onClick={() => scrollToStep(stop.step)}
                 className={`flex size-11 items-center justify-center rounded-full border font-plexmono text-[0.7rem] font-medium tracking-[0.04em] transition-[background-color,border-color,box-shadow,color] duration-300 ${
                   isActive
-                    ? "border-fb-lamp bg-fb-lamp text-fb-ink shadow-[0_0_18px_rgba(242,194,122,0.55),inset_0_0_6px_rgba(255,255,255,0.35)]"
-                    : "border-fb-text/25 bg-[rgba(236,231,223,0.04)] text-fb-text hover:border-fb-text/60"
+                    ? "border-fb-lamp bg-fb-lamp text-fb-ink shadow-[0_0_14px_rgba(4,120,84,0.35)]"
+                    : "border-fb-text/25 bg-white text-fb-text hover:border-fb-text/60"
                 }`}
               >
                 {stop.key}

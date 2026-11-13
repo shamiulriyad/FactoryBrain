@@ -92,12 +92,13 @@ export default function Scene({ onReady }: { onReady: () => void }) {
         onDecline={() => setDpr(1)}
         onIncline={() => setDpr(Math.min(window.devicePixelRatio || 1, MAX_DPR))}
       />
-      <fog attach="fog" args={[C.fog, 80, 330]} />
-      <hemisphereLight args={["#9aa0c0", "#3a332e", 1.05]} />
-      {/* Warm, low dusk sun from the front-left. */}
-      <directionalLight position={[-90, 22, 60]} color="#ffb98a" intensity={1.35} />
-      {/* Cool rim light from behind on the right. */}
-      <directionalLight position={[70, 45, -80]} color="#86a0e0" intensity={0.75} />
+      <fog attach="fog" args={[C.fog, 120, 420]} />
+      {/* Clear daytime sky over warm ground bounce. */}
+      <hemisphereLight args={["#eaf3ff", "#c9bda6", 1.55]} />
+      {/* Late-morning sun from the front-left. */}
+      <directionalLight position={[-60, 90, 70]} color="#fff6e8" intensity={1.9} />
+      {/* Soft fill from the right so no side reads as night. */}
+      <directionalLight position={[80, 40, 30]} color="#e4eefb" intensity={0.65} />
       <CameraRig />
       <Staged onDone={() => setMounted(true)}>
         <Building />

@@ -12,14 +12,15 @@ import { AgentAvatar } from "@/components/agents/AgentAvatar";
 import { RunButton, RunResult, useAgentRun } from "@/components/agents/AgentRun";
 import { useResource } from "@/lib/useResource";
 import { errorMessage } from "@/lib/api";
-import { canOperate, useAuthStore } from "@/lib/auth";
+import { useCan } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { useT } from "@/lib/useT";
 import { cn } from "@/lib/cn";
 import type { AgentDefinition } from "@/services/contracts";
 
 export default function AgentsPage() {
   const { t, locale } = useT();
-  const operator = canOperate(useAuthStore((s) => s.user));
+  const operator = useCan(P.AgentsRun);
   const roster = useResource<AgentDefinition[]>("/api/agents");
   const { run, runningId, runs } = useAgentRun();
 

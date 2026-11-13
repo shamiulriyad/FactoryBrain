@@ -9,7 +9,7 @@
 //     test-only credentials, bound to 127.0.0.1, removed at the end.
 //   - The API runs in ASPNETCORE_ENVIRONMENT=IntegrationTesting: it ignores
 //     the repo-root .env and refuses any non-loopback database.
-//   - The Next.js build/start run with FACTORYBRAIN_SKIP_ROOT_ENV=1, so the
+//   - The Next.js build/start run with BUNONBRAIN_SKIP_ROOT_ENV=1, so the
 //     repo-root .env is not loaded there either.
 //   - The API gets HTTP(S)_PROXY pointing at a closed local port (NO_PROXY
 //     for 127.0.0.1/localhost): any accidental call to a real provider fails
@@ -30,10 +30,10 @@ const run = promisify(execFile);
 const here = path.dirname(url.fileURLToPath(import.meta.url));
 const frontend = path.resolve(here, "..");
 const repo = path.resolve(frontend, "..");
-const apiProject = path.join(repo, "FactoryBrain.Backend", "FactoryBrain.Api");
+const apiProject = path.join(repo, "BunonBrain.Backend", "BunonBrain.Api");
 // E2E_API_DLL: run an API build from another folder (e.g. when a developer's
 // running API locks bin/Debug and the code under test was built elsewhere).
-const apiDll = process.env.E2E_API_DLL || path.join(apiProject, "bin", "Debug", "net10.0", "FactoryBrain.Api.dll");
+const apiDll = process.env.E2E_API_DLL || path.join(apiProject, "bin", "Debug", "net10.0", "BunonBrain.Api.dll");
 const artifacts = path.join(here, ".artifacts");
 
 const secret = (n = 24) => randomBytes(n).toString("base64url");
@@ -255,7 +255,7 @@ async function main() {
       throw new Error("Docker engine not reachable: start Docker Desktop first.");
     });
     await fs.access(apiDll).catch(() => {
-      throw new Error(`API not built (${apiDll}). Run: dotnet build FactoryBrain.Backend/FactoryBrain.Backend.sln`);
+      throw new Error(`API not built (${apiDll}). Run: dotnet build BunonBrain.Backend/BunonBrain.Backend.sln`);
     });
 
     // --- 0b. Frontend build (production, no repo-root .env) ---------------
@@ -269,7 +269,7 @@ async function main() {
     const webUrl = `http://127.0.0.1:${webPort}`;
     const webEnv = {
       ...cleanEnv(),
-      FACTORYBRAIN_SKIP_ROOT_ENV: "1",
+      BUNONBRAIN_SKIP_ROOT_ENV: "1",
       NEXT_PUBLIC_API_URL: apiUrl,
       DOTNET_API_URL: apiUrl,
       NEXT_TELEMETRY_DISABLED: "1",
@@ -286,10 +286,10 @@ async function main() {
     }
 
     // --- 1. Disposable database -------------------------------------------
-    const pg = { user: "fb_e2e", password: secret(), db: "factorybrain_e2e", port: await freePort() };
+    const pg = { user: "fb_e2e", password: secret(), db: "bunonbrain_e2e", port: await freePort() };
     const { stdout: cid } = await run("docker", [
       "run", "-d", "--rm",
-      "--label", "factorybrain.purpose=e2e",
+      "--label", "bunonbrain.purpose=e2e",
       "-e", `POSTGRES_USER=${pg.user}`, "-e", `POSTGRES_PASSWORD=${pg.password}`, "-e", `POSTGRES_DB=${pg.db}`,
       "-p", `127.0.0.1:${pg.port}:5432`,
       "pgvector/pgvector:pg16",
@@ -320,6 +320,9 @@ async function main() {
       admin:    { email: "admin@e2e.test",    password: secret(18) },
       operator: { email: "operator@e2e.test", password: secret(18) },
       viewer:   { email: "viewer@e2e.test",   password: secret(18) },
+      // Created through the API by the Super Admin below (POST /api/users).
+      supervisor: { email: "supervisor@e2e.test", password: secret(18) },
+      manager:    { email: "manager@e2e.test",    password: secret(18) },
     };
     const apiEnv = {
       ...cleanEnv(),
@@ -327,7 +330,7 @@ async function main() {
       DOTNET_ENVIRONMENT: "IntegrationTesting",
       ASPNETCORE_URLS: apiUrl,
       DOTNET_ROLL_FORWARD: "Major",
-      FACTORYBRAIN_DB: `Host=127.0.0.1;Port=${pg.port};Database=${pg.db};Username=${pg.user};Password=${pg.password}`,
+      BUNONBRAIN_DB: `Host=127.0.0.1;Port=${pg.port};Database=${pg.db};Username=${pg.user};Password=${pg.password}`,
       JWT_SIGNING_KEY: secret(48),
       SEED_ADMIN_EMAIL: users.admin.email, SEED_ADMIN_PASSWORD: users.admin.password,
       SEED_OPERATOR_EMAIL: users.operator.email, SEED_OPERATOR_PASSWORD: users.operator.password,
@@ -385,6 +388,12 @@ async function main() {
     const tamper = await run("docker", ["exec", container, "psql", "-U", pg.user, "-d", pg.db, "-tAX", "-c", "TRUNCATE audit_log"]).then(() => "allowed", (e) => (String(e.stderr).includes("append-only") ? "rejected" : `error: ${e.stderr}`));
     if (tamper !== "rejected") throw new Error(`audit_log TRUNCATE was ${tamper}`);
     log("audit_log TRUNCATE rejected by the database: ok");
+    // RBAC: the eight system roles and their permissions are seeded from the catalog.
+    const rbac = await psql(`select (select count(*) from roles where "IsSystem"), (select count(*) from permissions), (select count(*) from factories where "Code" = 'MAIN')`);
+    if (!migrations.some((m) => m.endsWith("_AddAccessControl")) || !rbac.startsWith("8|") || !rbac.endsWith("|1")) {
+      throw new Error(`Access-control migration / catalog not as expected (${rbac})`);
+    }
+    log(`access control: 8 system roles, ${rbac.split("|")[1]} permissions, default factory: ok`);
 
     // --- 5. Scenario data -------------------------------------------------
     const token = async (who) => {
@@ -395,6 +404,34 @@ async function main() {
       return (await res.json()).accessToken;
     };
     const opToken = await token("operator");
+
+    // Personas created the way an administrator would: by the Super Admin
+    // through POST /api/users with a temporary password, which each person
+    // then replaces (POST /api/account/password).
+    const adminToken = await token("admin");
+    const factories = await (await fetch(`${apiUrl}/api/factories`, { headers: { Authorization: `Bearer ${adminToken}` } })).json();
+    const main = factories.find((f) => f.code === "MAIN");
+    if (!main) throw new Error("default factory MAIN not found");
+    const createPersona = async (who, roles) => {
+      const temporaryPassword = secret(18);
+      const created = await fetch(`${apiUrl}/api/users`, {
+        method: "POST", headers: { Authorization: `Bearer ${adminToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ email: users[who].email, temporaryPassword, roles, factoryIds: [main.id], lineIds: [] }),
+      });
+      if (created.status !== 201) throw new Error(`create ${who}: HTTP ${created.status} ${await created.text()}`);
+      const first = await fetch(`${apiUrl}/api/auth/login`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: users[who].email, password: temporaryPassword }),
+      });
+      const { accessToken } = await first.json();
+      const changed = await fetch(`${apiUrl}/api/account/password`, {
+        method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: temporaryPassword, newPassword: users[who].password }),
+      });
+      if (changed.status !== 204) throw new Error(`password ${who}: HTTP ${changed.status}`);
+    };
+    await createPersona("supervisor", ["ProductionSupervisor"]);
+    await createPersona("manager", ["FactoryManager"]);
+    log("personas: admin=Super Admin, operator=Factory Manager+Production Supervisor, viewer=Monitoring Operator, supervisor, manager");
     const runAgent = async (agentId) => {
       const res = await fetch(`${apiUrl}/api/agents/${agentId}/run`, {
         method: "POST", headers: { Authorization: `Bearer ${opToken}`, "Content-Type": "application/json" }, body: "{}",
@@ -433,7 +470,7 @@ async function main() {
     // --- 7. Authenticated RAG eval (no model configured yet → demo/no_source) --
     const ragCode = await runStep("test-rag", process.execPath, [path.join(frontend, "scripts", "test-rag.mjs")], {
       cwd: frontend,
-      env: { ...cleanEnv(), RAG_EVAL_BASE_URL: apiUrl, RAG_EVAL_EMAIL: users.viewer.email, RAG_EVAL_PASSWORD: users.viewer.password },
+      env: { ...cleanEnv(), RAG_EVAL_BASE_URL: apiUrl, RAG_EVAL_EMAIL: users.supervisor.email, RAG_EVAL_PASSWORD: users.supervisor.password },
     });
 
     // --- 8. Playwright ---------------------------------------------------
@@ -447,6 +484,8 @@ async function main() {
         E2E_ADMIN_EMAIL: users.admin.email, E2E_ADMIN_PASSWORD: users.admin.password,
         E2E_OPERATOR_EMAIL: users.operator.email, E2E_OPERATOR_PASSWORD: users.operator.password,
         E2E_VIEWER_EMAIL: users.viewer.email, E2E_VIEWER_PASSWORD: users.viewer.password,
+        E2E_SUPERVISOR_EMAIL: users.supervisor.email, E2E_SUPERVISOR_PASSWORD: users.supervisor.password,
+        E2E_MANAGER_EMAIL: users.manager.email, E2E_MANAGER_PASSWORD: users.manager.password,
         E2E_APPROVE_ID: approveId, E2E_REJECT_ID: rejectId, E2E_HIGH_RISK_ID: highId,
         E2E_FAKE_LLM_FINDING: FAKE_LLM_FINDING, E2E_FORCE_LLM_FAILURE: FORCE_LLM_FAILURE,
         E2E_FAKE_QC_MODEL: FAKE_QC_MODEL,
@@ -465,12 +504,12 @@ async function main() {
 }
 
 /**
- * The parent environment minus every FactoryBrain / provider variable, so
+ * The parent environment minus every BunonBrain / provider variable, so
  * nothing from the developer's shell (or a previously loaded .env) leaks into
  * the test processes. Only what this script sets explicitly is passed on.
  */
 function cleanEnv() {
-  const drop = /^(SMTP_|PUBLIC_APP_URL|ALLOW_SELF_REGISTRATION|AI_SETTINGS_|FACTORYBRAIN_|DOTNET_CONNECTION|ConnectionStrings__|LLM_|RAG_|PYRAG_|GOOGLE_|OPENAI|ANTHROPIC|GEMINI|SEED_|JWT_|ADMIN_API_TOKEN|NEXT_PUBLIC_|DOTNET_API_URL|BACKEND_URL|ASPNETCORE_|DOTNET_ENVIRONMENT|SIMULATOR_|CORS_|AUTH_COOKIE|FORWARDED_|TRUSTED_PROXIES|LOGIN_RATE|E2E_|HTTP_PROXY|HTTPS_PROXY|NO_PROXY|QC_|MERCH_)/i;
+  const drop = /^(SMTP_|PUBLIC_APP_URL|ALLOW_SELF_REGISTRATION|AI_SETTINGS_|BUNONBRAIN_|DOTNET_CONNECTION|ConnectionStrings__|LLM_|RAG_|PYRAG_|GOOGLE_|OPENAI|ANTHROPIC|GEMINI|SEED_|JWT_|ADMIN_API_TOKEN|NEXT_PUBLIC_|DOTNET_API_URL|BACKEND_URL|ASPNETCORE_|DOTNET_ENVIRONMENT|SIMULATOR_|CORS_|AUTH_COOKIE|FORWARDED_|TRUSTED_PROXIES|LOGIN_RATE|E2E_|HTTP_PROXY|HTTPS_PROXY|NO_PROXY|QC_|MERCH_)/i;
   return Object.fromEntries(Object.entries(process.env).filter(([k]) => !drop.test(k)));
 }
 

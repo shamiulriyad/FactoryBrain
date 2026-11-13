@@ -1,5 +1,5 @@
 // Wire contracts for the .NET API, mirroring the C# DTOs in
-// FactoryBrain.Backend/FactoryBrain.Application/Dtos/**. The API serialises
+// BunonBrain.Backend/BunonBrain.Application/Dtos/**. The API serialises
 // with camelCase names, camelCase enum strings and omits null properties
 // (except where the DTO says JsonIgnoreCondition.Never), so optional fields
 // below may be absent rather than null.
@@ -69,6 +69,8 @@ export type AuditEntry = {
   toState?: string | null;
   reason?: string | null;
   traceId?: string | null;
+  /** Factory the entry belongs to (null for platform-level entries). */
+  factoryId?: string | null;
 };
 
 // ── Floor alerts ────────────────────────────────────────────────────────────
@@ -303,7 +305,8 @@ export type EmbeddingUpdateResult = { settings: EmbeddingStatus; reindex?: Reind
 
 // ── Users ───────────────────────────────────────────────────────────────────
 
-export type UserRow = { id: string; email: string; role: Role; createdAt: string };
+/** @deprecated The single-role model was replaced by system roles; see `@/lib/access` (UserSummary, UserDetail). */
+export type UserRow = { id: string; email: string; role: string; createdAt: string };
 
 // ── QC inspections ──────────────────────────────────────────────────────────
 // /api/qc/inspections, /api/qc/summary, /api/qc/categories, /api/qc/vision/status.

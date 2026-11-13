@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { roleLabel } from "@/lib/access";
 
 export type BadgeTone = "neutral" | "accent" | "info" | "success" | "warning" | "danger";
 
@@ -38,12 +39,32 @@ export const RISK_TONE: Record<"low" | "medium" | "high", BadgeTone> = {
   high: "danger"
 };
 
-/** Role chip for the signed-in user and user lists. */
+const ROLE_TONE: Record<string, BadgeTone> = {
+  SuperAdmin: "danger",
+  FactoryAdmin: "accent",
+  FactoryManager: "info",
+  ProductionSupervisor: "info",
+  MonitoringOperator: "success",
+  HrOfficer: "success",
+  DeviceAdmin: "success",
+  Worker: "neutral"
+};
+
+/** Role chip (system role id → readable name), for the signed-in user and user lists. */
 export function RoleBadge({ role, testId }: { role: string; testId?: string }) {
-  const tone: BadgeTone = role === "Admin" ? "accent" : role === "Operator" ? "info" : "neutral";
   return (
-    <Badge tone={tone} testId={testId}>
-      {role}
+    <Badge tone={ROLE_TONE[role] ?? "neutral"} testId={testId} title={role}>
+      {roleLabel(role)}
     </Badge>
+  );
+}
+
+/** Every role of a user, highest first; "No role" when empty. */
+export function RoleBadges({ roles, className }: { roles: string[]; className?: string }) {
+  if (roles.length === 0) return <Badge tone="warning" className={className}>No role</Badge>;
+  return (
+    <span className={cn("inline-flex flex-wrap gap-1", className)}>
+      {roles.map((r) => <RoleBadge key={r} role={r} />)}
+    </span>
   );
 }

@@ -1,7 +1,7 @@
-import { Big_Shoulders_Display, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import { Big_Shoulders_Display, IBM_Plex_Mono, IBM_Plex_Sans, Outfit } from "next/font/google";
 
 /**
- * FactoryBrain typefaces, shared by the marketing homepage and the app
+ * BunonBrain typefaces, shared by the marketing homepage and the app
  * sidebar so each font file is downloaded once.
  */
 export const displayFont = Big_Shoulders_Display({
@@ -43,6 +43,33 @@ export const plexMono = IBM_Plex_Mono({
   // Labels only; never the LCP element.
   preload: false,
 });
+
+/**
+ * Outfit: the geometric sans the BunonBrain wordmark is drawn from. The logo
+ * itself is outlined (components/brand/logoPaths.ts); this font is only
+ * loaded on the brand page, for the type specimen.
+ */
+export const wordmarkFont = Outfit({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  variable: "--font-wordmark",
+  display: "swap",
+  preload: false,
+});
+
+/**
+ * Corporate website headings: Outfit, the geometric face behind the logo.
+ * Loaded (and preloaded) only by the public site layout.
+ */
+export const siteHeadingFont = Outfit({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-heading",
+  display: "swap",
+});
+
+/** Public corporate site: headings, body and labels. */
+export const siteFontVariables = `${siteHeadingFont.variable} ${plexSans.variable} ${plexMono.variable}`;
 
 /** Class names that define the three CSS font variables (marketing pages). */
 export const fontVariables = `${displayFont.variable} ${plexSans.variable} ${plexMono.variable}`;

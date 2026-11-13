@@ -15,7 +15,7 @@ test("protected routes send an anonymous visitor to login, preserving the destin
 test("a wrong password is refused with a generic message", async ({ page }) => {
   await page.goto("/login");
   await page.getByLabel("Email").fill(creds("viewer").email);
-  await page.getByLabel("Password").fill("definitely-not-the-password");
+  await page.getByLabel("Password", { exact: true }).fill("definitely-not-the-password");
   await page.getByRole("button", { name: "Sign in" }).click();
   // Scoped to the form: Next.js also renders an (empty) role="alert" route announcer.
   await expect(page.locator("form").getByRole("alert")).toHaveText("Email or password is incorrect.");
@@ -23,11 +23,11 @@ test("a wrong password is refused with a generic message", async ({ page }) => {
 });
 
 test("login returns to the requested page and authenticated navigation works", async ({ page }) => {
-  await login(page, "viewer", "/app/approvals");
+  await login(page, "supervisor", "/app/approvals");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   // Signed-in identity and role from the API.
-  const chip = page.getByText(creds("viewer").email, { exact: true }).locator("..");
-  await expect(chip).toContainText("Viewer");
+  const chip = page.getByText(creds("supervisor").email, { exact: true }).locator("..");
+  await expect(chip).toContainText("Production Supervisor");
 
   // Client-side navigation through the sidebar to another protected page.
   await page.locator('a[href="/app/ask"]').first().click();
@@ -36,7 +36,7 @@ test("login returns to the requested page and authenticated navigation works", a
 
   // A full reload keeps the session: the HttpOnly refresh cookie restores it.
   await page.reload();
-  await expect(page.getByText(creds("viewer").email, { exact: true })).toBeVisible();
+  await expect(page.getByText(creds("supervisor").email, { exact: true })).toBeVisible();
   expect(new URL(page.url()).pathname).toBe("/app/ask");
 });
 
@@ -59,7 +59,7 @@ test("an external next= target is ignored after login (no open redirect)", async
   const { email, password } = creds("viewer");
   await page.goto("/login?next=" + encodeURIComponent("https://evil.example/phish"));
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL((u) => u.pathname === "/app");
   expect(new URL(page.url()).origin).toBe(new URL(process.env.E2E_BASE_URL!).origin);

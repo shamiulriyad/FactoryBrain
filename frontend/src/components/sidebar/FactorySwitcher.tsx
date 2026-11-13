@@ -2,7 +2,7 @@
 
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { FACTORIES, type FactoryOption } from "@/lib/navigation";
+import { type FactoryOption } from "@/lib/navigation";
 import type { HintHandler } from "./SidebarItem";
 import { menuItem, menuPanel, usePopover } from "./usePopover";
 
@@ -24,8 +24,11 @@ export function FactorySwitcher({
   label,
   menuLabel,
   onHint,
+  factories,
 }: {
   current: FactoryOption;
+  /** The signed-in user's factories (from the session). */
+  factories: FactoryOption[];
   onChange: (f: FactoryOption) => void;
   collapsed: boolean;
   /** "Switch factory" */
@@ -76,7 +79,7 @@ export function FactorySwitcher({
           <p aria-hidden="true" className="px-2.5 pb-1 pt-2 font-plexmono text-[11px] uppercase tracking-[0.08em] text-sb-label">
             {menuLabel}
           </p>
-          {FACTORIES.map((f) => {
+          {factories.map((f) => {
             const selected = f.id === current.id;
             return (
               <button

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
-import { apiAs, creds, env, login, prepare } from "./helpers";
+import { apiAs, creds, env, expandNav, login, prepare } from "./helpers";
 
 // Pages wired to the API in the frontend integration pass: role-aware
 // navigation, the audit log, the knowledge base, agents, floor alerts and
@@ -14,21 +14,23 @@ test.beforeEach(async ({ page }) => {
 
 const nav = (page: Page, id: string) => page.getByTestId(`nav-${id}`);
 
-test("navigation follows the signed-in role, and Admin pages refuse other roles", async ({ page, browser }) => {
-  await login(page, "viewer", "/app");
+test("navigation follows the signed-in user's permissions, and admin pages refuse other roles", async ({ page, browser }) => {
+  await login(page, "supervisor", "/app");
+  await expandNav(page);
   await expect(nav(page, "knowledge")).toBeVisible();
   await expect(nav(page, "approvals")).toBeVisible();
   await expect(nav(page, "audit")).toHaveCount(0);
 
   // A deep link to an Admin page shows an explanation instead of the page.
   await page.goto("/app/audit");
-  await expect(page.getByTestId("access-denied")).toContainText("needs the Admin role");
+  await expect(page.getByTestId("access-denied")).toContainText("audit.view");
   await expect(page.getByTestId("audit-table")).toHaveCount(0);
 
   const adminContext = await browser.newContext();
   const admin = await adminContext.newPage();
   await prepare(admin);
   await login(admin, "admin", "/app");
+  await expandNav(admin);
   await expect(nav(admin, "audit")).toBeVisible();
   await adminContext.close();
 });
@@ -61,8 +63,8 @@ test("approval details show the server audit trail to an Admin", async ({ page }
   await expect(detail.getByTestId("approval-audit")).toContainText(creds("operator").email);
 });
 
-test("knowledge base: a Viewer browses, an Admin ingests a document the API confirms", async ({ page, browser }) => {
-  await login(page, "viewer", "/app/knowledge");
+test("knowledge base: a supervisor browses, the Super Admin ingests a document the API confirms", async ({ page, browser }) => {
+  await login(page, "supervisor", "/app/knowledge");
   await expect(page.getByTestId("kb-readonly")).toBeVisible();
   await expect(page.getByTestId("kb-add-document")).toHaveCount(0);
   await expect(page.getByTestId("kb-row").first()).toBeVisible();
@@ -98,7 +100,7 @@ test("knowledge base: a Viewer browses, an Admin ingests a document the API conf
   await expect(admin.getByTestId("kb-row")).toContainText(title);
 
   // The API lists it too.
-  const api = await apiAs("viewer");
+  const api = await apiAs("supervisor");
   const docs = (await (await api.get("/api/rag/documents?source=sop")).json()) as Array<{ id: string; title: string }>;
   expect(docs.some((d) => d.id === body.documentId && d.title === title)).toBe(true);
   await api.dispose();
@@ -113,8 +115,8 @@ test("knowledge base: a Viewer browses, an Admin ingests a document the API conf
   await adminContext.close();
 });
 
-test("agents come from the server; an Operator runs one and a Viewer can't", async ({ page, browser }) => {
-  await login(page, "viewer", "/app/agents");
+test("agents come from the server; an Operator runs one and a supervisor can't", async ({ page, browser }) => {
+  await login(page, "supervisor", "/app/agents");
   await expect(page.locator('[data-agent-id="line-throughput-agent"]')).toBeVisible();
   await expect(page.getByTestId("agent-run-blocked").first()).toBeVisible();
   await expect(page.getByTestId("agent-run-line-throughput-agent")).toHaveCount(0);
@@ -131,8 +133,8 @@ test("agents come from the server; an Operator runs one and a Viewer can't", asy
   await opContext.close();
 });
 
-test("floor alerts: an Operator acknowledges one; a Viewer only reads", async ({ page, browser }) => {
-  await login(page, "viewer", "/app/activity");
+test("floor alerts: an Operator acknowledges one; a Factory Manager only reads", async ({ page, browser }) => {
+  await login(page, "manager", "/app/activity");
   await page.getByTestId("alerts-tab-all").click();
   await expect(page.getByTestId("floor-alert").first()).toBeVisible();
   await expect(page.getByTestId("floor-alert-toggle")).toHaveCount(0);
@@ -169,7 +171,7 @@ test("phone layout: navigation drawer and no horizontal scrolling", async ({ bro
   const { email, password } = creds("operator");
   await page.goto(`/login?next=${encodeURIComponent("/app/approvals")}`);
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL((u) => u.pathname === "/app/approvals");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -185,6 +187,7 @@ test("phone layout: navigation drawer and no horizontal scrolling", async ({ bro
   await page.getByRole("button", { name: "Open navigation" }).click();
   const drawer = page.getByRole("dialog", { name: "Navigation" });
   await expect(drawer.getByText(email, { exact: true })).toBeVisible();
+  await expandNav(drawer);
   await drawer.getByTestId("nav-ask").click();
   await page.waitForURL((u) => u.pathname === "/app/ask");
   await expect(drawer).toHaveCount(0);

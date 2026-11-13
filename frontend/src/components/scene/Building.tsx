@@ -8,6 +8,7 @@ import { BUILDING, floorBase } from "@/lib/tour";
 import { tourState } from "@/lib/tourStore";
 import { Batch, Inst, StaticMesh, geoBox, type InstItem } from "./geom";
 import { C } from "./palette";
+import { LOCKUP, LOGO_COLORS, SYMBOL_BODY, SYMBOL_HOOK, SYMBOL_WAVES, WORDMARK } from "@/components/brand/logoPaths";
 
 const H = BUILDING.floorHeight;
 const HW = BUILDING.halfWidth;
@@ -59,7 +60,7 @@ function buildStructure() {
   b.box(0, ROOF / 2, -HD - 0.05, HW * 2 + 0.6, ROOF, 0.4, C.backWall);
   for (let i = 1; i < N; i++) b.box(0, i * H - 0.2, -HD - 0.27, HW * 2 + 0.6, 0.3, 0.06, C.wallTrim);
   // Roof finish and parapet.
-  b.box(0, ROOF + 0.02, 0, HW * 2, 0.04, HD * 2, "#5b5d5f");
+  b.box(0, ROOF + 0.02, 0, HW * 2, 0.04, HD * 2, "#bdbab3");
   b.block(0, ROOF, HD + 0.18, HW * 2 + 0.6, 1.0, 0.25, C.concreteDark);
   b.block(0, ROOF, -HD - 0.18, HW * 2 + 0.6, 1.0, 0.25, C.concreteDark);
   b.block(-HW - 0.18, ROOF, 0, 0.25, 1.0, HD * 2 + 0.6, C.concreteDark);
@@ -83,11 +84,11 @@ function buildStructure() {
     b.block(-14 + dx, ROOF, 6.5 + dz, 0.16, 1.5, 0.16, C.steelDark);
   }
   b.block(-14, ROOF + 1.5, 6.5, 2.4, 0.1, 2.4, C.steelDark);
-  b.cyl(-14, ROOF + 2.65, 6.5, 1.15, 2.2, "#7c8183", "y", 12);
-  b.cyl(-14, ROOF + 3.8, 6.5, 1.15, 0.1, "#6a6f71", "y", 12, 0.3);
+  b.cyl(-14, ROOF + 2.65, 6.5, 1.15, 2.2, "#d4d7d8", "y", 12);
+  b.cyl(-14, ROOF + 3.8, 6.5, 1.15, 0.1, "#b9bdbf", "y", 12, 0.3);
   // Roof sign frame (the letters are a separate textured plane).
   for (const x of [-3.5, 3.5]) b.block(x, ROOF + 1.0, HD - 0.3, 0.14, 1.4, 0.14, C.steelDark);
-  b.box(0, ROOF + 2.95, HD - 0.36, 12.6, 1.9, 0.1, "#191d22");
+  b.box(0, ROOF + 2.95, HD - 0.36, 12.6, 1.9, 0.1, "#10263D");
   return b.build();
 }
 
@@ -124,21 +125,39 @@ const SOLAR: InstItem[] = (() => {
   return items;
 })();
 
+/** Rooftop sign: the BunonBrain logo (on-dark version) on deep navy. */
 function makeSignTexture(): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = 1024;
   canvas.height = 160;
   const ctx = canvas.getContext("2d")!;
-  const host = document.querySelector(".fb-home");
-  const family = host ? getComputedStyle(host).getPropertyValue("--font-display").trim() : "";
-  ctx.fillStyle = "#191d22";
+  ctx.fillStyle = LOGO_COLORS.navyDeep;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#f2c27a";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = `800 118px ${family || "Impact, 'Arial Narrow', sans-serif"}`;
-  if ("letterSpacing" in ctx) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = "10px";
-  ctx.fillText("FACTORYBRAIN", canvas.width / 2, canvas.height / 2 + 6);
+  // Fit the horizontal logo (LOCKUP units) into the sign with a margin.
+  const h = 116;
+  const k = h / LOCKUP.height;
+  const w = LOCKUP.width * k;
+  ctx.save();
+  ctx.translate((canvas.width - w) / 2, (canvas.height - h) / 2);
+  ctx.scale(k, k);
+  ctx.translate(-4, -2);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = LOGO_COLORS.white;
+  ctx.lineWidth = 3;
+  ctx.stroke(new Path2D(SYMBOL_HOOK));
+  ctx.lineWidth = 4;
+  ctx.stroke(new Path2D(SYMBOL_BODY));
+  ctx.strokeStyle = LOGO_COLORS.emeraldOnDark;
+  ctx.lineWidth = 2.4;
+  SYMBOL_WAVES.forEach((d) => ctx.stroke(new Path2D(d)));
+  ctx.translate(LOCKUP.wordmarkX, LOCKUP.baselineY);
+  ctx.scale(LOCKUP.wordmarkScale, LOCKUP.wordmarkScale);
+  ctx.fillStyle = LOGO_COLORS.white;
+  ctx.fill(new Path2D(WORDMARK.bunon));
+  ctx.fillStyle = LOGO_COLORS.emeraldOnDark;
+  ctx.fill(new Path2D(WORDMARK.brain));
+  ctx.restore();
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
@@ -154,9 +173,10 @@ export function Building() {
         () =>
           new THREE.MeshLambertMaterial({
             color: C.glass,
-            emissive: "#1a2330",
+            emissive: "#6f8fa6",
+            emissiveIntensity: 0.35,
             transparent: true,
-            opacity: 0.6,
+            opacity: 0.5,
             depthWrite: false,
           }),
       ),
@@ -179,8 +199,8 @@ export function Building() {
     const xray = Math.min(1, Math.max(0, p - 5));
     for (let i = 0; i < N; i++) {
       const near = Math.max(0, 1 - Math.abs(p - (i + 1)) * 1.4);
-      const base = 0.58 + (0.06 - 0.58) * near;
-      glassMats[i].opacity = base + (0.22 - base) * xray;
+      const base = 0.5 + (0.03 - 0.5) * near;
+      glassMats[i].opacity = base + (0.2 - base) * xray;
     }
   });
 
@@ -200,8 +220,8 @@ export function Building() {
         <pointLight
           key={i}
           position={[0, floorBase(i) + 3.1, 1.5]}
-          color="#ffd6a3"
-          intensity={4.2}
+          color="#fff4e2"
+          intensity={2.2}
           distance={34}
           decay={1}
         />

@@ -28,6 +28,14 @@ function buildStatic() {
     // Spreader parked at the table head.
     b.block(TABLE_CX + TABLE_LEN / 2 - 0.9, Y0 + TOP, z, 0.7, 0.55, 2.1, C.machineDark);
   });
+  // Straight-knife cutting machines standing on the lays.
+  for (const [x, t] of [[-7.4, 0], [-2.4, 2], [7.8, 1]] as const) {
+    const z = TABLE_ZS[t] - 0.35;
+    b.block(x, Y0 + TOP + 0.13, z, 0.34, 0.03, 0.26, C.machineDark); // base plate
+    b.block(x, Y0 + TOP + 0.16, z, 0.05, 0.42, 0.1, C.steel); // blade guard
+    b.block(x, Y0 + TOP + 0.58, z, 0.2, 0.22, 0.24, C.machineAccent); // motor
+    b.box(x, Y0 + TOP + 0.88, z, 0.04, 0.12, 0.04, C.machineDark); // handle
+  }
   // The shifted ply on table 3 (front), sticking out past the lay edge.
   b.box(-4.2, Y0 + TOP + 0.14, TABLE_ZS[2] + 0.13, 2.1, 0.03, 1.62, "#b49d78");
   // Bundle carts.
@@ -71,14 +79,16 @@ const BUNDLES: InstItem[] = (() => {
   return items;
 })();
 
+/* Cutters stand at the table edge, facing the lay. */
 const PEOPLE: PersonSpec[] = [
-  { x: -8, z: TABLE_ZS[0] - 1.25, y0: Y0 },
-  { x: 1.5, z: TABLE_ZS[0] + 1.25, y0: Y0 },
-  { x: -10.5, z: TABLE_ZS[1] + 1.25, y0: Y0 },
-  { x: 6.2, z: TABLE_ZS[1] - 1.25, y0: Y0 },
-  { x: -7.4, z: TABLE_ZS[2] - 1.25, y0: Y0 },
-  { x: -1.2, z: TABLE_ZS[2] - 1.25, y0: Y0 },
-  { x: 12.8, z: 2.6, y0: Y0 },
+  { x: -8, z: TABLE_ZS[0] - 1.2, y0: Y0, face: 0 },
+  { x: 1.5, z: TABLE_ZS[0] + 1.2, y0: Y0, face: Math.PI },
+  { x: -10.5, z: TABLE_ZS[1] + 1.2, y0: Y0, face: Math.PI },
+  { x: 7.8, z: TABLE_ZS[1] - 1.2, y0: Y0, face: 0 },
+  { x: -7.4, z: TABLE_ZS[2] - 1.2, y0: Y0, face: 0 },
+  { x: -2.4, z: TABLE_ZS[2] - 1.2, y0: Y0, face: -0.3 },
+  { x: 2.4, z: TABLE_ZS[2] + 1.2, y0: Y0, face: Math.PI },
+  { x: 12.8, z: 2.6, y0: Y0, face: Math.PI / 2 },
 ];
 
 export function Floor1() {

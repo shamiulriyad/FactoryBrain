@@ -12,6 +12,8 @@ import { create } from "zustand";
 import type { FloorId } from "@/lib/navigation";
 import { refreshUnreadAlerts, useUnreadAlerts } from "@/services/floorAlerts.api";
 import { refreshPendingApprovals, usePendingApprovals } from "@/services/approvals.api";
+import { can, useAuthStore } from "@/lib/auth";
+import { P } from "@/lib/access";
 
 export type FloorStatus = "ok" | "watch" | "act";
 export type FloorStatusMap = Record<FloorId, FloorStatus>;
@@ -42,8 +44,10 @@ export function setFloorStatuses(next: Partial<FloorStatusMap>): void {
 export function startFloorStatusFeed(intervalMs = 20_000): () => void {
   const tick = () => {
     if (document.visibilityState === "hidden") return;
-    void refreshUnreadAlerts();
-    void refreshPendingApprovals();
+    // Only poll what the signed-in user may read (the API would answer 403).
+    const user = useAuthStore.getState().user;
+    if (can(user, P.MonitoringView, P.ProductionView)) void refreshUnreadAlerts();
+    if (can(user, P.ApprovalsView)) void refreshPendingApprovals();
   };
   tick();
   const id = window.setInterval(tick, intervalMs);

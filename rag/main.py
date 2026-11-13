@@ -2,7 +2,7 @@
 
     uvicorn main:app --port 8000          # run from this folder
 
-Not called by the FactoryBrain backend yet (it has its own pgvector RAG). Routes:
+Not called by the BunonBrain backend yet (it has its own pgvector RAG). Routes:
 
     GET    /health                                          -> {status, ready, qdrant}
     POST   /api/kb/{collection}/ingest?document_id=&filename=&chunk_size=&chunk_overlap=
@@ -71,7 +71,7 @@ async def lifespan(_app: FastAPI):
     _state.clear()
 
 
-app = FastAPI(title="FactoryBrain - Python PDF RAG service", lifespan=lifespan)
+app = FastAPI(title="BunonBrain - Python PDF RAG service", lifespan=lifespan)
 
 if not config.RAG_API_KEY:
     print("[startup] WARNING: PYRAG_API_KEY is not set - this service accepts unauthenticated "

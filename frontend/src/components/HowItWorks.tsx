@@ -2,7 +2,7 @@ import { HOW_IT_WORKS } from "@/lib/tour";
 
 export function HowItWorks() {
   return (
-    <section id="how" aria-labelledby="how-title" className="relative z-20 border-t border-fb-line bg-fb-ink">
+    <section id="how" aria-labelledby="how-title" className="fb-light relative z-20 border-t border-fb-line bg-fb-ink">
       <div className="mx-auto max-w-[1200px] px-4 py-24 md:px-8 md:py-32">
         <h2 id="how-title" className="font-display text-[2.6rem] font-extrabold leading-none md:text-[3.6rem]">
           {HOW_IT_WORKS.heading}

@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Check, LogOut } from "lucide-react";
+import { Check, IdCard, LogOut, UserCircle2 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { logout, useAuthStore } from "@/lib/auth";
+import { can, displayName, logout, useAuthStore } from "@/lib/auth";
+import { roleLabel } from "@/lib/access";
 import { useAppStore } from "@/store/app.store";
 import { useT } from "@/lib/useT";
 import type { Locale } from "@/i18n/registry";
@@ -40,7 +41,8 @@ export function AccountMenu({
   const pop = usePopover(collapsed ? "right" : "above");
 
   if (!user) return null;
-  const role = String(user.role);
+  const role = user.roles?.length ? roleLabel(String(user.role)) : "No role";
+  const shown = displayName(user);
   const languageName = t("sidebar.languageName");
   const name = `${t("sidebar.account")}: ${user.email}, ${role}`;
 
@@ -76,11 +78,11 @@ export function AccountMenu({
           aria-hidden="true"
           className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-sb-accent text-[12px] font-semibold text-sb-ink"
         >
-          {initialsOf(user.email)}
+          {initialsOf(user.fullName?.trim() ? user.fullName.replace(/\s+/g, ".") + "@" : user.email)}
         </span>
         <span className={cn("min-w-0 flex-1", collapsed && "sr-only")}>
           <span className="block truncate text-[13px] font-medium leading-5 text-sb-text" title={user.email}>
-            {user.email}
+            {shown}
           </span>
           <span className="block truncate text-[12px] leading-4 text-sb-muted">
             <span data-testid="session-role">{role}</span> · {factoryName} · {languageName}
@@ -91,8 +93,21 @@ export function AccountMenu({
       {pop.open && (
         <div ref={pop.menuRef} role="menu" aria-label={t("sidebar.account")} className={menuPanel} style={pop.style} onKeyDown={pop.onMenuKeyDown}>
           <div className="px-2.5 pb-2 pt-2">
-            <p className="truncate text-[13px] font-medium text-sb-text">{user.email}</p>
-            <p className="text-[12px] text-sb-muted">{role}</p>
+            <p className="truncate text-[13px] font-medium text-sb-text">{shown}</p>
+            {shown !== user.email && <p className="truncate text-[12px] text-sb-muted">{user.email}</p>}
+            <p className="text-[12px] text-sb-muted">{(user.roles ?? []).map((r) => roleLabel(String(r))).join(", ") || "No role"}</p>
+          </div>
+          <div className="border-t border-sb-divider pt-1">
+            <button type="button" role="menuitem" tabIndex={-1} onClick={() => { pop.close(); router.push("/app/account"); }} className={menuItem} data-testid="menu-account">
+              <UserCircle2 size={16} aria-hidden="true" className="text-sb-muted" />
+              <span>{t("nav.account")}</span>
+            </button>
+            {can(user, "self.view") && (
+              <button type="button" role="menuitem" tabIndex={-1} onClick={() => { pop.close(); router.push("/app/me"); }} className={menuItem}>
+                <IdCard size={16} aria-hidden="true" className="text-sb-muted" />
+                <span>{t("nav.me")}</span>
+              </button>
+            )}
           </div>
           <div role="group" aria-label={t("sidebar.language")} className="border-t border-sb-divider pt-1">
             <p aria-hidden="true" className="px-2.5 pb-1 pt-1.5 font-plexmono text-[11px] uppercase tracking-[0.08em] text-sb-label">

@@ -91,9 +91,9 @@ const MOVING_ITEMS: InstItem[] = Array.from({ length: MOVING }, () => ({ p: [0, 
 
 const PEOPLE: PersonSpec[] = [
   ...PACK_XS.map((x) => ({ x, z: PACK_Z - 0.85, y0: Y0 })),
-  { x: 9.6, z: 7.3, y0: Y0 },
-  { x: -6.0, z: -7.2, y0: Y0 },
-  { x: 2.6, z: 2.6, y0: Y0 },
+  { x: 9.6, z: 7.3, y0: Y0, face: Math.PI },
+  { x: -6.0, z: -7.2, y0: Y0, face: Math.PI },
+  { x: 2.6, z: 2.6, y0: Y0, face: Math.PI / 2 },
 ];
 
 export function Floor4() {

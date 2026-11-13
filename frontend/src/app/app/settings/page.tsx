@@ -15,15 +15,17 @@ import { ConfirmDialog } from "@/components/ui/Modal";
 import { LanguageToggle } from "@/components/ui/LanguageToggle";
 import { LlmSettingsPanel } from "@/components/settings/LlmSettingsPanel";
 import { EmbeddingSettingsPanel } from "@/components/settings/EmbeddingSettingsPanel";
-import { MyAccessPanel, UsersPanel } from "@/components/settings/UsersPanel";
+import { UsersAccessPanel } from "@/components/settings/UsersPanel";
 import { cn } from "@/lib/cn";
-import { isAdmin, useAuthStore } from "@/lib/auth";
+import { can, useAuthStore } from "@/lib/auth";
+import { P } from "@/lib/access";
 
 // "advanced" keeps its id so existing deep links (?section=advanced) still open the AI section.
 type SectionId = "profile" | "appearance" | "advanced" | "users" | "dataReset";
 
-const SECTIONS: Array<{ id: SectionId; icon: typeof Building2; labelKey: string; adminOnly?: boolean; hint: string }> = [
-  { id: "advanced", icon: Cpu, labelKey: "settings.aiModels", hint: "Language model & embeddings" },
+/** `perms`: any one opens the section; none = everyone. */
+const SECTIONS: Array<{ id: SectionId; icon: typeof Building2; labelKey: string; perms?: string[]; hint: string }> = [
+  { id: "advanced", icon: Cpu, labelKey: "settings.aiModels", hint: "Language model & embeddings", perms: [P.KnowledgeView, P.PlatformSettingsManage] },
   { id: "users", icon: Users, labelKey: "settings.usersSection", hint: "Roles and access" },
   { id: "profile", icon: Building2, labelKey: "settings.businessProfile", hint: "This browser" },
   { id: "appearance", icon: Palette, labelKey: "settings.appearance", hint: "Theme, language" },
@@ -35,15 +37,15 @@ export default function SettingsPage() {
   const router = useRouter();
   const search = useSearchParams();
   const sectionParam = search?.get("section") as SectionId | null;
-  const [active, setActive] = useState<SectionId>("advanced");
-  const admin = isAdmin(useAuthStore((s) => s.user));
-  const sections = SECTIONS.filter((s) => !s.adminOnly || admin);
+  const user = useAuthStore((s) => s.user);
+  const sections = SECTIONS.filter((s) => can(user, ...(s.perms ?? [])));
+  const [active, setActive] = useState<SectionId>(sections[0]?.id ?? "appearance");
 
   // Honor ?section= deep links from the command palette.
   useEffect(() => {
     if (sectionParam && sections.some((s) => s.id === sectionParam)) setActive(sectionParam);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sectionParam, admin]);
+  }, [sectionParam, user]);
 
   function onSelectSection(id: SectionId) {
     setActive(id);
@@ -90,7 +92,7 @@ export default function SettingsPage() {
               <EmbeddingSettingsPanel />
             </>
           )}
-          {active === "users" && (admin ? <UsersPanel /> : <MyAccessPanel />)}
+          {active === "users" && <UsersAccessPanel />}
           {active === "profile" && <ProfileSection />}
           {active === "appearance" && <AppearanceSection />}
           {active === "dataReset" && <DataResetSection router={router} />}

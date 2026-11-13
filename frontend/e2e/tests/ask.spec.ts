@@ -35,7 +35,7 @@ async function setModel(enabled: boolean) {
 
 test.beforeEach(async ({ page }) => {
   await prepare(page);
-  await login(page, "viewer", "/app/ask");
+  await login(page, "supervisor", "/app/ask");
 });
 
 test.afterAll(async () => {

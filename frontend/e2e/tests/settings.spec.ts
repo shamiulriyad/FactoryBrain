@@ -19,7 +19,7 @@ async function askAsViewer(browser: Browser, question: string) {
   const context = await browser.newContext();
   const page = await context.newPage();
   await prepare(page);
-  await login(page, "viewer", "/app/ask");
+  await login(page, "supervisor", "/app/ask");
   const answered = page.waitForResponse((r) => r.url().endsWith("/api/ask") && r.request().method() === "POST");
   await page.getByTestId("ask-input").fill(question);
   await page.getByTestId("ask-input").press("Enter");
@@ -106,7 +106,7 @@ test("a stale Settings page can't overwrite a newer save (409, latest values sho
 
 test("embedding changes show a plan first and change nothing until confirmed", async ({ page }) => {
   const embedding = async () => {
-    const api = await apiAs("viewer");
+    const api = await apiAs("supervisor");
     const s = await (await api.get("/api/settings/embedding")).json();
     await api.dispose();
     return s as { provider: string; dimensions: number; columnDimensions: number };
@@ -145,9 +145,9 @@ test("embedding changes show a plan first and change nothing until confirmed", a
   expect(await embedding()).toMatchObject({ dimensions: 384, columnDimensions: 384 });
 });
 
-test("a Viewer sees the settings but cannot change them", async ({ page }) => {
+test("a non-admin sees the AI settings but cannot change them", async ({ page }) => {
   await prepare(page);
-  await login(page, "viewer", "/app");
+  await login(page, "supervisor", "/app");
   await openAdvanced(page);
   await expect(page.getByTestId("embedding-panel")).toContainText("Only an Admin can change embedding settings");
   await expect(page.getByTestId("emb-review")).toHaveCount(0);
@@ -159,7 +159,7 @@ test("a Viewer sees the settings but cannot change them", async ({ page }) => {
   await expect(page.getByTestId("llm-save")).toBeDisabled();
 
   // …and the API refuses the same change made directly.
-  const viewerApi = await apiAs("viewer");
+  const viewerApi = await apiAs("supervisor");
   const direct = await viewerApi.post("/api/settings/llm", { data: { provider: "openai", model: "viewer-attempt" } });
   expect(direct.status()).toBe(403);
   await viewerApi.dispose();

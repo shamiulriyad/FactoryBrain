@@ -8,6 +8,7 @@ import { useT } from "@/lib/useT";
 import { fetchAuthOptions, login, type AuthOptions } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { AuthCard, AuthPage, EMAIL_SHAPE, linkClass } from "@/components/auth/AuthCard";
 import { Callout } from "@/components/ui/Callout";
 
@@ -50,13 +51,16 @@ function LoginForm() {
     setSubmitting(false);
     if (result.ok) {
       setPassword("");
-      router.replace(safeNext(search?.get("next") ?? null));
+      // A temporary password set by an administrator must be changed first.
+      router.replace(result.user.mustChangePassword ? "/app/account?changePassword=1" : safeNext(search?.get("next") ?? null));
       return;
     }
     if (result.reason === "rate_limited") {
       setError(t("auth.rateLimited", { s: result.retryAfterSeconds ?? 60 }) as string);
     } else if (result.reason === "invalid") {
       setError(t("auth.invalid") as string);
+    } else if (result.reason === "deactivated") {
+      setError("This account is deactivated. Contact your administrator.");
     } else {
       setError(t("auth.unavailable") as string);
     }
@@ -98,8 +102,8 @@ function LoginForm() {
         <div className="flex flex-col gap-1.5">
           <label className="flex flex-col">
             <span className="field-label">{t("auth.password")}</span>
-            <Input
-              type="password"
+            <PasswordInput
+
               autoComplete="current-password"
               required
               value={password}

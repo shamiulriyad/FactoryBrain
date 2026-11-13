@@ -6,23 +6,19 @@ export const metadata: Metadata = {
   description:
     "BunonBrain is the operations layer for a mid-tier Bangladeshi garment plant. Factory Brain assembles the agents that run the floor.",
   applicationName: "BunonBrain",
-  icons: {
-    icon: [
-      { url: "/Thalamus_logo.png", type: "image/png", sizes: "any" }
-    ],
-    apple: [{ url: "/Thalamus_logo.png" }]
-  }
+  // Favicon and Apple touch icon come from app/icon.svg and app/apple-icon.png
+  // (the BunonBrain app-icon tile); the PWA icons are listed in app/manifest.ts.
 };
 
 /* Inline script that applies the saved theme before React hydrates so
    there is no flash. Reads the new `bunonbrain:theme` key; the old
-   `factoryBrain:theme` and `thalamus:theme` keys are read as a fallback
+   `bunonBrain:theme` and `thalamus:theme` keys are read as a fallback
    so users coming from older builds don't see a flash. */
 const themeBootstrap = `
 (function() {
   try {
     var stored = window.localStorage.getItem('bunonbrain:theme')
-      || window.localStorage.getItem('factoryBrain:theme')
+      || window.localStorage.getItem('bunonBrain:theme')
       || window.localStorage.getItem('thalamus:theme');
     var sys = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
     var theme = stored === 'light' || stored === 'dark' ? stored : (stored === 'system' ? sys : 'light');

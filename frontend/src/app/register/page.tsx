@@ -8,6 +8,7 @@ import { useT } from "@/lib/useT";
 import { fetchAuthOptions, register, type AuthOptions } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { AuthCard, AuthPage, EMAIL_SHAPE, linkClass } from "@/components/auth/AuthCard";
 
 /**
@@ -88,8 +89,8 @@ export default function RegisterPage() {
             <div className="flex flex-col gap-1.5">
               <label className="flex flex-col gap-1.5">
                 <span className="field-label">{t("auth.password")}</span>
-                <Input
-                  type="password"
+                <PasswordInput
+
                   autoComplete="new-password"
                   aria-describedby="password-hint"
                   value={password}
@@ -100,7 +101,7 @@ export default function RegisterPage() {
             </div>
             <label className="flex flex-col gap-1.5">
               <span className="field-label">{t("auth.confirmPassword")}</span>
-              <Input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+              <PasswordInput autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
             </label>
             {error && (
               <p role="alert" className="text-caption text-[var(--risk-high)]">

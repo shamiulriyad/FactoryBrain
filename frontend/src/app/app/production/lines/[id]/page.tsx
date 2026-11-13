@@ -19,7 +19,8 @@ import { StatCard } from "@/components/ui/StatCard";
 import { SkeletonRows } from "@/components/ui/Status";
 import { useOnDataChanged, useResource } from "@/lib/useResource";
 import { errorMessage } from "@/lib/api";
-import { canOperate, useAuthStore } from "@/lib/auth";
+import { useCan } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { fmt, fmtPct, fmtSigned, plantDateTime, plantToday } from "@/lib/production";
 import { productionPaths } from "@/services/production.api";
 import type { LineDetail, ProductionStyle, TimelinePoint } from "@/services/contracts";
@@ -30,7 +31,7 @@ import { Definitions, WipList, useMasterData, useProductionConfig } from "@/comp
 
 export default function LinePage() {
   const id = decodeURIComponent(useParams<{ id: string }>()?.id ?? "");
-  const operator = canOperate(useAuthStore((s) => s.user));
+  const operator = useCan(P.ProductionManage);
   const config = useProductionConfig();
   const md = useMasterData();
   const [date, setDate] = useState("");

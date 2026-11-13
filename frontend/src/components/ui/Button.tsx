@@ -62,7 +62,7 @@ type Props = {
  * foreground so a label never collides with its own surface.
  *
  * Contrast pairs (theme-independent contrast ratio, with fg/bg):
- *   primary   accent-green  (#7CE0C6)  / near-black (#04231C)  ≈ 13:1 dark, ≈ 7:1 light
+ *   primary   brand emerald (ink shade) / white                 ≈ 5.4:1 (both themes)
  *   secondary surface-2                  / fg-primary            ≈ 11:1 dark, ≈ 13:1 light
  *   ghost     transparent                / fg-secondary          ≈ 5:1 dark,  ≈ 5:1 light
  *   danger    risk-high-tint             / risk-high             ≈ 6:1 dark,  ≈ 6:1 light

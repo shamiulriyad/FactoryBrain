@@ -22,7 +22,8 @@ import { QualitySummary } from "@/components/qc/QualitySummary";
 import { CategoryManager } from "@/components/qc/CategoryManager";
 import { useOnDataChanged, useResource } from "@/lib/useResource";
 import { errorMessage } from "@/lib/api";
-import { canOperate, isAdmin, useAuthStore } from "@/lib/auth";
+import { useAuthStore, can } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { OUTCOME_LABEL, OUTCOME_TONE, STAGE_LABEL, STATUS_LABEL, STATUS_TONE, formatConfidence, isInProgress } from "@/lib/qcInspection";
@@ -34,8 +35,8 @@ const PAGE_SIZE = 20;
 
 export default function QcPage() {
   const user = useAuthStore((s) => s.user);
-  const operator = canOperate(user);
-  const admin = isAdmin(user);
+  const operator = can(user, P.QcManage);
+  const admin = can(user, P.SettingsManage);
   const [tab, setTab] = useState<Tab>("inspections");
 
   useEffect(() => {

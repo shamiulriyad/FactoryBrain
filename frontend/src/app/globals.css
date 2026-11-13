@@ -2,96 +2,156 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ----- Brand palette (theme-independent). Stored as "R G B" triplets so
+       Tailwind can apply opacity (bg-brand-navy/10) and CSS can use
+       rgb(var(--brand-navy)). Every other colour in the app derives from
+       these; components never hard-code brand hex values. ----- */
+@layer base {
+  :root {
+    --brand-navy: 22 50 79;            /* #16324F  primary navy, primary text */
+    --brand-navy-deep: 16 38 61;       /* #10263D  deep navy: sidebar, hero, footer */
+    --brand-emerald: 5 150 105;        /* #059669  primary accent (fills, rings, indicators) */
+    --brand-emerald-light: 209 250 229;/* #D1FAE5  soft accent fill */
+    --brand-white: 255 255 255;        /* #FFFFFF */
+    --brand-offwhite: 248 250 252;     /* #F8FAFC  page background, alternate sections */
+    --brand-border: 226 232 240;       /* #E2E8F0 */
+    --brand-text: 22 50 79;            /* #16324F  headings */
+    --brand-body: 51 65 85;            /* #334155  body copy */
+    --brand-muted: 100 116 139;        /* #64748B  secondary copy */
+
+    --brand-success: 22 163 74;        /* #16A34A */
+    --brand-warning: 245 158 11;       /* #F59E0B */
+    --brand-error: 220 38 38;          /* #DC2626 */
+    --brand-info: 37 99 235;           /* #2563EB */
+
+    /* Text-safe shades, derived from the brand colours above (no new hues).
+       White text on #059669 is 3.8:1 and #F59E0B / #16A34A text on white is
+       below 4.5:1, so text and filled buttons use these darker shades. */
+    --brand-emerald-ink: 4 120 84;          /* emerald × 0.80 → 5.4:1 with white */
+    --brand-emerald-ink-hover: 3 98 69;     /* emerald × 0.65 */
+    --brand-success-ink: 17 122 56;         /* success × 0.75 → 5.3:1 on white */
+    --brand-warning-ink: 147 95 7;          /* warning × 0.60 → 5.4:1 on white */
+    /* For text and icons on navy backgrounds (≥ 4.5:1 on #10263D). */
+    --brand-emerald-on-dark: 105 192 165;   /* 60% emerald + 40% white */
+    --brand-success-on-dark: 103 195 137;   /* 65% success + 35% white */
+    --brand-error-on-dark: 231 103 103;     /* 70% error + 30% white */
+    --brand-info-on-dark: 124 163 243;      /* 60% info + 40% white */
+    --brand-muted-on-dark: 167 177 190;     /* 45% off-white + 55% muted */
+    --brand-body-on-dark: 204 210 218;      /* 70% off-white + 30% muted */
+
+    /* App sidebar: always deep navy, independent of the page theme. */
+    --sb-bg: var(--brand-navy-deep);
+    --sb-input: var(--brand-navy);
+    --sb-border: 50 77 104;                 /* navy + 12% white */
+    --sb-divider: 37 63 89;                 /* navy + 7% white */
+    --sb-active: 22 50 79;                  /* navy */
+    --sb-hover: 26 56 86;                   /* navy + 3% white */
+    --sb-text: var(--brand-offwhite);
+    --sb-dim: var(--brand-body-on-dark);
+    --sb-muted: var(--brand-muted-on-dark);
+    --sb-label: 139 151 166;                /* 5.1:1 on deep navy */
+    --sb-accent: var(--brand-emerald-on-dark);
+    --sb-ok: var(--brand-success-on-dark);
+    --sb-watch: var(--brand-warning);
+    --sb-act: var(--brand-error-on-dark);
+    --sb-ink: var(--brand-navy-deep);
+  }
+}
+
 /* ----- Theme variables (light + dark). The same role name is reused
        across themes so component classes do not branch by theme. ----- */
 @layer base {
-  /* Dark: deep-ink control room. */
+  /* Dark: the brand on deep navy. */
   :root {
     color-scheme: dark;
+    /* Logo colours (components/brand/Logo.tsx, tone="auto"). */
+    --logo-ink: #FFFFFF;
+    --logo-accent: #34D399;
 
-    --bg-canvas: #0B1117;
-    --bg-sidebar: #080D12;
-    --bg-surface: #111922;
-    --bg-surface-2: #17212B;
-    --bg-surface-3: #1E2A36;
-    --bg-glass: #111922;
-    --bg-overlay: rgba(2, 6, 10, 0.62);
+    --bg-canvas: #0D1E31;                         /* deep navy × 0.8 */
+    --bg-sidebar: rgb(var(--brand-navy-deep));
+    --bg-surface: rgb(var(--brand-navy-deep));
+    --bg-surface-2: rgb(var(--brand-navy));
+    --bg-surface-3: #28425D;                      /* navy + 8% white */
+    --bg-glass: rgb(var(--brand-navy-deep));
+    --bg-overlay: rgba(6, 16, 27, 0.66);
 
-    --border-subtle: rgba(255, 255, 255, 0.08);
-    --border-strong: rgba(255, 255, 255, 0.15);
+    --border-subtle: rgba(255, 255, 255, 0.09);
+    --border-strong: rgba(255, 255, 255, 0.17);
     --grid-line: rgba(255, 255, 255, 0.05);
 
     /* Text tiers (all ≥ 4.5:1 on --bg-surface) */
-    --fg-primary: #E8EEF4;
-    --fg-secondary: #AAB7C4;
-    --fg-tertiary: #8A9AAA;
+    --fg-primary: rgb(var(--brand-offwhite));
+    --fg-secondary: rgb(var(--brand-body-on-dark));
+    --fg-tertiary: rgb(var(--brand-muted-on-dark));
 
-    /* Brand accent: loom amber. Status colours live on the risk tokens. */
-    --accent: #F2A93B;
-    --accent-strong: #FFBE5C;
-    --accent-soft: rgba(242, 169, 59, 0.14);
-    --accent-border: rgba(242, 169, 59, 0.42);
-    --accent-fg-on-bg: #1C1206;
-    --info: #7DB4F5;
-    --info-soft: rgba(125, 180, 245, 0.14);
-    --info-border: rgba(125, 180, 245, 0.38);
+    /* Brand accent: emerald. Status colours live on the risk tokens. */
+    --accent-rgb: var(--brand-emerald-on-dark);
+    --accent: rgb(var(--brand-emerald-on-dark));
+    --accent-strong: #8FD2BC;                     /* emerald-on-dark + 25% white */
+    --accent-soft: rgba(5, 150, 105, 0.18);
+    --accent-border: rgba(5, 150, 105, 0.5);
+    --accent-fg-on-bg: rgb(var(--brand-navy-deep));
+    --info: rgb(var(--brand-info-on-dark));
+    --info-soft: rgba(37, 99, 235, 0.18);
+    --info-border: rgba(37, 99, 235, 0.45);
 
     /* Sidebar ("bench") */
-    --bench: #080D12;
-    --bench-2: #0F171F;
-    --bench-fg: #E6EDF3;
-    --bench-muted: #8EA0B2;
-    --bench-border: rgba(255, 255, 255, 0.07);
+    --bench: rgb(var(--brand-navy-deep));
+    --bench-2: rgb(var(--brand-navy));
+    --bench-fg: rgb(var(--brand-offwhite));
+    --bench-muted: rgb(var(--brand-muted-on-dark));
+    --bench-border: rgba(255, 255, 255, 0.09);
 
-    --risk-low: #45BE82;
-    --risk-low-soft: rgba(69, 190, 130, 0.15);
-    --risk-low-border: rgba(69, 190, 130, 0.38);
-    --risk-low-fg-on-bg: #04170D;
+    --risk-low: rgb(var(--brand-success-on-dark));
+    --risk-low-soft: rgba(22, 163, 74, 0.16);
+    --risk-low-border: rgba(22, 163, 74, 0.45);
+    --risk-low-fg-on-bg: rgb(var(--brand-navy-deep));
 
-    --risk-medium: #E9B54E;
-    --risk-medium-soft: rgba(233, 181, 78, 0.15);
-    --risk-medium-border: rgba(233, 181, 78, 0.38);
-    --risk-medium-fg-on-bg: #241700;
+    --risk-medium: rgb(var(--brand-warning));
+    --risk-medium-soft: rgba(245, 158, 11, 0.15);
+    --risk-medium-border: rgba(245, 158, 11, 0.42);
+    --risk-medium-fg-on-bg: rgb(var(--brand-navy-deep));
 
-    --risk-high: #F0776F;
-    --risk-high-soft: rgba(240, 119, 111, 0.15);
-    --risk-high-border: rgba(240, 119, 111, 0.4);
-    --risk-high-fg-on-bg: #2A0606;
+    --risk-high: rgb(var(--brand-error-on-dark));
+    --risk-high-soft: rgba(220, 38, 38, 0.16);
+    --risk-high-border: rgba(220, 38, 38, 0.48);
+    --risk-high-fg-on-bg: #FFFFFF;
 
-    --stage-suggested: #93A0B4;
-    --stage-pending: #E9B54E;
-    --stage-executing: #7DB4F5;
-    --stage-done: #45BE82;
-    --stage-logged: #7A8699;
+    --stage-suggested: rgb(var(--brand-muted-on-dark));
+    --stage-pending: rgb(var(--brand-warning));
+    --stage-executing: rgb(var(--brand-info-on-dark));
+    --stage-done: rgb(var(--brand-success-on-dark));
+    --stage-logged: rgb(var(--brand-muted));
 
     /* Button tokens — semantic pairs so fg never inherits surface. */
-    --btn-primary-bg: #F2A93B;
-    --btn-primary-bg-hover: #FFBE5C;
-    --btn-primary-fg: #1C1206;
+    --btn-primary-bg: rgb(var(--brand-emerald-ink));
+    --btn-primary-bg-hover: rgb(var(--brand-emerald));
+    --btn-primary-fg: #FFFFFF;
     --btn-primary-border: transparent;
 
-    --btn-secondary-bg: #17212B;
-    --btn-secondary-bg-hover: #1E2A36;
-    --btn-secondary-fg: #E8EEF4;
-    --btn-secondary-border: rgba(255, 255, 255, 0.13);
+    --btn-secondary-bg: rgb(var(--brand-navy));
+    --btn-secondary-bg-hover: #28425D;
+    --btn-secondary-fg: rgb(var(--brand-offwhite));
+    --btn-secondary-border: rgba(255, 255, 255, 0.14);
 
     --btn-ghost-bg: transparent;
     --btn-ghost-bg-hover: rgba(255, 255, 255, 0.07);
-    --btn-ghost-fg: #C3CFDB;
+    --btn-ghost-fg: rgb(var(--brand-body-on-dark));
     --btn-ghost-fg-hover: #FFFFFF;
     --btn-ghost-border: transparent;
 
-    --btn-danger-bg: rgba(240, 119, 111, 0.16);
-    --btn-danger-bg-hover: rgba(240, 119, 111, 0.28);
-    --btn-danger-fg: #FFA49E;
-    --btn-danger-border: rgba(240, 119, 111, 0.5);
+    --btn-danger-bg: rgba(220, 38, 38, 0.16);
+    --btn-danger-bg-hover: rgba(220, 38, 38, 0.28);
+    --btn-danger-fg: rgb(var(--brand-error-on-dark));
+    --btn-danger-border: rgba(220, 38, 38, 0.5);
 
-    --btn-success-bg: #45BE82;
-    --btn-success-bg-hover: #5ACC93;
-    --btn-success-fg: #04170D;
+    --btn-success-bg: rgb(var(--brand-success-ink));
+    --btn-success-bg-hover: rgb(var(--brand-success));
+    --btn-success-fg: #FFFFFF;
     --btn-success-border: transparent;
 
-    /* Per-agent colour families — used by AgentAvatar. */
+    /* Per-agent colour families — categorical data colours used by AgentAvatar. */
     --agent-sales: #7CD3F0;
     --agent-sales-bg: rgba(124, 211, 240, 0.16);
     --agent-marketing: #F08CC2;
@@ -107,8 +167,8 @@
     --agent-automation: #B79CF0;
     --agent-automation-bg: rgba(183, 156, 240, 0.16);
 
-    --focus-ring: #FFBE5C;
-    --selection-bg: rgba(242, 169, 59, 0.25);
+    --focus-ring: rgb(var(--brand-emerald-on-dark));
+    --selection-bg: rgba(5, 150, 105, 0.32);
 
     --chart-grid: rgba(255, 255, 255, 0.05);
     --chart-axis: rgba(255, 255, 255, 0.1);
@@ -117,95 +177,98 @@
     --radius-card: 12px;
     --radius-control: 8px;
     --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 1px 2px rgba(0, 0, 0, 0.35);
-    --shadow-pop: 0 18px 44px rgba(0, 0, 0, 0.5);
+    --shadow-pop: 0 18px 44px rgba(3, 10, 18, 0.55);
 
     --glass-alpha: 0.62;
     --glass-blur: 14px;
     --glass-saturation: 150%;
     --glass-border: rgba(255, 255, 255, 0.12);
     --glass-highlight: rgba(255, 255, 255, 0.18);
-    --glass-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+    --glass-shadow: 0 24px 48px rgba(3, 10, 18, 0.5);
   }
 
-  /* Light: clean shop-floor paper with an ink sidebar. */
+  /* Light (default): white and off-white surfaces, navy type, emerald accent. */
   html.light {
+    --logo-ink: #16324F;
+    --logo-accent: #059669;
     color-scheme: light;
 
-    --bg-canvas: #F2F4F7;
-    --bg-sidebar: #0E1822;
-    --bg-surface: #FFFFFF;
-    --bg-surface-2: #F5F7FA;
-    --bg-surface-3: #EBEFF4;
-    --bg-glass: #FFFFFF;
-    --bg-overlay: rgba(9, 16, 24, 0.45);
+    --bg-canvas: rgb(var(--brand-offwhite));
+    --bg-sidebar: rgb(var(--brand-navy-deep));
+    --bg-surface: rgb(var(--brand-white));
+    --bg-surface-2: #EFF3F7;                      /* 60% off-white + 40% border */
+    --bg-surface-3: rgb(var(--brand-border));
+    --bg-glass: rgb(var(--brand-white));
+    --bg-overlay: rgba(16, 38, 61, 0.45);
 
-    --border-subtle: rgba(14, 26, 38, 0.09);
-    --border-strong: rgba(14, 26, 38, 0.17);
-    --grid-line: rgba(14, 26, 38, 0.05);
+    --border-subtle: rgb(var(--brand-border));
+    --border-strong: #B0BAC8;                     /* 60% border + 40% muted */
+    --grid-line: rgba(22, 50, 79, 0.05);
 
-    --fg-primary: #0E1A26;
-    --fg-secondary: #3A4858;
-    --fg-tertiary: #5A6878;
+    --fg-primary: rgb(var(--brand-text));
+    --fg-secondary: rgb(var(--brand-body));
+    --fg-tertiary: rgb(var(--brand-muted));
 
-    --accent: #A9520A;
-    --accent-strong: #8A4307;
-    --accent-soft: rgba(169, 82, 10, 0.09);
-    --accent-border: rgba(169, 82, 10, 0.32);
+    --accent-rgb: var(--brand-emerald-ink);
+    --accent: rgb(var(--brand-emerald-ink));
+    --accent-strong: rgb(var(--brand-emerald-ink-hover));
+    --accent-soft: rgb(var(--brand-emerald-light) / 0.75);
+    --accent-border: rgba(5, 150, 105, 0.38);
     --accent-fg-on-bg: #FFFFFF;
-    --info: #1F5FB8;
-    --info-soft: rgba(31, 95, 184, 0.08);
-    --info-border: rgba(31, 95, 184, 0.3);
+    --info: rgb(var(--brand-info));
+    --info-soft: rgba(37, 99, 235, 0.08);
+    --info-border: rgba(37, 99, 235, 0.3);
 
-    --bench: #0E1822;
-    --bench-2: #152230;
-    --bench-fg: #E8EEF4;
-    --bench-muted: #93A5B7;
-    --bench-border: rgba(255, 255, 255, 0.08);
+    --bench: rgb(var(--brand-navy-deep));
+    --bench-2: rgb(var(--brand-navy));
+    --bench-fg: rgb(var(--brand-offwhite));
+    --bench-muted: rgb(var(--brand-muted-on-dark));
+    --bench-border: rgba(255, 255, 255, 0.09);
 
-    --risk-low: #1D7A4C;
-    --risk-low-soft: rgba(29, 122, 76, 0.09);
-    --risk-low-border: rgba(29, 122, 76, 0.32);
+    --risk-low: rgb(var(--brand-success-ink));
+    --risk-low-soft: rgba(22, 163, 74, 0.1);
+    --risk-low-border: rgba(22, 163, 74, 0.34);
     --risk-low-fg-on-bg: #FFFFFF;
 
-    --risk-medium: #94600A;
-    --risk-medium-soft: rgba(148, 96, 10, 0.1);
-    --risk-medium-border: rgba(148, 96, 10, 0.34);
+    --risk-medium: rgb(var(--brand-warning-ink));
+    --risk-medium-soft: rgba(245, 158, 11, 0.12);
+    --risk-medium-border: rgba(245, 158, 11, 0.45);
     --risk-medium-fg-on-bg: #FFFFFF;
 
-    --risk-high: #B0271E;
-    --risk-high-soft: rgba(176, 39, 30, 0.08);
-    --risk-high-border: rgba(176, 39, 30, 0.32);
+    --risk-high: rgb(var(--brand-error));
+    --risk-high-soft: rgba(220, 38, 38, 0.07);
+    --risk-high-border: rgba(220, 38, 38, 0.32);
     --risk-high-fg-on-bg: #FFFFFF;
 
-    --stage-suggested: #556172;
-    --stage-pending: #94600A;
-    --stage-executing: #1F5FB8;
-    --stage-done: #1D7A4C;
-    --stage-logged: #556172;
+    --stage-suggested: rgb(var(--brand-muted));
+    --stage-pending: rgb(var(--brand-warning-ink));
+    --stage-executing: rgb(var(--brand-info));
+    --stage-done: rgb(var(--brand-success-ink));
+    --stage-logged: rgb(var(--brand-muted));
 
-    --btn-primary-bg: #A9520A;
-    --btn-primary-bg-hover: #8A4307;
+    --btn-primary-bg: rgb(var(--brand-emerald-ink));
+    --btn-primary-bg-hover: rgb(var(--brand-emerald-ink-hover));
     --btn-primary-fg: #FFFFFF;
     --btn-primary-border: transparent;
 
-    --btn-secondary-bg: #FFFFFF;
-    --btn-secondary-bg-hover: #F2F4F7;
-    --btn-secondary-fg: #0E1A26;
-    --btn-secondary-border: rgba(14, 26, 38, 0.16);
+    --btn-secondary-bg: rgb(var(--brand-white));
+    --btn-secondary-bg-hover: rgb(var(--brand-offwhite));
+    --btn-secondary-fg: rgb(var(--brand-navy));
+    --btn-secondary-border: rgba(22, 50, 79, 0.18);
 
     --btn-ghost-bg: transparent;
-    --btn-ghost-bg-hover: rgba(14, 26, 38, 0.06);
-    --btn-ghost-fg: #3A4858;
-    --btn-ghost-fg-hover: #0E1A26;
+    --btn-ghost-bg-hover: rgba(22, 50, 79, 0.06);
+    --btn-ghost-fg: rgb(var(--brand-body));
+    --btn-ghost-fg-hover: rgb(var(--brand-navy));
     --btn-ghost-border: transparent;
 
-    --btn-danger-bg: #FFFFFF;
-    --btn-danger-bg-hover: rgba(176, 39, 30, 0.07);
-    --btn-danger-fg: #A3241C;
-    --btn-danger-border: rgba(176, 39, 30, 0.42);
+    --btn-danger-bg: rgb(var(--brand-white));
+    --btn-danger-bg-hover: rgba(220, 38, 38, 0.06);
+    --btn-danger-fg: rgb(var(--brand-error));
+    --btn-danger-border: rgba(220, 38, 38, 0.4);
 
-    --btn-success-bg: #1D7A4C;
-    --btn-success-bg-hover: #17643E;
+    --btn-success-bg: rgb(var(--brand-success-ink));
+    --btn-success-bg-hover: #0E6630;              /* success × 0.63 */
     --btn-success-fg: #FFFFFF;
     --btn-success-border: transparent;
 
@@ -224,22 +287,22 @@
     --agent-automation: #5A3FA0;
     --agent-automation-bg: rgba(90, 63, 160, 0.12);
 
-    --focus-ring: #A9520A;
-    --selection-bg: rgba(169, 82, 10, 0.16);
+    --focus-ring: rgb(var(--brand-emerald));
+    --selection-bg: rgba(5, 150, 105, 0.18);
 
-    --chart-grid: rgba(14, 26, 38, 0.05);
-    --chart-axis: rgba(14, 26, 38, 0.1);
-    --world-dot: rgba(14, 26, 38, 0.08);
+    --chart-grid: rgba(22, 50, 79, 0.06);
+    --chart-axis: rgba(22, 50, 79, 0.12);
+    --world-dot: rgba(22, 50, 79, 0.08);
 
-    --shadow-card: 0 1px 2px rgba(14, 26, 38, 0.05), 0 1px 1px rgba(14, 26, 38, 0.03);
-    --shadow-pop: 0 18px 44px rgba(14, 26, 38, 0.18);
+    --shadow-card: 0 1px 2px rgba(16, 38, 61, 0.06), 0 1px 1px rgba(16, 38, 61, 0.03);
+    --shadow-pop: 0 18px 44px rgba(16, 38, 61, 0.16);
 
     --glass-alpha: 0.72;
     --glass-blur: 18px;
     --glass-saturation: 140%;
-    --glass-border: rgba(11, 14, 20, 0.12);
+    --glass-border: rgba(16, 38, 61, 0.12);
     --glass-highlight: rgba(255, 255, 255, 0.6);
-    --glass-shadow: 0 24px 48px rgba(20, 24, 31, 0.22);
+    --glass-shadow: 0 24px 48px rgba(16, 38, 61, 0.2);
   }
 
   html {
@@ -462,10 +525,10 @@
     color: var(--bench-muted);
     transition: background-color 150ms ease, color 150ms ease;
   }
-  .nav-item:hover { background: rgba(255, 255, 255, 0.05); color: #FFFFFF; }
+  .nav-item:hover { background: rgb(var(--sb-hover)); color: rgb(var(--sb-text)); }
   .nav-item[aria-current="page"] {
-    background: rgba(255, 255, 255, 0.08);
-    color: #FFFFFF;
+    background: rgb(var(--sb-active));
+    color: rgb(var(--sb-text));
   }
   .nav-item[aria-current="page"]::before {
     content: "";
@@ -497,7 +560,7 @@
     border: 1px solid var(--border-subtle);
     border-radius: 10px;
     overflow: hidden;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--shadow-pop);
   }
   .react-flow__controls button {
     background: transparent;
@@ -526,8 +589,8 @@
 }
 
 @keyframes brain-status-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(226, 107, 107, 0); }
-  50%      { box-shadow: 0 0 0 4px rgba(226, 107, 107, 0.18); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+  50%      { box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.18); }
 }
 
 @keyframes brand-stroke-draw {
@@ -577,12 +640,64 @@
 }
 .driver-popover.bunonbrain-tour .driver-popover-description { color: var(--fg-secondary); }
 
-/* ----- FactoryBrain marketing homepage (single dark theme) ----- */
+/* ----- BunonBrain marketing homepage -----
+   Daylight hero and 3D tour (navy text on white glass cards), white and
+   off-white content sections, navy footer. Every fb-* colour reads a
+   --home-* token; .fb-light / .fb-offwhite / .fb-dark set those tokens for
+   a section, so components never branch on the background. */
 @layer base {
+  .fb-home {
+    /* Default scope (daylight): hero and 3D tour over a bright sky. */
+    --home-ink: var(--brand-white);
+    --home-text: var(--brand-text);
+    --home-muted: var(--brand-muted);
+    --home-line: rgb(var(--brand-border));
+    --home-card: rgba(255, 255, 255, 0.93);
+    --home-field: rgb(var(--brand-white));
+    --home-lamp: var(--brand-emerald-ink);
+    --home-thread: var(--brand-error);
+    --home-warn: var(--brand-warning-ink);
+    --home-ok: var(--brand-success-ink);
+    --home-focus: rgb(var(--brand-emerald));
+  }
+  .fb-dark {
+    /* Navy scope: footer. */
+    --home-ink: var(--brand-navy-deep);
+    --home-text: var(--brand-white);
+    --home-muted: var(--brand-muted-on-dark);
+    --home-line: rgba(255, 255, 255, 0.14);
+    --home-card: rgba(16, 38, 61, 0.88);
+    --home-field: rgba(255, 255, 255, 0.06);
+    --home-lamp: var(--brand-emerald-on-dark);
+    --home-thread: var(--brand-error-on-dark);
+    --home-warn: var(--brand-warning);
+    --home-ok: var(--brand-success-on-dark);
+    --home-focus: rgb(var(--brand-emerald-on-dark));
+    color: rgb(var(--home-text));
+  }
+  .fb-light,
+  .fb-offwhite {
+    --home-ink: var(--brand-white);
+    --home-text: var(--brand-text);
+    --home-muted: var(--brand-muted);
+    --home-line: rgb(var(--brand-border));
+    --home-card: rgb(var(--brand-white));
+    --home-field: rgb(var(--brand-white));
+    --home-lamp: var(--brand-emerald-ink);
+    --home-thread: var(--brand-error);
+    --home-warn: var(--brand-warning-ink);
+    --home-ok: var(--brand-success-ink);
+    --home-focus: rgb(var(--brand-emerald));
+    color: rgb(var(--home-text));
+  }
+  .fb-offwhite {
+    --home-ink: var(--brand-offwhite);
+  }
+
   html:has(.fb-home),
   html:has(.fb-home) body {
-    background: #0f141b;
-    color-scheme: dark;
+    background: #eef4f9;
+    color-scheme: light;
   }
   html:has(.fb-home) {
     scroll-padding-top: 72px;
@@ -594,7 +709,7 @@
   }
   .fb-home {
     font-family: var(--font-plex), system-ui, sans-serif;
-    color: #ece7df;
+    color: rgb(var(--home-text));
     font-size: 16px;
     line-height: 1.55;
     font-weight: 400;
@@ -604,43 +719,47 @@
     font-synthesis-weight: none;
   }
   .fb-home *:focus-visible {
-    outline: 2px solid #f2c27a;
+    outline: 2px solid var(--home-focus);
     outline-offset: 3px;
     border-radius: 3px;
   }
   .fb-home ::selection {
-    background: rgba(242, 194, 122, 0.35);
+    background: rgba(5, 150, 105, 0.3);
   }
 }
 
 @layer components {
-  /* Dusk sky behind the transparent canvas; its lower band matches the scene fog. */
+  /* Clear daytime sky behind the transparent canvas; its lower band matches the scene fog. */
   .fb-sky {
     background: linear-gradient(
       to bottom,
-      #0d131d 0%,
-      #1a2131 30%,
-      #3b3a4c 55%,
-      #5f5662 72%,
-      #5f5662 100%
+      #9cc3e4 0%,
+      #bcd7ee 35%,
+      #d6e6f3 62%,
+      #dfe9f2 80%,
+      #dfe9f2 100%
     );
   }
-  /* Scrim so hero text always sits on a dark ground (contrast >= 4.5:1). */
+  /* A very light haze so the scene and its posters sit softly behind the cards. */
+  .fb-tint {
+    background: rgb(255 255 255 / 0.06);
+  }
+  /* Light scrim so the navy hero text always reads (contrast >= 4.5:1). */
   .fb-hero-scrim {
     background: linear-gradient(
       to bottom,
-      rgba(15, 20, 27, 0.9) 0%,
-      rgba(15, 20, 27, 0.82) 48%,
-      rgba(15, 20, 27, 0) 72%
+      rgb(255 255 255 / 0.94) 0%,
+      rgb(255 255 255 / 0.86) 48%,
+      rgb(255 255 255 / 0) 72%
     );
   }
   @media (min-width: 768px) {
     .fb-hero-scrim {
       background: linear-gradient(
         to right,
-        rgba(15, 20, 27, 0.92) 0%,
-        rgba(15, 20, 27, 0.84) 34%,
-        rgba(15, 20, 27, 0) 60%
+        rgb(255 255 255 / 0.95) 0%,
+        rgb(255 255 255 / 0.85) 34%,
+        rgb(255 255 255 / 0) 60%
       );
     }
   }
@@ -650,27 +769,30 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    border-radius: 3px;
+    border-radius: 6px;
     padding: 0 1.15rem;
-    font-weight: 500;
+    font-weight: 600;
     font-size: 0.95rem;
     line-height: 1;
-    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
   }
+  /* Primary call to action: emerald on every background. */
   .fb-btn-solid {
-    background: #ece7df;
-    color: #0f141b;
+    background: rgb(var(--brand-emerald-ink));
+    color: #FFFFFF;
+    box-shadow: 0 1px 2px rgb(var(--brand-navy-deep) / 0.18);
   }
   .fb-btn-solid:hover {
-    background: #ffffff;
+    background: rgb(var(--brand-emerald-ink-hover));
   }
+  /* Secondary: an outline in the section's text colour. */
   .fb-btn-ghost {
-    border: 1px solid rgba(236, 231, 223, 0.45);
-    color: #ece7df;
+    border: 1px solid rgb(var(--home-text) / 0.45);
+    color: rgb(var(--home-text));
   }
   .fb-btn-ghost:hover {
-    border-color: #ece7df;
-    background: rgba(236, 231, 223, 0.06);
+    border-color: rgb(var(--home-text));
+    background: rgb(var(--home-text) / 0.06);
   }
   .fb-cue-line {
     animation: fb-cue 2.4s ease-in-out infinite;
@@ -696,13 +818,87 @@
 /* App sidebar: a visible, thin scrollbar so the longer menu reads as scrollable. */
 .sb-scroll {
   scrollbar-width: thin;
-  scrollbar-color: #3a4452 transparent;
+  scrollbar-color: rgb(var(--sb-border)) transparent;
 }
 .sb-scroll::-webkit-scrollbar { width: 8px; }
 .sb-scroll::-webkit-scrollbar-track { background: transparent; }
 .sb-scroll::-webkit-scrollbar-thumb {
-  background: #3a4452;
+  background: rgb(var(--sb-border));
   border-radius: 8px;
-  border: 2px solid #0d1218;
+  border: 2px solid rgb(var(--sb-bg));
 }
-.sb-scroll::-webkit-scrollbar-thumb:hover { background: #4b5664; }
+.sb-scroll::-webkit-scrollbar-thumb:hover { background: rgb(var(--sb-label)); }
+
+/* ----- BunonBrain corporate website (app/(site)) -----
+   Light, editorial and flat: navy for type, emerald for action, mint and
+   off-white for grounds. Patterns echo the logo: a fine grid (the
+   construction grid of the symbol) and a woven thread (the fabric waves). */
+@layer components {
+  .site-root {
+    font-family: var(--font-plex), system-ui, sans-serif;
+    color: rgb(var(--brand-body));
+    background: #fff;
+    color-scheme: light;
+    font-feature-settings: "ss01";
+  }
+  .site-root :focus-visible {
+    outline: 2px solid rgb(var(--brand-emerald));
+    outline-offset: 3px;
+  }
+  .site-root ::selection { background: rgb(var(--brand-emerald-light)); color: rgb(var(--brand-navy)); }
+
+  .site-hero {
+    background:
+      radial-gradient(60rem 28rem at 85% -10%, rgb(var(--brand-emerald-light) / 0.55), transparent 60%),
+      radial-gradient(40rem 24rem at -10% 0%, rgb(22 50 79 / 0.06), transparent 60%),
+      linear-gradient(to bottom, #fff, rgb(var(--brand-offwhite)));
+  }
+  .site-grid {
+    background-image:
+      linear-gradient(to right, rgb(22 50 79 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(22 50 79 / 0.05) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse at 70% 0%, #000 0%, transparent 70%);
+  }
+  .site-cta {
+    background:
+      radial-gradient(36rem 20rem at 100% 0%, rgb(5 150 105 / 0.35), transparent 60%),
+      linear-gradient(135deg, rgb(var(--brand-navy)), rgb(var(--brand-navy-deep)));
+  }
+  .site-on-dark {
+    background:
+      radial-gradient(40rem 22rem at 90% 0%, rgb(5 150 105 / 0.18), transparent 60%),
+      rgb(var(--brand-navy-deep));
+  }
+  /* Woven thread: two offset wave rows, like the waves in the symbol. */
+  .site-weave {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='28' viewBox='0 0 56 28'%3E%3Cpath d='M0 7q7-6 14 0t14 0t14 0t14 0' fill='none' stroke='%2334D399' stroke-opacity='.16' stroke-width='1.4'/%3E%3Cpath d='M0 21q7-6 14 0t14 0t14 0t14 0' fill='none' stroke='%23FFFFFF' stroke-opacity='.06' stroke-width='1.4'/%3E%3C/svg%3E");
+    mask-image: linear-gradient(to left, #000, transparent 75%);
+  }
+
+  /* Long-form documents: legal, docs, articles. */
+  .site-prose { color: rgb(var(--brand-body)); font-size: 1.02rem; line-height: 1.8; }
+  .site-prose h2 { font-family: var(--font-heading), sans-serif; color: rgb(var(--brand-text)); font-size: 1.55rem; font-weight: 600; letter-spacing: -0.015em; line-height: 1.25; margin: 2.6rem 0 0.9rem; scroll-margin-top: 96px; }
+  .site-prose h3 { font-family: var(--font-heading), sans-serif; color: rgb(var(--brand-text)); font-size: 1.18rem; font-weight: 600; margin: 1.8rem 0 0.6rem; }
+  .site-prose p { margin: 0 0 1.05rem; }
+  .site-prose ul { margin: 0 0 1.2rem; padding-left: 1.25rem; list-style: disc; }
+  .site-prose ol { margin: 0 0 1.2rem; padding-left: 1.25rem; list-style: decimal; }
+  .site-prose li { margin: 0.35rem 0; padding-left: 0.2rem; }
+  .site-prose li::marker { color: rgb(var(--brand-emerald)); }
+  .site-prose a { color: rgb(var(--brand-emerald-ink)); text-decoration: underline; text-underline-offset: 3px; }
+  .site-prose strong { color: rgb(var(--brand-text)); font-weight: 600; }
+  .site-prose code { font-family: var(--font-plex-mono), monospace; font-size: 0.88em; background: rgb(var(--brand-offwhite)); border: 1px solid rgb(var(--brand-border)); border-radius: 4px; padding: 0.05rem 0.35rem; }
+  .site-prose table { width: 100%; border-collapse: collapse; margin: 0 0 1.4rem; font-size: 0.94rem; }
+  .site-prose th, .site-prose td { border-bottom: 1px solid rgb(var(--brand-border)); padding: 0.6rem 0.75rem 0.6rem 0; text-align: left; vertical-align: top; }
+  .site-prose th { color: rgb(var(--brand-text)); font-weight: 600; }
+
+  /* Marked text that still needs confirmation by the company or its lawyers. */
+  .site-tbc { background: rgb(245 158 11 / 0.14); border-bottom: 1px dashed rgb(var(--brand-warning-ink)); color: rgb(var(--brand-warning-ink)); padding: 0 0.2rem; font-weight: 500; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .site-rise { animation: site-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+    .site-rise-2 { animation-delay: 0.08s; }
+    .site-rise-3 { animation-delay: 0.16s; }
+    @keyframes site-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  }
+}

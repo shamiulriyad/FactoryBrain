@@ -209,6 +209,9 @@ export function TourBackdrop() {
         </div>
       )}
 
+      {/* Brand cast over the scene and its posters (navy). */}
+      <div className="fb-tint absolute inset-0" />
+
       {/* Screen-space tags; the scene writes their position every frame. */}
       {showScene && (
         <div className="absolute inset-0">

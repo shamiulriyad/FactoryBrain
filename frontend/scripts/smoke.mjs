@@ -80,7 +80,7 @@ async function main() {
     "src/services/floorAlerts.server.ts",
     "src/store/sensors.store.ts",
     "src/store/floorAlerts.store.ts",
-    "src/store/factoryBrain.live.store.ts",
+    "src/store/bunonBrain.live.store.ts",
     "src/_legacy_api/sensors/ingest/route.ts",
     "src/_legacy_api/sensors/latest/route.ts",
     "src/_legacy_api/floor-alerts/route.ts",
@@ -177,7 +177,7 @@ async function main() {
   assert(latestRoute.includes("listLatestReadings"), "latest reads server ingest buffer");
   assert(!latestRoute.includes("useSensorsStore"), "latest does not import client sensors store");
   const sensorsServer = await read("src/services/sensors.server.ts");
-  assert(sensorsServer.includes("__factoryBrainSimState"), "sensors.server owns shared sim buffer");
+  assert(sensorsServer.includes("__bunonBrainSimState"), "sensors.server owns shared sim buffer");
   assert(sensorsServer.includes("listLatestReadings"), "sensors.server exports listLatestReadings");
   const agentRun = await read("src/_legacy_api/agents/[agentId]/run/route.ts");
   assert(agentRun.includes("persistAgentRun"), "agents/run persists via persistAgentRun");

@@ -2,7 +2,7 @@
 // LEGACY — OFFLINE-ONLY FALLBACK
 //
 // This file used to be the production data plane for /api/ask. Since step 46
-// the ASP.NET Core 9 backend (`FactoryBrain.Api/Services/Rag/`) is the
+// the ASP.NET Core 9 backend (`BunonBrain.Api/Services/Rag/`) is the
 // authoritative RAG path; the Next.js frontend talks to it via the proxy in
 // next.config.mjs. The TypeScript implementation is preserved here for
 // offline tooling, tests, and local demos where the .NET backend is not
@@ -10,7 +10,7 @@
 // docs/rag-research.md for the split rationale.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Chunker for the factoryBrain RAG pipeline.
+// Chunker for the bunonBrain RAG pipeline.
 //
 // Ingest structured knowledge from:
 //   * src/data/manuals.ts       (factory manuals + sensor logs)

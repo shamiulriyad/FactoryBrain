@@ -39,14 +39,14 @@ async function upload(page: Page, file: { name: string; mimeType: string; buffer
   await form.getByTestId("merch-upload-save").click();
 }
 
-test("a Viewer reads merchandising pages but has no write controls, and the API refuses writes", async ({ page }) => {
-  await login(page, "viewer", "/app/merchandising");
+test("a Production Supervisor reads merchandising pages but has no write controls, and the API refuses writes", async ({ page }) => {
+  await login(page, "supervisor", "/app/merchandising");
   await expect(page.getByRole("heading", { name: "Merchandising" })).toBeVisible();
   await expect(page.getByTestId("merch-extraction-status")).toContainText("rule-based label parser (not AI)");
   await expect(page.getByTestId("merch-register")).toHaveCount(0);
   await expect(page.getByTestId("merch-stat-active")).toBeVisible();
 
-  const api = await apiAs("viewer");
+  const api = await apiAs("supervisor");
   expect((await api.post("/api/merchandising/orders", { data: { buyer: "x", buyerOrderNumber: "y" } })).status()).toBe(403);
   const config = await (await api.get("/api/merchandising/config")).json();
   expect(config.extraction.mode).toBe("rules");
@@ -163,7 +163,7 @@ test("a scanned image is kept but reported as needing OCR, and the overview coun
   await expect(page.getByTestId("merch-no-text")).toBeVisible();
 
   await page.goto("/app/merchandising");
-  const api = await apiAs("viewer");
+  const api = await apiAs("supervisor");
   const overview = await (await api.get("/api/merchandising/overview")).json();
   await api.dispose();
   await expect(page.getByTestId("merch-stat-active")).toContainText(String(overview.activeOrders));

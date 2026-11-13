@@ -1,5 +1,5 @@
 /**
- * FactoryBrain homepage tour: copy, detections, floor status and camera
+ * BunonBrain homepage tour: copy, detections, floor status and camera
  * keyframes in one place. Edit words and camera positions here; the 3D
  * scene, the HTML cards and the floor rail all read from this file.
  *
@@ -88,7 +88,7 @@ export const HERO = {
   headlineAccent: "Floor by floor.",
   headlineTail: "In one view.",
   body:
-    "FactoryBrain watches fabric, machines and work in progress on every floor of a garment factory, and tells your team where to look before a small problem becomes a missed shipment.",
+    "BunonBrain watches fabric, machines and work in progress on every floor of a garment factory, and tells your team where to look before a small problem becomes a missed shipment.",
   primaryCta: "Book a demo",
   secondaryCta: "Take the tour",
   skip: "Skip the tour",
@@ -112,8 +112,8 @@ export const FLOOR_SECTIONS: FloorSection[] = [
       example: true,
     },
     detection: {
-      center: [4.5, 1.12, 1.4],
-      size: [0.7, 0.18, 0.5],
+      center: [4.5, 1.45, 1.46],
+      size: [0.7, 0.42, 0.45],
       label: "Slub · 2 pts · roll 118 @ 34.6 m",
       example: true,
     },
@@ -235,7 +235,7 @@ export const HOW_IT_WORKS = {
     {
       title: "Learn",
       body:
-        "For the first weeks FactoryBrain learns what normal looks like for your styles, lines and shifts, so it flags real problems instead of noise.",
+        "For the first weeks BunonBrain learns what normal looks like for your styles, lines and shifts, so it flags real problems instead of noise.",
     },
     {
       title: "Act",
@@ -279,44 +279,39 @@ export const FOV = { desktop: 42, portrait: 64 };
 /** Width / height below which the portrait framing is used. */
 export const PORTRAIT_ASPECT = 0.9;
 
-/** Distance of the drone in front of the glass (glass sits at z = halfDepth). */
-const DRONE_Z = { desktop: 16.4, portrait: 19.5 };
-
 /**
- * Nudges a camera x so the sightline to `focus` doesn't cross the front
- * facade right behind a column. Columns are 0.6 m wide; keep 1.1 m clear.
+ * Where the drone hovers at each floor: just inside the glass, so window
+ * mullions and the front columns are behind it and people and machines are
+ * seen clearly. Floor-to-floor climbs arc back out through the facade.
  */
-export function avoidColumns(camX: number, camZ: number, focus: Vec3): number {
-  const glassZ = BUILDING.halfDepth;
-  const clear = 1.1;
-  let x = camX;
-  for (let i = 0; i < 4; i++) {
-    const t = (camZ - glassZ) / (camZ - focus[2]);
-    const crossX = x + (focus[0] - x) * t;
-    const hit = BUILDING.columnXs.find((c) => Math.abs(crossX - c) < clear);
-    if (hit === undefined) break;
-    // Push the crossing to the nearer side of the column.
-    const dir = crossX >= hit ? 1 : -1;
-    const needed = hit + dir * clear - crossX;
-    x += needed / (1 - t);
+const DRONE_Z = { desktop: BUILDING.halfDepth - 0.7, portrait: BUILDING.halfDepth - 0.7 };
+
+/** Keeps the drone at least 1 m from the front columns it hovers beside. */
+export function avoidColumns(camX: number): number {
+  const clear = 1.0;
+  const limit = BUILDING.halfWidth - 1.2;
+  let x = Math.max(-limit, Math.min(limit, camX));
+  for (const c of BUILDING.columnXs) {
+    if (Math.abs(x - c) < clear) x = c + (x >= c ? 1 : -1) * clear;
   }
-  return x;
+  return Math.max(-limit, Math.min(limit, x));
 }
 
 function floorKey(section: FloorSection): CameraKey {
   const [fx, , fz] = section.detection.center;
   const y0 = floorBase(section.floorIndex);
-  const dx = fx > 0 ? -2.6 : -2.2;
-  const deskX = avoidColumns(fx + dx, DRONE_Z.desktop, section.detection.center);
-  const portX = avoidColumns(fx, DRONE_Z.portrait, section.detection.center);
   return {
     desktop: {
-      pos: [deskX, y0 + 2.75, DRONE_Z.desktop],
-      target: [fx - 2.1, y0 + 1.0, fz - 1],
+      // Left of the subject so it sits right of centre, clear of the card.
+      // Near the ceiling, looking across the floor past the subject, so the
+      // subject sits in the foreground with the rest of the floor behind it.
+      pos: [avoidColumns(fx - 2.4), y0 + 3.1, DRONE_Z.desktop],
+      target: [fx - 1.4, y0 + 0.5, fz - 4],
     },
     portrait: {
-      pos: [portX, y0 + 3.0, DRONE_Z.portrait],
-      target: [fx, y0 - 1.5, fz - 1],
+      // Look below the subject so it sits above the card at the bottom.
+      pos: [avoidColumns(fx), y0 + 3.1, DRONE_Z.portrait],
+      target: [fx, y0 - 0.9, fz - 1.5],
     },
   };
 }
@@ -349,8 +344,8 @@ export function plateauEase(t: number): number {
   return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
 }
 
-/** Sideways (away from the glass) bulge when climbing between floors. */
-const CLIMB_ARC = 3.2;
+/** Bulge out through the glass when climbing between floors. */
+const CLIMB_ARC = 3.6;
 
 /**
  * Camera pose for a continuous progress value p (0..LAST_STEP). Pure maths,
@@ -368,9 +363,11 @@ export function cameraAt(p: number, portrait: boolean, out?: CameraPose): Camera
     res.pos[k] = a.pos[k] + (b.pos[k] - a.pos[k]) * e;
     res.target[k] = a.target[k] + (b.target[k] - a.target[k]) * e;
   }
-  // Floor-to-floor climbs (segments 1→2 … 4→5) arc out from the glass.
+  // Floor-to-floor climbs (segments 1→2 … 4→5) arc out through the glass.
+  // The square root moves the drone outside early, so it is well clear of
+  // the slab edge by the time it rises past the ceiling.
   if (i >= 1 && i <= 4) {
-    const arc = Math.sin(Math.PI * e) * CLIMB_ARC;
+    const arc = Math.sqrt(Math.sin(Math.PI * e)) * CLIMB_ARC;
     res.pos[2] += arc;
     res.target[2] += arc * 0.35;
   }

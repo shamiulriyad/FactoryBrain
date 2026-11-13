@@ -79,7 +79,7 @@ let accessToken = null;
 //   kind:        "en" | "bn" | "nonsense"
 //   expected:    [docId, ...]   — parent doc ids expected in top-3 ragHits
 //
-// The expected ids match `FactoryBrain.Backend/FactoryBrain.Infrastructure/Seed/DbInitializer.cs`
+// The expected ids match `BunonBrain.Backend/BunonBrain.Infrastructure/Seed/DbInitializer.cs`
 // `SeedRmgDemoCorpusAsync` (the IsDemo=true docs that the demo backend
 // seeds). Each demo doc is exercised by at least one English question;
 // the Bangla FAQ is allowed ONLY on rows whose topic is needle breakage

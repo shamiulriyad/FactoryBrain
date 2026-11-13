@@ -22,19 +22,26 @@ function buildStatic() {
   // Pallet stacks of rolls near the receiving door.
   b.block(-15, Y0, -2.5, 2.2, 0.15, 1.8, C.wood);
   b.block(-12.2, Y0, -2.5, 2.2, 0.15, 1.8, C.wood);
-  // Inspection machines: frame, lit table frame, roll arms.
+  // Inspection machines. Fabric runs from the feed roll (low, back) over the
+  // top roller and down the lit, inclined panel that faces the inspector
+  // (+z side), then onto the take-up roll at the front.
   for (const x of MACHINE_XS) {
     const z = MACHINE_Z;
-    for (const sx of [-1.05, 1.05]) {
-      b.block(x + sx, Y0, z - 0.6, 0.1, 1.75, 0.1, C.machineDark);
-      b.block(x + sx, Y0, z + 0.6, 0.1, 0.95, 0.1, C.machineDark);
-      b.box(x + sx, Y0 + 1.0, z, 0.08, 0.08, 1.3, C.machineDark);
+    for (const sx of [-1.12, 1.12]) {
+      b.block(x + sx, Y0, z - 0.55, 0.12, 2.0, 0.12, C.machineDark); // back post
+      b.block(x + sx, Y0, z + 0.5, 0.12, 0.95, 0.12, C.machineDark); // front post
+      b.box(x + sx, Y0 + 0.06, z, 0.14, 0.12, 1.4, C.machineDark); // foot
+      b.box(x + sx, Y0 + 1.42, z - 0.05, 0.1, 0.1, 1.3, C.machineDark, 0, 0.72); // side rail along the panel
     }
-    b.box(x, Y0 + 1.06, z, 2.0, 0.1, 1.15, C.machine, 0, -0.42); // table housing
-    b.block(x - 1.25, Y0, z + 0.2, 0.4, 1.05, 0.5, C.machineDark); // control box
-    // Fabric web: from feed roll over the table to the take-up roll.
-    b.box(x, Y0 + 1.42, z - 0.55, 1.7, 0.01, 0.35, "#4f5d78", 0, -0.9);
-    b.box(x, Y0 + 0.9, z + 0.66, 1.7, 0.01, 0.4, "#4f5d78", 0, 1.1);
+    b.box(x, Y0 + 2.0, z - 0.55, 2.36, 0.1, 0.12, C.machineDark); // top beam
+    b.box(x, Y0 + 1.4, z + 0.02, 2.12, 0.08, 1.2, C.machine, 0, 0.9); // panel housing
+    b.box(x, Y0 + 0.2, z + 0.5, 2.36, 0.08, 0.1, C.machineAccent); // kick rail
+    // Control console on the right, at the inspector's hand.
+    b.block(x + 1.45, Y0, z + 0.45, 0.42, 1.0, 0.36, C.machineDark);
+    b.box(x + 1.45, Y0 + 1.06, z + 0.48, 0.44, 0.1, 0.4, C.machine, 0, 0.5);
+    // Fabric web from the feed roll up the back to the top roller.
+    b.box(x, Y0 + 1.25, z - 0.5, 1.8, 1.45, 0.012, "#5b6f94");
+    b.cyl(x, Y0 + 1.9, z - 0.38, 0.07, 1.95, C.steel, "x", 10);
   }
   // Roll trolley.
   b.block(9.6, Y0 + 0.2, 4.0, 1.6, 0.06, 0.9, C.steel);
@@ -44,7 +51,7 @@ function buildStatic() {
 
 function buildGlow() {
   const b = new Batch();
-  for (const x of MACHINE_XS) b.box(x, Y0 + 1.13, MACHINE_Z, 1.75, 0.02, 0.95, C.litTable, 0, -0.42);
+  for (const x of MACHINE_XS) b.box(x, Y0 + 1.435, MACHINE_Z + 0.06, 1.95, 0.02, 1.08, C.litTable, 0, 0.9);
   return b.build();
 }
 
@@ -76,15 +83,17 @@ const ROLLS: InstItem[] = (() => {
 
 /* Feed and take-up rolls rotate; index 2k is feed, 2k+1 take-up. */
 const MACHINE_ROLLS: InstItem[] = MACHINE_XS.flatMap((x) => [
-  { p: [x, Y0 + 1.62, MACHINE_Z - 0.78], s: [1.75, 0.2, 0.2], c: "#4f5d78" },
-  { p: [x, Y0 + 0.62, MACHINE_Z + 0.82], s: [1.75, 0.24, 0.24], c: "#4f5d78" },
+  { p: [x, Y0 + 0.5, MACHINE_Z - 0.62], s: [1.85, 0.26, 0.26], c: "#5b6f94" },
+  { p: [x, Y0 + 0.72, MACHINE_Z + 0.62], s: [1.85, 0.2, 0.2], c: "#5b6f94" },
 ]) as InstItem[];
 
 const PEOPLE: PersonSpec[] = [
-  ...MACHINE_XS.map((x) => ({ x: x + 0.55, z: MACHINE_Z + 1.25, y0: Y0 })),
-  { x: -13.6, z: -1.1, y0: Y0 },
-  { x: 8.7, z: 4.9, y0: Y0 },
-  { x: -6.2, z: -7.6, y0: Y0 },
+  // Inspector in front of each lit panel, a helper loading rolls at the back.
+  ...MACHINE_XS.map((x) => ({ x: x + 0.75, z: MACHINE_Z + 1.15, y0: Y0, face: Math.PI - 0.25 })),
+  ...MACHINE_XS.map((x) => ({ x: x - 0.7, z: MACHINE_Z - 1.25, y0: Y0, face: 0.2 })),
+  { x: -13.6, z: -1.1, y0: Y0, face: Math.PI },
+  { x: 8.7, z: 4.9, y0: Y0, face: -0.8 },
+  { x: -6.2, z: -7.6, y0: Y0, face: Math.PI },
 ];
 
 export function FloorG() {

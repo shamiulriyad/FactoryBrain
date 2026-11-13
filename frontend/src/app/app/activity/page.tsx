@@ -17,7 +17,8 @@ import { SkeletonRows } from "@/components/ui/Status";
 import { useToast } from "@/components/ui/Toast";
 import { useResource, useOnDataChanged } from "@/lib/useResource";
 import { errorMessage } from "@/lib/api";
-import { canOperate, useAuthStore } from "@/lib/auth";
+import { useCan } from "@/lib/auth";
+import { P } from "@/lib/access";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { markAlertRead, setUnreadFrom } from "@/services/floorAlerts.api";
@@ -30,7 +31,7 @@ const PAGE_SIZE = 25;
 export default function FloorAlertsPage() {
   const { t, locale } = useT();
   const toast = useToast();
-  const operator = canOperate(useAuthStore((s) => s.user));
+  const operator = useCan(P.MonitoringAlertsReview, P.ProductionAlertsReview);
   const alerts = useResource<FloorAlertList>("/api/floor-alerts", { pollMs: 10_000 });
   useOnDataChanged(() => void alerts.reload());
 

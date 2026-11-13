@@ -22,6 +22,9 @@ function buildStatic() {
       b.block(x - 0.5, Y0, z, 0.05, 0.72, 0.56, C.steelDark);
       b.block(x + 0.5, Y0, z, 0.05, 0.72, 0.56, C.steelDark);
       b.block(x, Y0, z - 0.72, 0.42, 0.44, 0.38, C.steelDark); // stool
+      b.block(x + 0.28, Y0 + 0.5, z + 0.05, 0.26, 0.2, 0.22, C.machineDark); // motor under the table
+      b.block(x + 0.48, Y0 + 0.76, z + 0.2, 0.025, 0.5, 0.025, C.steel); // thread stand
+      b.cyl(x + 0.48, Y0 + 1.2, z + 0.2, 0.05, 0.1, C.thread, "y", 8); // cone of thread
     }
     // Andon pole at the line end.
     b.block(10.6, Y0, z, 0.06, 2.3, 0.06, C.steelDark);
@@ -88,9 +91,9 @@ const BUNDLES: InstItem[] = (() => {
 
 const PEOPLE: PersonSpec[] = [
   ...LINE_ZS.flatMap((z) => Array.from({ length: STATIONS }, (_, j) => ({ x: stationX(j), z: z - 0.72, y0: Y0, seated: true }))),
-  { x: -13.2, z: 3.6, y0: Y0 },
-  { x: 9.2, z: -2.0, y0: Y0 },
-  { x: 6.4, z: 4.2, y0: Y0 },
+  { x: -13.2, z: 3.6, y0: Y0, face: -Math.PI / 2 },
+  { x: 9.2, z: -2.0, y0: Y0, face: -2.2 },
+  { x: 6.4, z: 4.2, y0: Y0, face: Math.PI / 2 },
 ];
 
 export function Floor2() {

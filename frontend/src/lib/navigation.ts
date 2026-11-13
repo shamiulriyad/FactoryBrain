@@ -28,7 +28,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { KeyRound, ShieldHalf, UserCircle2, UserCog, Building2, IdCard, Inbox } from "lucide-react";
+import { KeyRound, ShieldHalf, UserCircle2, UserCog, Building2, IdCard, Inbox, Globe } from "lucide-react";
 import { P } from "@/lib/access";
 
 export type FloorId = "fabric" | "cutting" | "sewing" | "qc" | "packing";
@@ -137,6 +137,7 @@ export const ADMIN_GROUP: NavGroup = {
     { id: "admin-roles", labelKey: "nav.roles", href: "/app/admin/roles", icon: ShieldHalf, perms: [P.RolesView], keywords: "roles rbac access" },
     { id: "admin-permissions", labelKey: "nav.permissions", href: "/app/admin/permissions", icon: KeyRound, perms: [P.RolesView], keywords: "permissions matrix rbac" },
     { id: "admin-factories", labelKey: "nav.factories", href: "/app/admin/factories", icon: Building2, perms: [P.FactoriesManage, P.LinesManage], keywords: "factory factories tenant lines" },
+    { id: "admin-website", labelKey: "nav.website", href: "/app/admin/website", icon: Globe, perms: [P.PlatformSettingsManage], keywords: "website homepage hero photo image rotation public site" },
     { id: "admin-inquiries", labelKey: "nav.inquiries", href: "/app/admin/inquiries", icon: Inbox, perms: [P.InquiriesManage], keywords: "website inquiries demo requests contact support leads messages" },
   ],
 };

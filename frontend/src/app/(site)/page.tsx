@@ -2,6 +2,9 @@ import Link from "next/link";
 import { ArrowRight, Box, Languages, ScrollText, ShieldCheck, Users2, Workflow } from "lucide-react";
 import { ButtonLink, Card, CheckList, Container, CtaBand, Eyebrow, IconTile, Section, SectionHeader, StatusBadge } from "@/components/site/ui";
 import { FaqList, PlatformDiagram, ScreenFrame, Steps } from "@/components/site/visuals";
+import { HeroVisual } from "@/components/site/HeroVisual";
+import { resolveHero } from "@/content/site/heroMedia";
+import { getHeroSettings } from "@/lib/site/heroSettings";
 import { FAQS } from "@/content/site/faqs";
 import { MODULES } from "@/content/site/modules";
 import { SOLUTIONS } from "@/content/site/solutions";
@@ -34,7 +37,9 @@ const WHY = [
   { icon: ScrollText, title: "Numbers you can trace", body: "Efficiency, WIP, DHU and delivery risk calculated from records, with nothing estimated or filled in." },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Which photo(s) the hero shows is a setting (Administration → Website), not code.
+  const hero = resolveHero(await getHeroSettings());
   const capabilities = MODULES.slice(0, 9);
   return (
     <>
@@ -64,7 +69,7 @@ export default function HomePage() {
           </div>
           <div className="site-rise site-rise-2 relative">
             <div aria-hidden className="absolute -inset-6 -z-0 rounded-[2rem] bg-gradient-to-br from-brand-emerald-light/70 via-white/0 to-brand-navy/[0.06] blur-2xl" />
-            <ScreenFrame src="/site/screens/overview.jpg" alt="BunonBrain floor overview: lines below target, mean line efficiency, machines down, pending decisions and the line status board, on simulated data" priority className="relative" />
+            <HeroVisual {...hero} />
           </div>
         </Container>
       </section>

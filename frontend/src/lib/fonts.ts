@@ -1,4 +1,4 @@
-import { Big_Shoulders_Display, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import { Big_Shoulders_Display, IBM_Plex_Mono, IBM_Plex_Sans, Outfit } from "next/font/google";
 
 /**
  * BunonBrain typefaces, shared by the marketing homepage and the app
@@ -41,6 +41,19 @@ export const plexMono = IBM_Plex_Mono({
   variable: "--font-plex-mono",
   display: "swap",
   // Labels only; never the LCP element.
+  preload: false,
+});
+
+/**
+ * Outfit: the geometric sans the BunonBrain wordmark is drawn from. The logo
+ * itself is outlined (components/brand/logoPaths.ts); this font is only
+ * loaded on the brand page, for the type specimen.
+ */
+export const wordmarkFont = Outfit({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  variable: "--font-wordmark",
+  display: "swap",
   preload: false,
 });
 

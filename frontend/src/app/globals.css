@@ -64,6 +64,9 @@
   /* Dark: the brand on deep navy. */
   :root {
     color-scheme: dark;
+    /* Logo colours (components/brand/Logo.tsx, tone="auto"). */
+    --logo-ink: #FFFFFF;
+    --logo-accent: #34D399;
 
     --bg-canvas: #0D1E31;                         /* deep navy × 0.8 */
     --bg-sidebar: rgb(var(--brand-navy-deep));
@@ -186,6 +189,8 @@
 
   /* Light (default): white and off-white surfaces, navy type, emerald accent. */
   html.light {
+    --logo-ink: #16324F;
+    --logo-accent: #059669;
     color-scheme: light;
 
     --bg-canvas: rgb(var(--brand-offwhite));

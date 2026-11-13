@@ -8,6 +8,7 @@ import { BUILDING, floorBase } from "@/lib/tour";
 import { tourState } from "@/lib/tourStore";
 import { Batch, Inst, StaticMesh, geoBox, type InstItem } from "./geom";
 import { C } from "./palette";
+import { LOCKUP, LOGO_COLORS, SYMBOL_BODY, SYMBOL_HOOK, SYMBOL_WAVES, WORDMARK } from "@/components/brand/logoPaths";
 
 const H = BUILDING.floorHeight;
 const HW = BUILDING.halfWidth;
@@ -87,7 +88,7 @@ function buildStructure() {
   b.cyl(-14, ROOF + 3.8, 6.5, 1.15, 0.1, "#b9bdbf", "y", 12, 0.3);
   // Roof sign frame (the letters are a separate textured plane).
   for (const x of [-3.5, 3.5]) b.block(x, ROOF + 1.0, HD - 0.3, 0.14, 1.4, 0.14, C.steelDark);
-  b.box(0, ROOF + 2.95, HD - 0.36, 12.6, 1.9, 0.1, "#10263d");
+  b.box(0, ROOF + 2.95, HD - 0.36, 12.6, 1.9, 0.1, "#10263D");
   return b.build();
 }
 
@@ -124,21 +125,39 @@ const SOLAR: InstItem[] = (() => {
   return items;
 })();
 
+/** Rooftop sign: the BunonBrain logo (on-dark version) on deep navy. */
 function makeSignTexture(): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = 1024;
   canvas.height = 160;
   const ctx = canvas.getContext("2d")!;
-  const host = document.querySelector(".fb-home");
-  const family = host ? getComputedStyle(host).getPropertyValue("--font-display").trim() : "";
-  ctx.fillStyle = "#10263d";
+  ctx.fillStyle = LOGO_COLORS.navyDeep;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#ffffff";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = `800 118px ${family || "Impact, 'Arial Narrow', sans-serif"}`;
-  if ("letterSpacing" in ctx) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = "10px";
-  ctx.fillText("BUNONBRAIN", canvas.width / 2, canvas.height / 2 + 6);
+  // Fit the horizontal logo (LOCKUP units) into the sign with a margin.
+  const h = 116;
+  const k = h / LOCKUP.height;
+  const w = LOCKUP.width * k;
+  ctx.save();
+  ctx.translate((canvas.width - w) / 2, (canvas.height - h) / 2);
+  ctx.scale(k, k);
+  ctx.translate(-4, -2);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = LOGO_COLORS.white;
+  ctx.lineWidth = 3;
+  ctx.stroke(new Path2D(SYMBOL_HOOK));
+  ctx.lineWidth = 4;
+  ctx.stroke(new Path2D(SYMBOL_BODY));
+  ctx.strokeStyle = LOGO_COLORS.emeraldOnDark;
+  ctx.lineWidth = 2.4;
+  SYMBOL_WAVES.forEach((d) => ctx.stroke(new Path2D(d)));
+  ctx.translate(LOCKUP.wordmarkX, LOCKUP.baselineY);
+  ctx.scale(LOCKUP.wordmarkScale, LOCKUP.wordmarkScale);
+  ctx.fillStyle = LOGO_COLORS.white;
+  ctx.fill(new Path2D(WORDMARK.bunon));
+  ctx.fillStyle = LOGO_COLORS.emeraldOnDark;
+  ctx.fill(new Path2D(WORDMARK.brain));
+  ctx.restore();
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;

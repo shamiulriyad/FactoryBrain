@@ -47,7 +47,7 @@ export function AuthPage({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-[100dvh] grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] bg-canvas">
       <aside className="hidden lg:flex flex-col justify-between bg-[var(--bench)] text-[var(--bench-fg)] p-10 xl:p-14">
-        <BrandMark size={34} framed withWordmark className="[&_*]:!text-white" />
+        <BrandMark size={38} framed withWordmark tone="onDark" />
         <div className="max-w-md">
           <p className="text-[30px] leading-[38px] font-semibold tracking-tight text-white">
             The operations layer for your garment floor.
@@ -55,7 +55,7 @@ export function AuthPage({ children }: { children: React.ReactNode }) {
           <ul className="mt-8 space-y-5">
             {POINTS.map((p) => (
               <li key={p.title} className="flex gap-3">
-                <span className="mt-0.5 size-8 shrink-0 rounded-lg bg-white/10 text-[var(--accent)] inline-flex items-center justify-center">
+                <span className="mt-0.5 size-8 shrink-0 rounded-lg bg-white/10 text-[rgb(var(--brand-emerald-on-dark))] inline-flex items-center justify-center">
                   <p.icon size={16} />
                 </span>
                 <span>

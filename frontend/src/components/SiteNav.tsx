@@ -7,7 +7,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, LayoutGrid, LogIn, Menu, X } from "lucide-react";
-import { LogoMark } from "@/components/SiteLogo";
+import { Logo } from "@/components/brand/Logo";
 import { refreshSession, useAuthStore } from "@/lib/auth";
 
 const LINKS = [
@@ -100,10 +100,9 @@ export function SiteNav() {
       data-testid="site-nav"
     >
       <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-4 px-4 md:px-8">
-        <a href="#top" className="inline-flex min-h-11 shrink-0 items-center gap-2.5" aria-label="BunonBrain, back to top" onClick={() => setOpen(false)}>
-          <LogoMark />
-          <span className="font-display text-[1.4rem] font-bold tracking-[0.02em]">BunonBrain</span>
-        </a>
+        <Link href="/" className="inline-flex min-h-11 shrink-0 items-center gap-2.5" aria-label="BunonBrain home" onClick={() => setOpen(false)}>
+          <Logo height={34} />
+        </Link>
 
         <nav aria-label="Main" className="ml-6 hidden md:block">
           <ul className="flex items-center gap-1">

@@ -47,6 +47,7 @@ public static class EndpointMatrix
         ("POST",  "/api/auth/forgot-password",  Anon),
         ("POST",  "/api/auth/reset-password",   Anon),
         ("POST",  "/api/inquiries",             Anon),
+        ("GET",   "/api/site-settings/hero",    Anon),
 
         // Any signed-in user: identity and own account only.
         ("GET",   "/",                          Auth),
@@ -87,6 +88,7 @@ public static class EndpointMatrix
         ("GET",   "/api/audit",                       G(P.AuditView)),
         ("GET",   "/api/inquiries",                   G(P.InquiriesManage)),
         ("PATCH", "/api/inquiries/{id}",              G(P.InquiriesManage)),
+        ("PUT",   "/api/site-settings/hero",          G(P.PlatformSettingsManage)),
 
         // Knowledge & AI.
         ("POST",  "/api/ask",                   G(P.KnowledgeView)),

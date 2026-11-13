@@ -2705,6 +2705,28 @@ namespace BunonBrain.Infrastructure.Migrations
                     b.ToTable("sensor_readings", (string)null);
                 });
 
+            modelBuilder.Entity("BunonBrain.Domain.Entities.SiteSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("UpdatedByEmail")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
+                    b.Property<string>("ValueJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("site_settings", (string)null);
+                });
+
             modelBuilder.Entity("BunonBrain.Domain.Entities.StyleOperation", b =>
                 {
                     b.Property<Guid>("Id")

@@ -636,12 +636,27 @@
 .driver-popover.bunonbrain-tour .driver-popover-description { color: var(--fg-secondary); }
 
 /* ----- BunonBrain marketing homepage -----
-   Navy hero / tour / footer, white and off-white content sections. Every
-   fb-* colour reads a --home-* token; .fb-light / .fb-offwhite flip those
-   tokens for a section, so components never branch on the background. */
+   Daylight hero and 3D tour (navy text on white glass cards), white and
+   off-white content sections, navy footer. Every fb-* colour reads a
+   --home-* token; .fb-light / .fb-offwhite / .fb-dark set those tokens for
+   a section, so components never branch on the background. */
 @layer base {
   .fb-home {
-    /* Dark scope (navy): hero, 3D tour, footer. */
+    /* Default scope (daylight): hero and 3D tour over a bright sky. */
+    --home-ink: var(--brand-white);
+    --home-text: var(--brand-text);
+    --home-muted: var(--brand-muted);
+    --home-line: rgb(var(--brand-border));
+    --home-card: rgba(255, 255, 255, 0.93);
+    --home-field: rgb(var(--brand-white));
+    --home-lamp: var(--brand-emerald-ink);
+    --home-thread: var(--brand-error);
+    --home-warn: var(--brand-warning-ink);
+    --home-ok: var(--brand-success-ink);
+    --home-focus: rgb(var(--brand-emerald));
+  }
+  .fb-dark {
+    /* Navy scope: footer. */
     --home-ink: var(--brand-navy-deep);
     --home-text: var(--brand-white);
     --home-muted: var(--brand-muted-on-dark);
@@ -653,6 +668,7 @@
     --home-warn: var(--brand-warning);
     --home-ok: var(--brand-success-on-dark);
     --home-focus: rgb(var(--brand-emerald-on-dark));
+    color: rgb(var(--home-text));
   }
   .fb-light,
   .fb-offwhite {
@@ -675,7 +691,7 @@
 
   html:has(.fb-home),
   html:has(.fb-home) body {
-    background: rgb(var(--brand-navy-deep));
+    background: #eef4f9;
     color-scheme: light;
   }
   html:has(.fb-home) {
@@ -708,37 +724,37 @@
 }
 
 @layer components {
-  /* Navy sky behind the transparent canvas; its lower band matches the scene fog. */
+  /* Clear daytime sky behind the transparent canvas; its lower band matches the scene fog. */
   .fb-sky {
     background: linear-gradient(
       to bottom,
-      #0A1A2B 0%,
-      rgb(var(--brand-navy-deep)) 30%,
-      rgb(var(--brand-navy)) 58%,
-      #2C4560 78%,
-      #2C4560 100%
+      #9cc3e4 0%,
+      #bcd7ee 35%,
+      #d6e6f3 62%,
+      #dfe9f2 80%,
+      #dfe9f2 100%
     );
   }
-  /* Even navy cast over the scene and its posters so the 3D tour matches the brand. */
+  /* A very light haze so the scene and its posters sit softly behind the cards. */
   .fb-tint {
-    background: rgb(var(--brand-navy-deep) / 0.28);
+    background: rgb(255 255 255 / 0.06);
   }
-  /* Scrim so hero text always sits on a dark ground (contrast >= 4.5:1). */
+  /* Light scrim so the navy hero text always reads (contrast >= 4.5:1). */
   .fb-hero-scrim {
     background: linear-gradient(
       to bottom,
-      rgb(var(--brand-navy-deep) / 0.94) 0%,
-      rgb(var(--brand-navy-deep) / 0.86) 48%,
-      rgb(var(--brand-navy-deep) / 0) 72%
+      rgb(255 255 255 / 0.94) 0%,
+      rgb(255 255 255 / 0.86) 48%,
+      rgb(255 255 255 / 0) 72%
     );
   }
   @media (min-width: 768px) {
     .fb-hero-scrim {
       background: linear-gradient(
         to right,
-        rgb(var(--brand-navy-deep) / 0.95) 0%,
-        rgb(var(--brand-navy-deep) / 0.86) 34%,
-        rgb(var(--brand-navy-deep) / 0) 60%
+        rgb(255 255 255 / 0.95) 0%,
+        rgb(255 255 255 / 0.85) 34%,
+        rgb(255 255 255 / 0) 60%
       );
     }
   }

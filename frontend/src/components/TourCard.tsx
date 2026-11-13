@@ -2,7 +2,7 @@ import { FLOOR_STATUS, type FloorSection, type OverviewSection, type Pill, type 
 
 const PILL_STYLE: Record<Pill, string> = {
   OK: "border-fb-ok/60 text-fb-ok",
-  Watch: "border-fb-lamp/70 text-fb-lamp",
+  Watch: "border-fb-warn/70 text-fb-warn",
   Act: "border-fb-thread/80 text-fb-thread",
 };
 
@@ -17,7 +17,7 @@ export function StatusPill({ pill }: { pill: Pill }) {
 }
 
 const cardBase =
-  "pointer-events-auto w-full rounded-[4px] border border-fb-line bg-fb-card p-5 backdrop-blur-md md:max-w-[27rem] md:p-7";
+  "pointer-events-auto w-full rounded-[6px] border border-fb-line bg-fb-card p-5 shadow-[0_10px_30px_rgba(16,38,61,0.14)] backdrop-blur-md md:max-w-[27rem] md:p-7";
 
 function FloorCard({ section }: { section: FloorSection }) {
   const titleId = `tour-${section.step}-title`;

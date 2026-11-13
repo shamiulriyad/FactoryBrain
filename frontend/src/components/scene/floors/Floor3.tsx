@@ -95,7 +95,7 @@ function railPose(s: number, out: InstItem) {
 const PEOPLE: PersonSpec[] = [
   ...QC_XS.map((x) => ({ x, z: QC_Z - 0.85, y0: Y0 })),
   ...Array.from({ length: 8 }, (_, k) => ({ x: -14 + k * 3.6, z: IRON_Z - 0.6, y0: Y0 })),
-  { x: 1.2, z: 2.4, y0: Y0 },
+  { x: 1.2, z: 2.4, y0: Y0, face: -Math.PI / 2 },
 ];
 
 export function Floor3() {

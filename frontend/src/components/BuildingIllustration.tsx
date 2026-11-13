@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { FLOOR_STATUS, LAST_STEP } from "@/lib/tour";
 import { subscribeTour, tourState } from "@/lib/tourStore";
 
-const PILL_COLOR = { OK: "#8fc9a8", Watch: "#f2c27a", Act: "#ff6b45" } as const;
+const PILL_COLOR = { OK: "rgb(var(--home-ok))", Watch: "rgb(var(--home-warn))", Act: "rgb(var(--home-thread))" } as const;
 
 /**
  * Static elevation drawing used when WebGL is unavailable. The current
@@ -33,27 +33,27 @@ export function BuildingIllustration() {
       aria-hidden="true"
       focusable="false"
     >
-      <rect x="20" y={groundY} width="380" height="16" rx="2" fill="#2a2d2c" />
-      <rect x="60" y={groundY - 2} width={W} height="4" fill="#4c4e52" />
+      <rect x="20" y={groundY} width="380" height="16" rx="2" fill="#9fb08f" />
+      <rect x="60" y={groundY - 2} width={W} height="4" fill="#c9c6bd" />
       {/* Roof: parapet, sign, tank. */}
-      <rect x="60" y={top - 10} width={W} height="10" fill="#64666a" />
-      <rect x="150" y={top - 34} width="120" height="18" fill="#191d22" />
-      <text x="210" y={top - 21} textAnchor="middle" fontSize="11" fontWeight="700" letterSpacing="2" fill="#f2c27a" fontFamily="var(--font-display), sans-serif">
-        FACTORYBRAIN
+      <rect x="60" y={top - 10} width={W} height="10" fill="#b8b5ad" />
+      <rect x="150" y={top - 34} width="120" height="18" fill="#10263d" />
+      <text x="210" y={top - 21} textAnchor="middle" fontSize="11" fontWeight="700" letterSpacing="2" style={{ fill: "#ffffff" }} fontFamily="var(--font-display), sans-serif">
+        BUNONBRAIN
       </text>
-      <rect x="78" y={top - 34} width="20" height="24" fill="#7c8183" />
+      <rect x="78" y={top - 34} width="20" height="24" fill="#d4d7d8" />
       {floors.map((i) => {
         const y = groundY - (i + 1) * FH;
         const isOn = step === i + 1;
         const status = FLOOR_STATUS.find((s) => s.floor === (i === 0 ? "G" : String(i)))!;
         return (
           <g key={i}>
-            <rect x="60" y={y} width={W} height={FH} fill={isOn ? "#3a4a4f" : "#2b3640"} />
-            <rect x="60" y={y + FH - 5} width={W} height="5" fill="#55585d" />
+            <rect x="60" y={y} width={W} height={FH} fill={isOn ? "#e8f3ee" : "#cfdfea"} />
+            <rect x="60" y={y + FH - 5} width={W} height="5" fill="#c4c1ba" />
             {Array.from({ length: 13 }, (_, k) => (
-              <rect key={k} x={60 + k * 25} y={y} width="1.5" height={FH - 5} fill="#1d232a" />
+              <rect key={k} x={60 + k * 25} y={y} width="1.5" height={FH - 5} fill="#a7b0b8" />
             ))}
-            <rect x="64" y={y + 4} width={W - 8} height="2" fill={isOn ? "#ffe3b3" : "#c9b48d"} opacity={isOn ? 1 : 0.5} />
+            <rect x="64" y={y + 4} width={W - 8} height="2" fill={isOn ? "#ffffff" : "#f4f1e8"} opacity={isOn ? 1 : 0.7} />
             {(isOn || all) && (
               <>
                 <rect
@@ -61,16 +61,15 @@ export function BuildingIllustration() {
                   y={y + 18}
                   width="34"
                   height="22"
-                  fill="rgba(255,107,69,0.15)"
-                  stroke="#ff6b45"
+                  style={{ fill: "rgb(var(--home-thread) / 0.15)", stroke: "rgb(var(--home-thread))" }}
                   strokeWidth="1.5"
                 />
                 {all && (
-                  <circle cx={340} cy={y + FH / 2 - 2} r="5" fill={PILL_COLOR[status.pill]} />
+                  <circle cx={340} cy={y + FH / 2 - 2} r="5" style={{ fill: PILL_COLOR[status.pill] }} />
                 )}
               </>
             )}
-            <text x="44" y={y + FH / 2 + 2} textAnchor="end" fontSize="13" fill={isOn ? "#f2c27a" : "#a4a9af"} fontFamily="var(--font-plex-mono), monospace">
+            <text x="44" y={y + FH / 2 + 2} textAnchor="end" fontSize="13" style={{ fill: isOn ? "rgb(var(--home-lamp))" : "rgb(var(--home-muted))" }} fontFamily="var(--font-plex-mono), monospace">
               {i === 0 ? "G" : i}
             </text>
           </g>

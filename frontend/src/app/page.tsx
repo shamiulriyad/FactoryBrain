@@ -10,15 +10,15 @@ import { TOUR_SECTIONS } from "@/lib/tour";
 import { fontVariables } from "@/lib/fonts";
 
 export const metadata: Metadata = {
-  title: "FactoryBrain: your whole garment factory, floor by floor",
+  title: "BunonBrain: your whole garment factory, floor by floor",
   description:
-    "FactoryBrain uses cameras, machine data and analytics to catch problems in fabric inspection, cutting, sewing, QC, inventory and shipment.",
-  applicationName: "FactoryBrain",
+    "BunonBrain uses cameras, machine data and analytics to catch problems in fabric inspection, cutting, sewing, QC, inventory and shipment.",
+  applicationName: "BunonBrain",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f141b",
-  colorScheme: "dark",
+  themeColor: "#ffffff",
+  colorScheme: "light",
 };
 
 export default function HomePage() {

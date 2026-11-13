@@ -6,6 +6,7 @@ using BunonBrain.Application.Qc;
 using BunonBrain.Application.Workers;
 using BunonBrain.Domain.Entities;
 using BunonBrain.Infrastructure.Access;
+using BunonBrain.Infrastructure.Assignments;
 using BunonBrain.Infrastructure.Persistence;
 using BunonBrain.Infrastructure.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
@@ -152,6 +153,10 @@ public sealed partial class WorkerService : IWorkerService
             var exact = OrganizationService.Like(q.Designation.Trim());
             workers = workers.Where(w => w.Designation != null && EF.Functions.ILike(w.Designation, exact, "\\"));
         }
+        if (q.Assigned is { } assigned)
+            workers = assigned
+                ? workers.Where(w => _db.Assignments.Any(a => a.WorkerId == w.Id && a.EndAt == null))
+                : workers.Where(w => !_db.Assignments.Any(a => a.WorkerId == w.Id && a.EndAt == null));
         if (employment && !string.IsNullOrWhiteSpace(q.EmploymentType))
         {
             var type = EmploymentTypes.Parse(q.EmploymentType);
@@ -245,7 +250,11 @@ public sealed partial class WorkerService : IWorkerService
             ManageCards: manage,
             AllowedStatuses: manage ? WorkerStatusTransitions.AllowedFrom(w.Status) : Array.Empty<string>());
 
-        return AccessResult<WorkerProfileDto>.Ok(new WorkerProfileDto(dto, factory, Machine: null, account, cards, history, ActivityPlaceholders, can));
+        var machine = await (from a in _db.Assignments.AsNoTracking()
+                             join m in _db.Machines.AsNoTracking() on a.MachineId equals m.Id
+                             where a.WorkerId == id && a.EndAt == null
+                             select m.MachineType == null ? m.Code : m.Code + " · " + m.MachineType).FirstOrDefaultAsync(ct);
+        return AccessResult<WorkerProfileDto>.Ok(new WorkerProfileDto(dto, factory, machine, account, cards, history, ActivityPlaceholders, can));
     }
 
     /// <summary>
@@ -256,7 +265,6 @@ public sealed partial class WorkerService : IWorkerService
     {
         Section("attendance", "Attendance history", "Appears when the attendance module is connected."),
         Section("shifts", "Shift history", "Appears when shift management is connected."),
-        Section("workstationAssignments", "Workstation assignment history", "Appears when workstation management is connected."),
         Section("activityTimeline", "Activity timeline", "Appears when floor monitoring is connected."),
         Section("breaks", "Break history", "Appears when the attendance module is connected."),
         Section("overtime", "Overtime history", "Appears when overtime management is connected."),
@@ -351,7 +359,6 @@ public sealed partial class WorkerService : IWorkerService
             DepartmentId = r.DepartmentId,
             FloorId = r.FloorId,
             LineId = Clean(r.LineId),
-            Workstation = Clean(r.LineId) is null ? null : Clean(r.Workstation),
             CreatedByUserId = caller.UserId,
             CreatedAt = now,
             UpdatedAt = now,
@@ -435,6 +442,9 @@ public sealed partial class WorkerService : IWorkerService
         Set("floor", w.FloorId, r.FloorId, v => w.FloorId = v);
         if (lineId != w.LineId)
         {
+            if (await _db.Assignments.AnyAsync(a => a.WorkerId == id && a.EndAt == null, ct))
+                return AccessResult<WorkerDto>.Conflict("worker_has_assignment",
+                    "This worker has an active workstation assignment. Transfer the worker to change the line.");
             changed.Add("line");
             w.LineId = lineId;
             w.Workstation = null; // a workstation belongs to a line
@@ -546,9 +556,18 @@ public sealed partial class WorkerService : IWorkerService
                 cardsEnded = cards.Count;
             }
 
+            // Only active workers hold workstations: the assignment ends with the status change.
+            var assignmentsEnded = 0;
+            if (to != WorkerStatuses.Active)
+            {
+                assignmentsEnded = await AssignmentService.EndForWorkerStatusAsync(_db, caller, w.Id, to, now, traceId, ct);
+                if (assignmentsEnded > 0) w.Workstation = null;
+            }
+
             _db.AuditLog.Add(AccessAudit.Entry(caller.Actor, "worker.status_changed", AccessAudit.EntityWorker, w.Id.ToString(), from, to,
                 $"worker {w.WorkerCode}: {from} → {to}{(reason is null ? "" : $": {reason}")}"
                 + (cardsEnded > 0 ? $"; {cardsEnded} card(s) deactivated" : "")
+                + (assignmentsEnded > 0 ? $"; {assignmentsEnded} workstation assignment(s) ended" : "")
                 + (WorkerStatuses.IsSeparated(to) && w.UserId is not null ? "; a login account is still linked" : ""),
                 traceId, w.FactoryId));
             await _db.SaveChangesAsync(ct);
@@ -565,18 +584,22 @@ public sealed partial class WorkerService : IWorkerService
         var w = await _db.Workers.FirstAsync(x => x.Id == id, ct);
         if (WorkerStatuses.IsSeparated(w.Status))
             return AccessResult<WorkerDto>.Conflict("worker_separated", $"This worker is {w.Status} and can't be assigned to a workstation.");
+        // Workstations are assigned through /api/assignments (capacity, history, transfers). This endpoint only sets the line.
+        if (!string.IsNullOrWhiteSpace(r.Workstation))
+            return AccessResult<WorkerDto>.Invalid("use_assignments", "Assign a workstation with POST /api/assignments (or transfer the worker); this endpoint only sets the line.");
+        if (await _db.Assignments.AnyAsync(a => a.WorkerId == id && a.EndAt == null, ct))
+            return AccessResult<WorkerDto>.Conflict("worker_has_assignment", "This worker has an active workstation assignment. Transfer the worker instead.");
         var lineId = Clean(r.LineId);
         var lineError = await CheckLineAsync(caller, w.FactoryId, lineId, ct);
         if (lineError is not null) return lineError;
         // A supervisor can't move a worker off their lines to one they don't run.
         if (caller.IsLineScoped && lineId is null)
             return AccessResult<WorkerDto>.Forbidden("line_out_of_scope", "Choose one of your lines.");
-        var from = $"{w.LineId ?? "-"}/{w.Workstation ?? "-"}";
+        var from = w.LineId ?? "-";
         w.LineId = lineId;
-        w.Workstation = lineId is null ? null : Clean(r.Workstation);
         w.UpdatedAt = DateTimeOffset.UtcNow;
-        _db.AuditLog.Add(AccessAudit.Entry(caller.Actor, "worker.workstation_assigned", AccessAudit.EntityWorker, w.Id.ToString(),
-            from, $"{w.LineId ?? "-"}/{w.Workstation ?? "-"}", $"worker {w.WorkerCode} moved", traceId, w.FactoryId));
+        _db.AuditLog.Add(AccessAudit.Entry(caller.Actor, "worker.line_changed", AccessAudit.EntityWorker, w.Id.ToString(),
+            from, w.LineId ?? "-", $"worker {w.WorkerCode} moved to line {w.LineId ?? "(none)"}", traceId, w.FactoryId));
         await _db.SaveChangesAsync(ct);
         return AccessResult<WorkerDto>.Ok(await DtoAsync(caller, id, ct));
     }

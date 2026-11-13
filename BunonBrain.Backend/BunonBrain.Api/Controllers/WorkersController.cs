@@ -36,9 +36,10 @@ public class WorkersController : ControllerBase
     [RequirePermission(Permissions.WorkersView)]
     public async Task<IActionResult> List([FromQuery] string? search, [FromQuery] Guid? factoryId, [FromQuery] Guid? departmentId,
         [FromQuery] Guid? floorId, [FromQuery] string? lineId, [FromQuery] string? status, [FromQuery] string? designation,
-        [FromQuery] string? employmentType, [FromQuery] string? sort, [FromQuery] int? page, [FromQuery] int? pageSize, CancellationToken ct)
+        [FromQuery] string? employmentType, [FromQuery] string? sort, [FromQuery] int? page, [FromQuery] int? pageSize,
+        [FromQuery] bool? assigned, CancellationToken ct)
         => Ok(await _workers.ListAsync(this.Caller(),
-            new WorkerListQuery(search, factoryId, departmentId, floorId, lineId, status, designation, employmentType, sort, page ?? 1, pageSize ?? 25), ct));
+            new WorkerListQuery(search, factoryId, departmentId, floorId, lineId, status, designation, employmentType, sort, page ?? 1, pageSize ?? 25, assigned), ct));
 
     /// <summary>GET /api/workers/me — the caller's own worker record (404 when the account isn't linked to one).</summary>
     [HttpGet("me")]

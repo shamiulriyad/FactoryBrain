@@ -57,7 +57,7 @@ export default function AccountPage() {
                 <div><dt className="text-fg-tertiary">Reach</dt><dd className="mt-1"><ScopeBadge scope={profile.data.scope} /></dd></div>
                 <div><dt className="text-fg-tertiary">Factories</dt><dd className="mt-1 text-fg-primary">{profile.data.factories.map((f) => `${f.code} · ${f.name}`).join(", ") || (profile.data.scope === "Platform" ? "All factories" : "None")}</dd></div>
                 <div><dt className="text-fg-tertiary">Production lines</dt><dd className="mt-1 text-fg-primary">{profile.data.lines.map((l) => l.name).join(", ") || (profile.data.scope === "Line" ? "None" : "All in your factories")}</dd></div>
-                <div><dt className="text-fg-tertiary">Worker profile</dt><dd className="mt-1 text-fg-primary">{profile.data.worker ? `${profile.data.worker.employeeCode} · ${profile.data.worker.fullName}` : "Not linked"}</dd></div>
+                <div><dt className="text-fg-tertiary">Worker profile</dt><dd className="mt-1 text-fg-primary">{profile.data.worker ? `${profile.data.worker.workerCode} · ${profile.data.worker.fullName}` : "Not linked"}</dd></div>
                 <div><dt className="text-fg-tertiary">Last sign-in</dt><dd className="mt-1 text-fg-primary">{profile.data.lastLoginAt ? formatDateTime(profile.data.lastLoginAt, locale) : "—"}</dd></div>
               </dl>
               <details className="mt-4 surface-2 px-3 py-2 text-caption">

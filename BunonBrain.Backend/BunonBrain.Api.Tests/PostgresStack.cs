@@ -427,12 +427,17 @@ public sealed class DbApiFactory : WebApplicationFactory<Program>
     /// <summary>Per-host image store under the temp folder, removed with the host.</summary>
     public string QcStoragePath { get; } = Path.Combine(Path.GetTempPath(), "bunonbrain-qc-tests", Guid.NewGuid().ToString("N"));
 
+    /// <summary>Per-host worker photo store under the temp folder, removed with the host.</summary>
+    public string WorkerPhotoStoragePath { get; } = Path.Combine(Path.GetTempPath(), "bunonbrain-worker-photo-tests", Guid.NewGuid().ToString("N"));
+
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
         try { if (Directory.Exists(MerchStoragePath)) Directory.Delete(MerchStoragePath, recursive: true); }
         catch (IOException) { /* best effort: temp folder */ }
         try { if (Directory.Exists(QcStoragePath)) Directory.Delete(QcStoragePath, recursive: true); }
+        catch (IOException) { /* best effort: temp folder */ }
+        try { if (Directory.Exists(WorkerPhotoStoragePath)) Directory.Delete(WorkerPhotoStoragePath, recursive: true); }
         catch (IOException) { /* best effort: temp folder */ }
     }
 
@@ -546,6 +551,7 @@ public sealed class DbApiFactory : WebApplicationFactory<Program>
             ["PYRAG_COLLECTION_NAME"]       = FakeRagCollection,
             ["QC_IMAGE_STORAGE_PATH"]       = QcStoragePath,
             ["MERCH_DOCUMENT_STORAGE_PATH"] = MerchStoragePath,
+            ["WORKER_PHOTO_STORAGE_PATH"]   = WorkerPhotoStoragePath,
         };
         foreach (var (k, v) in _overrides) env[k] = v;
         _environment = env;

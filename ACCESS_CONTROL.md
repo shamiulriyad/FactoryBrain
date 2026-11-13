@@ -26,7 +26,10 @@ the server would refuse.
 | User → lines | `user_production_line_assignments` | A Production Supervisor acts only on these lines (they must belong to the user's factories). |
 | Factory | `factories` | Tenant. Created by a Super Admin. Deactivating one removes it from every member's access at once. |
 | Production line | `production_lines.FactoryId` | Lines are attached to a factory. |
-| Worker profile | `workers` | **Separate from login accounts.** A worker needs no login; at most one account can be linked (`UserId`) so the worker sees their own records. |
+| Worker | `workers` | **Separate from login accounts.** A worker needs no login; at most one account can be linked (`UserId`) so the worker sees their own records. Permanent Worker ID (`W-001`) from the `worker_number_seq` sequence; never deleted, never reused. |
+| Worker status history | `worker_status_history` | Every status change (Active, Inactive, Suspended, Resigned, Terminated) with reason, effective date and who. |
+| Worker card | `worker_cards` | RFID / NFC credential. One *active* card per UID; returned cards can be re-issued, past assignments are kept. |
+| Department, production floor | `departments`, `production_floors` | Per-factory reference data for worker placement; deactivated, never deleted. |
 | Audit | `audit_log` (+ `FactoryId`) | Append-only (the database rejects UPDATE/DELETE/TRUNCATE). Factory-scoped readers see only their factories' entries. |
 
 Migration: `20261112165317_AddAccessControl`. It renames the old
@@ -77,10 +80,11 @@ active factory keeps only self-service permissions.
 | **Organization** |
 | `lines.view` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | `lines.manage` | ✓ | ✓ | | | | | | |
-| `departments.manage` *R* | ✓ | ✓ | | | | | | |
+| `departments.manage` | ✓ | ✓ | | | | | | |
 | `settings.manage` | ✓ | ✓ | | | | | | |
 | **Workforce** |
 | `workers.view` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | | |
+| `workers.details.view` | ✓ | ✓ | ✓ | | | ✓ | | |
 | `workers.manage` | ✓ | ✓ | | | | ✓ | | |
 | `workers.assign` | ✓ | ✓ | | ✓ | | | | |
 | **Attendance** (all *R*) |
@@ -133,27 +137,40 @@ active factory keeps only self-service permissions.
 3. **Line isolation.** A Production Supervisor sees only workers on assigned
    lines, can move workers only between those lines, and can record QC only for
    them.
-4. **Self access.** A Worker reads only their own linked worker profile
-   (`GET /api/workers/me`). Employment details (phone, grade, joining date) are
-   returned only to `workers.manage` holders and the worker themself.
-5. **No escalation.** A caller grants only roles they manage *and* whose
+4. **Self access.** A Worker reads only their own linked worker record
+   (`GET /api/workers/me`, or its id / Worker ID).
+5. **Worker detail tiers.** Everyone who can see a worker gets the directory
+   fields (Worker ID, name, photo, placement, designation, status).
+   `workers.details.view` adds employment details (employee number, joining
+   date, grade, type, status history) and the CSV export without personal
+   columns. `workers.manage` and the worker themself also get personal
+   details (phone, email, gender, date of birth, address, emergency contact).
+   The IT / Device Administrator has no access to worker records.
+6. **Worker lifecycle.** Status changes follow a fixed transition table
+   (`WorkerStatusTransitions`), are checked under a row lock, need a reason to
+   suspend, separate or re-hire, and are kept in the status history. Resigning
+   or terminating deactivates the worker's cards. Workers are never deleted;
+   Worker IDs come from a database sequence, so concurrent registrations never
+   share one and an ID is never handed out again.
+7. **No escalation.** A caller grants only roles they manage *and* whose
    permissions they hold; manages a user only when they could grant every
    role that user holds; can't change their own roles, status or scope.
    Factory Admins can't touch Factory Admins or Super Admins.
-6. **Super Admin protection.** Only Super Admins see or change Super Admin
+8. **Super Admin protection.** Only Super Admins see or change Super Admin
    accounts; the last active Super Admin can't be deactivated or lose the role
    (checked under a row lock, so two admins can't remove each other at once).
-7. **Sessions follow changes.** Access tokens carry roles, permissions,
+9. **Sessions follow changes.** Access tokens carry roles, permissions,
    factory/line ids and a security stamp. Changing roles, scope, status, email
    or password rotates the stamp; the API rejects older tokens (401) and the
    browser silently refreshes to the new access. Deactivation and admin
    password resets also revoke the refresh token. (Per-instance cache: 30 s.)
-8. **Temporary passwords.** Accounts created by an administrator, and admin
+10. **Temporary passwords.** Accounts created by an administrator, and admin
    resets, use a temporary password; until it is changed every permission
    check fails with `password_change_required`.
-9. **Audit.** Sign-ins and every user, role, scope, status, password, factory,
-   line and worker change are recorded with actor, before/after and reason.
-   Passwords are never logged.
+11. **Audit.** Sign-ins and every user, role, scope, status, password, factory,
+   line, department, floor, worker, card, import and export are recorded with
+   actor, before/after and reason. Passwords are never logged, and worker edits
+   record which fields changed, not their personal values.
 
 Errors are RFC 7807 problem details with a stable `code`, e.g.
 `permission_denied` (+ `requiredPermissions`), `password_change_required`,
@@ -181,11 +198,21 @@ Errors are RFC 7807 problem details with a stable `code`, e.g.
 | `POST /api/factories`, `PUT /api/factories/{id}`, `POST /api/factories/{id}/status` | `factories.manage` (Super Admin) |
 | `GET /api/factories/{id}/lines` | `lines.view` or `users.update` |
 | `GET /api/factories/unassigned-lines`, `PUT/DELETE /api/factories/{id}/lines/{lineId}` | `lines.manage` |
-| `GET /api/workers`, `GET /api/workers/{id}` | `workers.view` (own profile: `self.view`) |
+| `GET/POST /api/factories/{id}/departments`, `PUT …/departments/{departmentId}` | list: `workers.view`, `lines.view` or `departments.manage`; write: `departments.manage` |
+| `GET/POST /api/factories/{id}/floors`, `PUT …/floors/{floorId}` | list: `workers.view` or `lines.view`; write: `lines.manage` |
+| `GET /api/workers?search&factoryId&departmentId&floorId&lineId&status&designation&employmentType&sort&page&pageSize` | `workers.view` |
+| `GET /api/workers/{id}`, `GET /api/workers/{id}/profile`, `GET /api/workers/{id}/photo` (`{id}` = GUID or Worker ID) | `workers.view` (own record: `self.view`) |
 | `GET /api/workers/me` | `self.view` |
+| `GET /api/workers/statistics?factoryId` | `workers.view` |
+| `GET /api/workers/export?…same filters…` | `workers.details.view` or `workers.manage` |
 | `POST /api/workers`, `PUT /api/workers/{id}` | `workers.manage` |
+| `PATCH /api/workers/{id}/status` `{status, reason, effectiveOn}` | `workers.manage` |
+| `PUT/DELETE /api/workers/{id}/photo` | `workers.manage` |
+| `GET/POST /api/workers/{id}/cards`, `PATCH /api/workers/{id}/cards/{cardId}` `{reason}` | `workers.manage` |
+| `GET /api/workers/import/template`, `POST /api/workers/import` (multipart `file`, `factoryId`, `dryRun`) | `workers.manage` |
 | `PUT /api/workers/{id}/workstation` | `workers.assign` or `workers.manage` |
-| `PUT /api/workers/{id}/account` `{userId}` | `users.update` |
+| `PUT /api/workers/{id}/account` `{userId}` (link / unlink) | `users.update` |
+| `POST /api/workers/{id}/account` `{email, temporaryPassword}` (create a Worker login) | `users.create` |
 | `GET /api/audit?entityType&entityId&action&actorUserId&factoryId&limit&before` | `audit.view` (scoped) |
 
 The existing modules (production, QC, merchandising, approvals, sensors,
@@ -202,7 +229,13 @@ knowledge, settings, agents) are guarded by their module permissions; see
 | User details: profile, roles & scope, activity, security | `/app/admin/users/{id}` | `users.view` (actions follow `can` from the API) |
 | Roles | `/app/admin/roles` | `roles.view` |
 | Permissions matrix | `/app/admin/permissions` | `roles.view` |
-| Factories & lines | `/app/admin/factories` | `factories.manage` or `lines.manage` |
+| Factories, lines, departments & floors | `/app/admin/factories` | `factories.manage`, `lines.manage` or `departments.manage` |
+| Worker directory (search, filters, sort, pages, export, summary) | `/app/workers` | `workers.view` |
+| Add worker | `/app/workers/new` | `workers.manage` |
+| Worker details (profile, status, cards, login, photo) | `/app/workers/{id}` | `workers.view` (actions follow `can` from the API) |
+| Edit worker | `/app/workers/{id}/edit` | `workers.manage` |
+| Import workers (CSV, preview, confirm) | `/app/workers/import` | `workers.manage` |
+| Worker statistics | `/app/workers/statistics` | `workers.view` |
 | Account settings (profile, password, my access) | `/app/account` | everyone |
 | My profile (worker self-service) | `/app/me` | `self.view` |
 | Access denied | shown in place, or `/app/access-denied` | — |
@@ -220,8 +253,10 @@ temporary password to `/app/account`, and starts users without an overview
 3. **Users** → *New user* → role *Factory Admin*, that factory. Share the
    temporary password; they replace it at first sign-in.
 4. The Factory Admin creates the other users (HR, supervisors with lines, …).
-5. HR creates worker profiles; a Factory Admin links a worker to a login if
-   the worker should see their own records.
+5. The Factory Admin adds the factory's departments (and floors) on
+   **Factories, lines & departments**.
+6. HR registers workers (**Workers** → *Add worker* or *Import CSV*); a Factory
+   Admin gives a worker a login only if they should see their own records.
 
 ## 8. Known limitations
 
@@ -229,7 +264,7 @@ temporary password to `/app/account`, and starts users without an overview
   hold single-plant data without a factory column. They are permission-gated,
   and Production Supervisors are line-limited on QC writes, but their records
   are not yet partitioned by factory.
-- Attendance, shifts, leave, overtime, cameras, device logs, departments and
+- Attendance, shifts, leave, overtime, cameras, device logs and
   notifications are reserved permissions: the roles carry them, but those
   modules aren't built yet.
 - System roles are fixed; custom roles are not supported (by design for now).

@@ -9,14 +9,14 @@ import { CalendarClock, IdCard, MapPin } from "lucide-react";
 import { RequirePermission } from "@/components/auth/RequireRole";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
-import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState, SkeletonRows } from "@/components/ui/Status";
 import { useResource } from "@/lib/useResource";
 import { errorMessage, isApiError } from "@/lib/api";
-import { formatDate } from "@/lib/format";
 import { useT } from "@/lib/useT";
-import { P, type WorkerDto } from "@/lib/access";
+import { P } from "@/lib/access";
+import { formatDay, type Worker } from "@/lib/workers";
+import { WorkerAvatar, WorkerStatusBadge } from "@/components/workers/shared";
 
 export default function MyProfilePage() {
   return (
@@ -28,7 +28,7 @@ export default function MyProfilePage() {
 
 function Mine() {
   const { locale } = useT();
-  const me = useResource<WorkerDto>("/api/workers/me");
+  const me = useResource<Worker>("/api/workers/me");
   const notLinked = isApiError(me.error) && me.error.status === 404;
 
   return (
@@ -45,17 +45,20 @@ function Mine() {
           <>
             <Panel title="Profile" icon={<IdCard size={14} />}>
               <dl className="grid gap-3 sm:grid-cols-3 text-caption">
-                <Item label="Employee code"><span className="font-mono">{me.data.employeeCode}</span></Item>
+                <Item label="Worker ID"><span className="inline-flex items-center gap-2"><WorkerAvatar worker={me.data} size={28} /><span className="font-mono">{me.data.workerCode}</span></span></Item>
+                <Item label="Employee number"><span className="font-mono">{me.data.employeeCode ?? "—"}</span></Item>
+                <Item label="Status"><WorkerStatusBadge status={me.data.status} /></Item>
+                <Item label="Department">{me.data.department?.name ?? "—"}</Item>
                 <Item label="Designation">{me.data.designation ?? "—"}</Item>
-                <Item label="Status"><Badge tone={me.data.isActive ? "success" : "neutral"}>{me.data.isActive ? "Active" : "Inactive"}</Badge></Item>
                 <Item label="Grade">{me.data.grade ?? "—"}</Item>
-                <Item label="Joined">{me.data.joinedOn ? formatDate(me.data.joinedOn, locale) : "—"}</Item>
+                <Item label="Joined">{formatDay(me.data.joinedOn, locale)}</Item>
+                <Item label="Employment type">{me.data.employmentType ?? "—"}</Item>
                 <Item label="Phone">{me.data.phone ?? "—"}</Item>
               </dl>
             </Panel>
             <Panel title="Assigned workstation" icon={<MapPin size={14} />}>
               <p className="text-body text-fg-primary" data-testid="my-workstation">
-                {me.data.lineId ? <>Line <strong>{me.data.lineId}</strong>{me.data.workstation ? <> · workstation <strong>{me.data.workstation}</strong></> : null}</> : "Not assigned yet."}
+                {me.data.lineId ? <>Line <strong>{me.data.line?.name ?? me.data.lineId}</strong>{me.data.workstation ? <> · workstation <strong>{me.data.workstation}</strong></> : null}</> : "Not assigned yet."}
               </p>
             </Panel>
             <Panel title="Attendance, shift & breaks" icon={<CalendarClock size={14} />}>

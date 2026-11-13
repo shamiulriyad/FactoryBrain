@@ -163,7 +163,7 @@ public sealed class AccountService : IAccountService
         var lines = await _db.ProductionLines.AsNoTracking().Where(l => lineIds.Contains(l.Id))
             .OrderBy(l => l.Id).Select(l => new LineRef(l.Id, l.Name, l.FactoryId)).ToListAsync(ct);
         var worker = await _db.Workers.AsNoTracking().Where(w => w.UserId == userId)
-            .Select(w => new WorkerRef(w.Id, w.EmployeeCode, w.FullName)).FirstOrDefaultAsync(ct);
+            .Select(w => new WorkerRef(w.Id, w.WorkerCode, w.FullName)).FirstOrDefaultAsync(ct);
         return new AccountProfile(user.Id, user.Email, user.FullName, user.Phone, snapshot.Roles, snapshot.Permissions,
             snapshot.Scope.ToString(), snapshot.Factories, lines, worker, user.MustChangePassword, user.CreatedAt, user.LastLoginAt);
     }

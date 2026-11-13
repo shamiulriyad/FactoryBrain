@@ -25,6 +25,8 @@ namespace BunonBrain.Infrastructure.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.HasSequence("worker_number_seq");
+
             modelBuilder.Entity("BunonBrain.Domain.Entities.ActivityEvent", b =>
                 {
                     b.Property<string>("Id")
@@ -329,6 +331,45 @@ namespace BunonBrain.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("customers", (string)null);
+                });
+
+            modelBuilder.Entity("BunonBrain.Domain.Entities.Department", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<Guid>("FactoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FactoryId", "Code")
+                        .IsUnique();
+
+                    b.HasIndex("FactoryId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("departments", (string)null);
                 });
 
             modelBuilder.Entity("BunonBrain.Domain.Entities.DocumentChunk", b =>
@@ -1720,6 +1761,45 @@ namespace BunonBrain.Infrastructure.Migrations
                     b.ToTable("products", (string)null);
                 });
 
+            modelBuilder.Entity("BunonBrain.Domain.Entities.ProductionFloor", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<Guid>("FactoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FactoryId", "Code")
+                        .IsUnique();
+
+                    b.HasIndex("FactoryId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("production_floors", (string)null);
+                });
+
             modelBuilder.Entity("BunonBrain.Domain.Entities.ProductionLine", b =>
                 {
                     b.Property<string>("Id")
@@ -2969,6 +3049,67 @@ namespace BunonBrain.Infrastructure.Migrations
                     b.ToTable("vision_results", (string)null);
                 });
 
+            modelBuilder.Entity("BunonBrain.Domain.Entities.WorkerCard", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CardType")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)");
+
+                    b.Property<string>("CardUid")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("DeactivatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<Guid?>("DeactivatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DeactivationReason")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("FactoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("IssuedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<Guid?>("IssuedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<Guid>("WorkerId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CardUid")
+                        .IsUnique()
+                        .HasFilter("\"IsActive\"");
+
+                    b.HasIndex("FactoryId");
+
+                    b.HasIndex("WorkerId");
+
+                    b.ToTable("worker_cards", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_worker_cards_type", "\"CardType\" IN ('RFID','NFC')");
+                        });
+                });
+
             modelBuilder.Entity("BunonBrain.Domain.Entities.WorkerProfile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2978,16 +3119,50 @@ namespace BunonBrain.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamptz");
 
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("DateOfBirth")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("DepartmentId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Designation")
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
-                    b.Property<string>("EmployeeCode")
-                        .IsRequired()
+                    b.Property<string>("Email")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("EmergencyContactName")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("EmergencyContactPhone")
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
+                    b.Property<string>("EmergencyContactRelation")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("EmployeeCode")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("EmploymentType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("Permanent");
+
                     b.Property<Guid>("FactoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("FloorId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("FullName")
@@ -2995,12 +3170,13 @@ namespace BunonBrain.Infrastructure.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<string>("Gender")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
                     b.Property<string>("Grade")
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
 
                     b.Property<DateOnly?>("JoinedOn")
                         .HasColumnType("date");
@@ -3013,11 +3189,45 @@ namespace BunonBrain.Infrastructure.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
+                    b.Property<string>("PhotoContentType")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("PhotoKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("PresentAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("Active");
+
+                    b.Property<DateTimeOffset?>("StatusChangedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("StatusReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamptz");
 
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("WorkerCode")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<long>("WorkerNumber")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Workstation")
                         .HasMaxLength(32)
@@ -3025,16 +3235,95 @@ namespace BunonBrain.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DepartmentId");
+
+                    b.HasIndex("FloorId");
+
                     b.HasIndex("LineId");
 
                     b.HasIndex("UserId")
                         .IsUnique()
                         .HasFilter("\"UserId\" IS NOT NULL");
 
-                    b.HasIndex("FactoryId", "EmployeeCode")
+                    b.HasIndex("WorkerCode")
                         .IsUnique();
 
-                    b.ToTable("workers", (string)null);
+                    b.HasIndex("WorkerNumber")
+                        .IsUnique();
+
+                    b.HasIndex("FactoryId", "EmployeeCode")
+                        .IsUnique()
+                        .HasFilter("\"EmployeeCode\" IS NOT NULL");
+
+                    b.HasIndex("FactoryId", "Status");
+
+                    b.ToTable("workers", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_workers_employment_type", "\"EmploymentType\" IN ('Permanent','Probation','Contract','Temporary','Apprentice')");
+
+                            t.HasCheckConstraint("CK_workers_gender", "\"Gender\" IS NULL OR \"Gender\" IN ('Female','Male','Other')");
+
+                            t.HasCheckConstraint("CK_workers_status", "\"Status\" IN ('Active','Inactive','Suspended','Resigned','Terminated')");
+
+                            t.HasCheckConstraint("CK_workers_worker_number", "\"WorkerNumber\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("BunonBrain.Domain.Entities.WorkerStatusChange", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("ChangedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("ChangedByEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("ChangedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("EffectiveOn")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("FactoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FromStatus")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ToStatus")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("WorkerId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkerId", "Id");
+
+                    b.ToTable("worker_status_history", (string)null);
+                });
+
+            modelBuilder.Entity("BunonBrain.Domain.Entities.Department", b =>
+                {
+                    b.HasOne("BunonBrain.Domain.Entities.Factory", null)
+                        .WithMany()
+                        .HasForeignKey("FactoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("BunonBrain.Domain.Entities.DocumentChunk", b =>
@@ -3289,6 +3578,15 @@ namespace BunonBrain.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("BunonBrain.Domain.Entities.ProductionFloor", b =>
+                {
+                    b.HasOne("BunonBrain.Domain.Entities.Factory", null)
+                        .WithMany()
+                        .HasForeignKey("FactoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("BunonBrain.Domain.Entities.ProductionLine", b =>
                 {
                     b.HasOne("BunonBrain.Domain.Entities.Factory", null)
@@ -3471,13 +3769,38 @@ namespace BunonBrain.Infrastructure.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("BunonBrain.Domain.Entities.WorkerProfile", b =>
+            modelBuilder.Entity("BunonBrain.Domain.Entities.WorkerCard", b =>
                 {
                     b.HasOne("BunonBrain.Domain.Entities.Factory", null)
                         .WithMany()
                         .HasForeignKey("FactoryId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("BunonBrain.Domain.Entities.WorkerProfile", null)
+                        .WithMany()
+                        .HasForeignKey("WorkerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BunonBrain.Domain.Entities.WorkerProfile", b =>
+                {
+                    b.HasOne("BunonBrain.Domain.Entities.Department", null)
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BunonBrain.Domain.Entities.Factory", null)
+                        .WithMany()
+                        .HasForeignKey("FactoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BunonBrain.Domain.Entities.ProductionFloor", null)
+                        .WithMany()
+                        .HasForeignKey("FloorId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("BunonBrain.Domain.Entities.ProductionLine", null)
                         .WithMany()
@@ -3488,6 +3811,15 @@ namespace BunonBrain.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("BunonBrain.Domain.Entities.WorkerStatusChange", b =>
+                {
+                    b.HasOne("BunonBrain.Domain.Entities.WorkerProfile", null)
+                        .WithMany()
+                        .HasForeignKey("WorkerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("BunonBrain.Domain.Entities.LineLayout", b =>

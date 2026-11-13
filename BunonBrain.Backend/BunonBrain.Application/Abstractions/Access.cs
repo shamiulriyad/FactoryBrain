@@ -73,19 +73,6 @@ public interface IFactoryService
     Task<AccessResult<FactoryLineDto>> DetachLineAsync(AccessContext caller, Guid factoryId, string lineId, string? traceId, CancellationToken ct);
 }
 
-/// <summary>Worker profiles (separate from login accounts), scoped by factory, line and self.</summary>
-public interface IWorkerService
-{
-    Task<PagedResult<WorkerDto>> ListAsync(AccessContext caller, WorkerListQuery query, CancellationToken ct);
-    Task<AccessResult<WorkerDto>> GetAsync(AccessContext caller, Guid workerId, CancellationToken ct);
-    /// <summary>The caller's own worker profile, if their account is linked to one.</summary>
-    Task<WorkerDto?> MineAsync(AccessContext caller, CancellationToken ct);
-    Task<AccessResult<WorkerDto>> CreateAsync(AccessContext caller, CreateWorkerRequest request, string? traceId, CancellationToken ct);
-    Task<AccessResult<WorkerDto>> UpdateAsync(AccessContext caller, Guid workerId, UpdateWorkerRequest request, string? traceId, CancellationToken ct);
-    Task<AccessResult<WorkerDto>> AssignWorkstationAsync(AccessContext caller, Guid workerId, AssignWorkstationRequest request, string? traceId, CancellationToken ct);
-    Task<AccessResult<WorkerDto>> LinkAccountAsync(AccessContext caller, Guid workerId, LinkWorkerAccountRequest request, string? traceId, CancellationToken ct);
-}
-
 /// <summary>The audit log, filtered to what the caller may see.</summary>
 public interface IAuditQueryService
 {

@@ -161,19 +161,45 @@ export function Sidebar({ mode, onClose }: { mode: "rail" | "drawer"; onClose?: 
     setScrolledDown(nav.scrollTop > 2);
   }, []);
 
+  // Bring the current page's item into view when the page changes or the rail
+  // collapses / expands, and only then. This used to run on every resize of
+  // the list as well: near the bottom the "N more" row disappears, the list
+  // grows, the menu jumped back to the active item, the row came back, and
+  // so on, so the menu bounced up and down and its last items couldn't be
+  // reached. Only the menu itself scrolls (scrollIntoView would also move the
+  // page and the app shell).
   useEffect(() => {
     const nav = navRef.current;
     if (!nav) return;
-    // The "N more" row can appear and shrink the list, so re-check on resize.
-    const keepActiveInView = () => {
-      nav.querySelector<HTMLElement>('[aria-current="page"]')?.scrollIntoView({ block: "nearest" });
-      measureOverflow();
+    const item = nav.querySelector<HTMLElement>('[aria-current="page"]');
+    if (item) {
+      const box = nav.getBoundingClientRect();
+      const r = item.getBoundingClientRect();
+      const margin = 8;
+      if (r.top < box.top + margin) nav.scrollTop -= box.top + margin - r.top;
+      else if (r.bottom > box.bottom - margin) nav.scrollTop += r.bottom - (box.bottom - margin);
+    }
+    measureOverflow();
+  }, [pathname, collapsed, measureOverflow]);
+
+  // Re-count the items below the fold whenever the list changes size or
+  // content (permissions arriving, a group opened). Measuring never scrolls.
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    let frame = 0;
+    const remeasure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(measureOverflow);
     };
-    keepActiveInView();
-    const ro = new ResizeObserver(keepActiveInView);
+    remeasure();
+    const ro = new ResizeObserver(remeasure);
     ro.observe(nav);
-    return () => ro.disconnect();
-  }, [pathname, collapsed, user, closedGroups, measureOverflow]);
+    return () => {
+      cancelAnimationFrame(frame);
+      ro.disconnect();
+    };
+  }, [user, closedGroups, collapsed, measureOverflow]);
 
   const scrollMenu = () => {
     const nav = navRef.current;

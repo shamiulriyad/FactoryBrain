@@ -57,6 +57,20 @@ export const wordmarkFont = Outfit({
   preload: false,
 });
 
+/**
+ * Corporate website headings: Outfit, the geometric face behind the logo.
+ * Loaded (and preloaded) only by the public site layout.
+ */
+export const siteHeadingFont = Outfit({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-heading",
+  display: "swap",
+});
+
+/** Public corporate site: headings, body and labels. */
+export const siteFontVariables = `${siteHeadingFont.variable} ${plexSans.variable} ${plexMono.variable}`;
+
 /** Class names that define the three CSS font variables (marketing pages). */
 export const fontVariables = `${displayFont.variable} ${plexSans.variable} ${plexMono.variable}`;
 

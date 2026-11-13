@@ -8,12 +8,22 @@ import { TourBackdrop } from "@/components/TourBackdrop";
 import { TourStep } from "@/components/TourCard";
 import { TOUR_SECTIONS } from "@/lib/tour";
 import { fontVariables } from "@/lib/fonts";
+import { pageMeta } from "@/lib/site/seo";
+import { SITE } from "@/lib/site/config";
 
+/*
+ * 3D factory tour. Not routed at the moment: the folder is named "_tour", and
+ * Next.js ignores folders starting with "_". Rename it back to "tour" (and
+ * re-add links from the homepage, navigation and sitemap) to publish it again.
+ */
 export const metadata: Metadata = {
-  title: "BunonBrain: your whole garment factory, floor by floor",
-  description:
-    "BunonBrain uses cameras, machine data and analytics to catch problems in fabric inspection, cutting, sewing, QC, inventory and shipment.",
-  applicationName: "BunonBrain",
+  ...pageMeta({
+    title: "3D factory tour",
+    description:
+      "Fly through a garment factory floor by floor and see where BunonBrain watches fabric inspection, cutting, sewing lines, QC and packing.",
+    path: "/tour",
+  }),
+  metadataBase: new URL(SITE.url),
 };
 
 export const viewport: Viewport = {

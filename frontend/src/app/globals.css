@@ -829,3 +829,76 @@
 }
 .sb-scroll::-webkit-scrollbar-thumb:hover { background: rgb(var(--sb-label)); }
 
+/* ----- BunonBrain corporate website (app/(site)) -----
+   Light, editorial and flat: navy for type, emerald for action, mint and
+   off-white for grounds. Patterns echo the logo: a fine grid (the
+   construction grid of the symbol) and a woven thread (the fabric waves). */
+@layer components {
+  .site-root {
+    font-family: var(--font-plex), system-ui, sans-serif;
+    color: rgb(var(--brand-body));
+    background: #fff;
+    color-scheme: light;
+    font-feature-settings: "ss01";
+  }
+  .site-root :focus-visible {
+    outline: 2px solid rgb(var(--brand-emerald));
+    outline-offset: 3px;
+  }
+  .site-root ::selection { background: rgb(var(--brand-emerald-light)); color: rgb(var(--brand-navy)); }
+
+  .site-hero {
+    background:
+      radial-gradient(60rem 28rem at 85% -10%, rgb(var(--brand-emerald-light) / 0.55), transparent 60%),
+      radial-gradient(40rem 24rem at -10% 0%, rgb(22 50 79 / 0.06), transparent 60%),
+      linear-gradient(to bottom, #fff, rgb(var(--brand-offwhite)));
+  }
+  .site-grid {
+    background-image:
+      linear-gradient(to right, rgb(22 50 79 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(22 50 79 / 0.05) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse at 70% 0%, #000 0%, transparent 70%);
+  }
+  .site-cta {
+    background:
+      radial-gradient(36rem 20rem at 100% 0%, rgb(5 150 105 / 0.35), transparent 60%),
+      linear-gradient(135deg, rgb(var(--brand-navy)), rgb(var(--brand-navy-deep)));
+  }
+  .site-on-dark {
+    background:
+      radial-gradient(40rem 22rem at 90% 0%, rgb(5 150 105 / 0.18), transparent 60%),
+      rgb(var(--brand-navy-deep));
+  }
+  /* Woven thread: two offset wave rows, like the waves in the symbol. */
+  .site-weave {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='28' viewBox='0 0 56 28'%3E%3Cpath d='M0 7q7-6 14 0t14 0t14 0t14 0' fill='none' stroke='%2334D399' stroke-opacity='.16' stroke-width='1.4'/%3E%3Cpath d='M0 21q7-6 14 0t14 0t14 0t14 0' fill='none' stroke='%23FFFFFF' stroke-opacity='.06' stroke-width='1.4'/%3E%3C/svg%3E");
+    mask-image: linear-gradient(to left, #000, transparent 75%);
+  }
+
+  /* Long-form documents: legal, docs, articles. */
+  .site-prose { color: rgb(var(--brand-body)); font-size: 1.02rem; line-height: 1.8; }
+  .site-prose h2 { font-family: var(--font-heading), sans-serif; color: rgb(var(--brand-text)); font-size: 1.55rem; font-weight: 600; letter-spacing: -0.015em; line-height: 1.25; margin: 2.6rem 0 0.9rem; scroll-margin-top: 96px; }
+  .site-prose h3 { font-family: var(--font-heading), sans-serif; color: rgb(var(--brand-text)); font-size: 1.18rem; font-weight: 600; margin: 1.8rem 0 0.6rem; }
+  .site-prose p { margin: 0 0 1.05rem; }
+  .site-prose ul { margin: 0 0 1.2rem; padding-left: 1.25rem; list-style: disc; }
+  .site-prose ol { margin: 0 0 1.2rem; padding-left: 1.25rem; list-style: decimal; }
+  .site-prose li { margin: 0.35rem 0; padding-left: 0.2rem; }
+  .site-prose li::marker { color: rgb(var(--brand-emerald)); }
+  .site-prose a { color: rgb(var(--brand-emerald-ink)); text-decoration: underline; text-underline-offset: 3px; }
+  .site-prose strong { color: rgb(var(--brand-text)); font-weight: 600; }
+  .site-prose code { font-family: var(--font-plex-mono), monospace; font-size: 0.88em; background: rgb(var(--brand-offwhite)); border: 1px solid rgb(var(--brand-border)); border-radius: 4px; padding: 0.05rem 0.35rem; }
+  .site-prose table { width: 100%; border-collapse: collapse; margin: 0 0 1.4rem; font-size: 0.94rem; }
+  .site-prose th, .site-prose td { border-bottom: 1px solid rgb(var(--brand-border)); padding: 0.6rem 0.75rem 0.6rem 0; text-align: left; vertical-align: top; }
+  .site-prose th { color: rgb(var(--brand-text)); font-weight: 600; }
+
+  /* Marked text that still needs confirmation by the company or its lawyers. */
+  .site-tbc { background: rgb(245 158 11 / 0.14); border-bottom: 1px dashed rgb(var(--brand-warning-ink)); color: rgb(var(--brand-warning-ink)); padding: 0 0.2rem; font-weight: 500; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .site-rise { animation: site-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+    .site-rise-2 { animation-delay: 0.08s; }
+    .site-rise-3 { animation-delay: 0.16s; }
+    @keyframes site-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  }
+}

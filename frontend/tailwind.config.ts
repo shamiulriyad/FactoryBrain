@@ -95,7 +95,8 @@ const config: Config = {
         mono: ["JetBrains Mono", "ui-monospace", "monospace"],
         display: ["var(--font-display)", "Impact", "sans-serif"],
         plex: ["var(--font-plex)", "system-ui", "sans-serif"],
-        plexmono: ["var(--font-plex-mono)", "ui-monospace", "monospace"]
+        plexmono: ["var(--font-plex-mono)", "ui-monospace", "monospace"],
+        heading: ["var(--font-heading)", "var(--font-plex)", "system-ui", "sans-serif"]
       },
       fontSize: {
         display: ["28px", { lineHeight: "34px", fontWeight: "600" }],

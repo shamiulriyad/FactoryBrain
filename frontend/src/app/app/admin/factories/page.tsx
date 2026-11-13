@@ -25,10 +25,11 @@ import { formatDate } from "@/lib/format";
 import { useT } from "@/lib/useT";
 import { cn } from "@/lib/cn";
 import { P, type FactoryDto, type FactoryLine } from "@/lib/access";
+import { OrgUnitsPanel } from "@/components/workers/OrgUnitsPanel";
 
 export default function FactoriesPage() {
   return (
-    <RequirePermission perms={[P.FactoriesManage, P.LinesManage]} what="Factory management">
+    <RequirePermission perms={[P.FactoriesManage, P.LinesManage, P.DepartmentsManage]} what="Factory management">
       <Factories />
     </RequirePermission>
   );
@@ -38,6 +39,8 @@ function Factories() {
   const { locale } = useT();
   const toast = useToast();
   const platform = useCan(P.FactoriesManage);
+  const canDepartments = useCan(P.DepartmentsManage);
+  const canFloors = useCan(P.LinesManage);
   const factories = useResource<FactoryDto[]>("/api/factories");
   const [editing, setEditing] = useState<FactoryDto | "new" | null>(null);
   const [toggling, setToggling] = useState<FactoryDto | null>(null);
@@ -64,7 +67,7 @@ function Factories() {
     <div className="page" data-testid="factories-page">
       <PageHeader
         eyebrow="Administration"
-        title="Factories & lines"
+        title="Factories, lines & departments"
         description={platform ? "Every factory on the platform. Factory-level users only ever reach the factories they are assigned to." : "Your factory and its production lines."}
         actions={platform && <Button variant="primary" iconLeft={<Plus size={14} />} onClick={() => setEditing("new")} data-testid="new-factory">New factory</Button>}
       />
@@ -104,6 +107,12 @@ function Factories() {
             </ul>
           </Panel>
           {current && <LinesPanel factory={current} onChanged={() => void factories.reload()} />}
+          {current && (
+            <div className="lg:col-span-2 grid gap-4 lg:grid-cols-2">
+              <OrgUnitsPanel key={`d-${current.id}`} factoryId={current.id} factoryName={current.name} kind="departments" canManage={canDepartments} factoryActive={current.isActive} />
+              <OrgUnitsPanel key={`f-${current.id}`} factoryId={current.id} factoryName={current.name} kind="floors" canManage={canFloors} factoryActive={current.isActive} />
+            </div>
+          )}
         </div>
       )}
 

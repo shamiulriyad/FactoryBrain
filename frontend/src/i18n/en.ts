@@ -141,6 +141,7 @@ export const en = {
     inquiries: "Website inquiries",
     website: "Website",
     workforce: "Workforce",
+    workers: "Workers",
     floorMap: "Live floor map",
     alerts: "Alerts",
     orders: "Orders & shipments",

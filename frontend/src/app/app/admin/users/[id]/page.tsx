@@ -89,7 +89,7 @@ export default function UserDetailPage() {
         <Fact label="Last sign-in">{u.lastLoginAt ? formatRelative(u.lastLoginAt, locale) : "Never"}</Fact>
         <Fact label="Created">{formatDateTime(u.createdAt, locale)}</Fact>
         <Fact label="Factories">{u.factories.length ? u.factories.map((f) => f.name).join(", ") : u.scope === "Platform" ? "All (platform)" : "None"}</Fact>
-        <Fact label="Worker profile">{u.worker ? `${u.worker.employeeCode} · ${u.worker.fullName}` : "Not linked"}</Fact>
+        <Fact label="Worker profile">{u.worker ? <Link href={`/app/workers/${u.worker.id}`} className="text-accent hover:underline">{u.worker.workerCode} · {u.worker.fullName}</Link> : "Not linked"}</Fact>
       </dl>
 
       {!u.can.edit && !u.can.assignRoles && !u.can.changeStatus && (

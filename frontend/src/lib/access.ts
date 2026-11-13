@@ -19,8 +19,10 @@ export const P = {
   AuditView: "audit.view",
   LinesView: "lines.view",
   LinesManage: "lines.manage",
+  DepartmentsManage: "departments.manage",
   SettingsManage: "settings.manage",
   WorkersView: "workers.view",
+  WorkersDetailsView: "workers.details.view",
   WorkersManage: "workers.manage",
   WorkersAssign: "workers.assign",
   AttendanceView: "attendance.view",
@@ -89,7 +91,8 @@ export type PagedResult<T> = { items: T[]; page: number; pageSize: number; total
 
 export type LineRef = { id: string; name: string; factoryId: string | null };
 export type FactoryRef = { id: string; code: string; name: string };
-export type WorkerRef = { id: string; employeeCode: string; fullName: string };
+/** A worker: id, permanent Worker ID (e.g. W-001) and name. */
+export type WorkerRef = { id: string; workerCode: string; fullName: string };
 
 export type UserSummary = {
   id: string;
@@ -172,24 +175,6 @@ export type FactoryDto = {
 };
 
 export type FactoryLine = { id: string; name: string; workstations: number; isActive: boolean; factoryId: string | null };
-
-export type WorkerDto = {
-  id: string;
-  factoryId: string;
-  employeeCode: string;
-  fullName: string;
-  designation?: string | null;
-  lineId?: string | null;
-  workstation?: string | null;
-  isActive: boolean;
-  hasAccount: boolean;
-  userId?: string | null;
-  phone?: string | null;
-  joinedOn?: string | null;
-  grade?: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
 
 export type AccountProfile = {
   id: string;

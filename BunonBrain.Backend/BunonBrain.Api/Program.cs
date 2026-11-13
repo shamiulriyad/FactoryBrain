@@ -434,6 +434,10 @@ builder.Services.AddRateLimiter(o =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: RateLimitPolicies.UserPartition(httpContext),
             factory: _ => FixedWindow(RateLimitPolicies.SensorLivePerMinute)));
+    o.AddPolicy(RateLimitPolicies.Inquiry, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => FixedWindow(RateLimitPolicies.InquiryPerMinute)));
     o.AddPolicy(RateLimitPolicies.QcUpload, httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: RateLimitPolicies.UserPartition(httpContext),

@@ -457,6 +457,82 @@ namespace BunonBrain.Infrastructure.Migrations
                     b.ToTable("floor_alerts", (string)null);
                 });
 
+            modelBuilder.Entity("BunonBrain.Domain.Entities.Inquiry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Company")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("DetailsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
+                    b.Property<string>("JobTitle")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SourcePath")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Subject")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Kind");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("inquiries", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_inquiries_kind", "\"Kind\" IN ('demo','consultation','contact','support','problem','feature','feedback','partnership')");
+
+                            t.HasCheckConstraint("CK_inquiries_reply_channel", "\"Email\" IS NOT NULL OR \"Phone\" IS NOT NULL");
+
+                            t.HasCheckConstraint("CK_inquiries_status", "\"Status\" IN ('new','in_progress','closed')");
+                        });
+                });
+
             modelBuilder.Entity("BunonBrain.Domain.Entities.Insight", b =>
                 {
                     b.Property<string>("Id")

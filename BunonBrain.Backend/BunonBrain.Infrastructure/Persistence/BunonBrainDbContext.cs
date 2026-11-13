@@ -41,6 +41,7 @@ public class BunonBrainDbContext : DbContext
     public DbSet<AuditLogEntry>      AuditLog           => Set<AuditLogEntry>();
     public DbSet<AiSettingsRecord>   AiSettings         => Set<AiSettingsRecord>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<Inquiry>            Inquiries          => Set<Inquiry>();
     public DbSet<Factory>                      Factories              => Set<Factory>();
     public DbSet<Role>                         Roles                  => Set<Role>();
     public DbSet<Permission>                   Permissions            => Set<Permission>();

@@ -45,6 +45,7 @@ public static class Permissions
     public const string FactoriesManage        = "factories.manage";
     public const string PlatformSettingsManage = "platform.settings.manage";
     public const string KnowledgeManage        = "knowledge.manage";
+    public const string InquiriesManage        = "inquiries.manage";
 
     // Users & access
     public const string UsersView          = "users.view";
@@ -141,6 +142,7 @@ public static class AccessCatalog
         P(Permissions.FactoriesManage,        "Platform", "Manage factories", "Create, rename, deactivate and reactivate factories.", platformOnly: true),
         P(Permissions.PlatformSettingsManage, "Platform", "Manage platform settings", "AI providers, API keys and embedding settings shared by every factory.", platformOnly: true),
         P(Permissions.KnowledgeManage,        "Platform", "Manage knowledge base", "Ingest documents and rebuild the shared knowledge-base index.", platformOnly: true),
+        P(Permissions.InquiriesManage,        "Platform", "Manage website inquiries", "Read and triage demo requests, contact and support messages sent from the public website.", platformOnly: true),
 
         P(Permissions.UsersView,          "Users & access", "View users", "List and open user accounts in your scope."),
         P(Permissions.UsersCreate,        "Users & access", "Create users", "Create login accounts in your factory."),

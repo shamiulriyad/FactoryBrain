@@ -138,6 +138,7 @@ export const en = {
     sensors: "Sensors",
     knowledge: "Knowledge base",
     audit: "Audit log",
+    inquiries: "Website inquiries",
     workforce: "Workforce",
     floorMap: "Live floor map",
     alerts: "Alerts",

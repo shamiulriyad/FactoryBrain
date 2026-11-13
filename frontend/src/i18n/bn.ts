@@ -137,6 +137,7 @@ export const bn: Dict = {
     sensors: "সেন্সর",
     knowledge: "জ্ঞানভান্ডার",
     audit: "অডিট লগ",
+    inquiries: "ওয়েবসাইট অনুসন্ধান",
     workforce: "কর্মীবাহিনী",
     floorMap: "লাইভ ফ্লোর ম্যাপ",
     alerts: "অ্যালার্ট",

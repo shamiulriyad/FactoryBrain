@@ -8,6 +8,7 @@ export const P = {
   FactoriesManage: "factories.manage",
   PlatformSettingsManage: "platform.settings.manage",
   KnowledgeManage: "knowledge.manage",
+  InquiriesManage: "inquiries.manage",
   UsersView: "users.view",
   UsersCreate: "users.create",
   UsersUpdate: "users.update",

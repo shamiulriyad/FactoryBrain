@@ -75,6 +75,11 @@ public sealed class PermissionPolicyProvider : IAuthorizationPolicyProvider
 
     public Task<AuthorizationPolicy?> GetPolicyAsync(string policyName)
     {
+        if (RequireServiceAttribute.Parse(policyName) is { } service)
+            return Task.FromResult<AuthorizationPolicy?>(new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .RequireClaim(AccessClaims.Service, service)
+                .Build());
         var perms = RequirePermissionAttribute.Parse(policyName);
         if (perms is null) return _fallback.GetPolicyAsync(policyName);
         var policy = new AuthorizationPolicyBuilder()

@@ -31,11 +31,12 @@ public sealed partial class CameraService : ICameraService
     private readonly BunonBrainDbContext _db;
     private readonly ICameraFileStore _files;
     private readonly AiSecretProtector _secrets;
+    private readonly IMonitoringSystemHooks _monitoring;
     private readonly ILogger<CameraService> _log;
 
-    public CameraService(BunonBrainDbContext db, ICameraFileStore files, AiSecretProtector secrets, ILogger<CameraService> log)
+    public CameraService(BunonBrainDbContext db, ICameraFileStore files, AiSecretProtector secrets, IMonitoringSystemHooks monitoring, ILogger<CameraService> log)
     {
-        _db = db; _files = files; _secrets = secrets; _log = log;
+        _db = db; _files = files; _secrets = secrets; _monitoring = monitoring; _log = log;
     }
 
     // ─── Reach ─────────────────────────────────────────────────────────────
@@ -292,6 +293,7 @@ public sealed partial class CameraService : ICameraService
         var status = CameraStatuses.Parse(r.Status)!;
         if (status == current.Status) return await GetAsync(caller, id, ct);
         var cam = await _db.Cameras.FirstAsync(c => c.Id == id, ct);
+        var from = cam.Status;
         _db.AuditLog.Add(AccessAudit.Entry(caller.Actor, "camera.status_changed", AccessAudit.EntityCamera, cam.Id.ToString(), cam.Status, status,
             $"camera {cam.Code}: {cam.Status} → {status}" + (string.IsNullOrWhiteSpace(r.Reason) ? "" : $" ({r.Reason.Trim()})"), traceId, cam.FactoryId));
         cam.Status = status;
@@ -300,6 +302,7 @@ public sealed partial class CameraService : ICameraService
         cam.UpdatedAt = cam.StatusChangedAt;
         await _db.SaveChangesAsync(ct);
         _db.ChangeTracker.Clear();
+        await _monitoring.CameraStatusAsync(id, from, status, Clean(r.Reason), caller, ct);
         return await GetAsync(caller, id, ct);
     }
 

@@ -21,6 +21,10 @@ public static class AccessClaims
     public const string SecurityStamp = "stamp";
     /// <summary>"1" while the user must change a temporary password; permission checks then fail.</summary>
     public const string MustChangePassword = "pwc";
+    /// <summary>Set only on service principals (e.g. <c>computer-vision</c>), never on people's tokens.</summary>
+    public const string Service = "svc";
+    /// <summary>"1" when a service principal may reach every factory.</summary>
+    public const string ServiceAllFactories = "svc_all";
 }
 
 /// <summary>
@@ -59,8 +63,14 @@ public sealed class AccessContext
     public bool MustChangePassword { get; }
     public RoleScope Scope { get; }
 
+    /// <summary>The service's name for a service principal (no roles; reach set by its configuration), else null.</summary>
+    public string? ServiceName { get; }
+
+    public bool IsService => ServiceName is not null;
+
     public AccessContext(Guid userId, string email, IEnumerable<string> roles, IEnumerable<string> permissions,
-        IEnumerable<Guid> factoryIds, IEnumerable<string> lineIds, bool mustChangePassword = false)
+        IEnumerable<Guid> factoryIds, IEnumerable<string> lineIds, bool mustChangePassword = false,
+        string? serviceName = null, bool serviceAllFactories = false)
     {
         UserId = userId;
         Email = email;
@@ -69,7 +79,10 @@ public sealed class AccessContext
         FactoryIds = factoryIds.ToHashSet();
         LineIds = lineIds.ToHashSet(StringComparer.Ordinal);
         MustChangePassword = mustChangePassword;
-        Scope = AccessCatalog.ScopeFor(Roles);
+        ServiceName = serviceName;
+        // A service has no role: its reach is the factories it was configured for.
+        Scope = serviceName is null ? AccessCatalog.ScopeFor(Roles)
+            : serviceAllFactories ? RoleScope.Platform : RoleScope.Factory;
     }
 
     /// <summary>Super Admin: reaches every factory.</summary>
@@ -96,7 +109,7 @@ public sealed class AccessContext
         return false;
     }
 
-    public string PrimaryRole => AccessCatalog.PrimaryRole(Roles);
+    public string PrimaryRole => ServiceName is null ? AccessCatalog.PrimaryRole(Roles) : "Service";
 
     /// <summary>Identity for audit records.</summary>
     public AuditActor Actor => new(UserId, Email, PrimaryRole);
@@ -115,7 +128,9 @@ public sealed class AccessContext
             principal.FindAll(AccessClaims.Permission).Select(c => c.Value),
             principal.FindAll(AccessClaims.Factory).Select(c => Guid.TryParse(c.Value, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty),
             principal.FindAll(AccessClaims.Line).Select(c => c.Value),
-            principal.FindFirst(AccessClaims.MustChangePassword)?.Value == "1");
+            principal.FindFirst(AccessClaims.MustChangePassword)?.Value == "1",
+            principal.FindFirst(AccessClaims.Service)?.Value,
+            principal.FindFirst(AccessClaims.ServiceAllFactories)?.Value == "1");
     }
 
     /// <summary>Build the context a token for <paramref name="snapshot"/> would carry.</summary>

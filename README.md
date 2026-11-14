@@ -38,6 +38,12 @@ English and বাংলা.
 | 🔍 | **Quality inspection** | Upload garment photos, AI defect detection with boxes (configurable vision provider), inspector review and corrections, inspection history, defect rates and DHU from reviewed records |
 | 👷 | **Workforce (demo)** | Worker directory and profiles, manual roll-call attendance, leave and overtime, neutral performance, machine skills and training, grievances and confidential wellbeing on browser-only demo data |
 | 🚨 | **Floor alerts** | Alerts stored by the backend and broadcast over SignalR (`/hubs/factory`) |
+| 🔐 | **Access control** | Eight roles, permission-based, scoped to factories and production lines ([ACCESS_CONTROL.md](ACCESS_CONTROL.md)) |
+| 🧵 | **Workers & workstations** | Worker register, RFID cards, workstation assignments and transfers |
+| 🕒 | **Attendance & shifts** | Shifts, attendance, breaks and overtime with approvals |
+| 📷 | **Cameras & devices** | Camera registration, coverage, video sources (encrypted credentials), polygon zones; IoT devices with heartbeat health and a device simulator |
+| 🖥 | **Central monitoring** | Monitoring room, camera grid, event timeline, alerts (acknowledge / escalate / resolve / dismiss) and a simulator, live over SignalR (`/hubs/monitoring`), scoped per factory and line ([MONITORING_EVENTS.md](MONITORING_EVENTS.md)) |
+| 👁 | **Computer vision (Python)** | Separate FastAPI service in [`computer-vision/`](computer-vision/): YOLO person detection + ByteTrack tracking + zone association, sending REAL events to the monitoring room. No face recognition, no worker identities |
 | 🎭 | **Demo mode** | With no LLM key, Ask and agent runs return deterministic canned answers |
 | 📄 | **PDF RAG (Python)** | Standalone LangChain + Qdrant + Gemini pipeline in [`rag/`](rag/) |
 
@@ -96,7 +102,7 @@ flowchart LR
 - Node.js 20+
 - .NET 10 SDK
 - PostgreSQL with the pgvector extension (local, Docker or Supabase)
-- Python 3.11 (only for `rag/`)
+- Python 3.11 (only for `rag/` and `computer-vision/`)
 
 ### 1. Environment
 
@@ -135,7 +141,7 @@ extension, applies EF Core migrations and seeds demo data.
 ### 4. Frontend
 
 ```bash
-re
+cd frontend
 npm install
 npm run dev                 # reads the repo-root .env
 ```
@@ -155,6 +161,24 @@ python ask.py "your question"
 ```
 
 Details: [rag/README.md](rag/README.md)
+
+### 6. Computer vision (optional)
+
+```bash
+cd computer-vision
+py -3.11 -m venv .venv && .venv\Scripts\activate     # macOS/Linux: source .venv/bin/activate
+pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements-dev.txt
+python scripts/download_model.py                     # YOLO11n weights into models/
+copy .env.example .env                               # set CV_API_KEY and CV_BACKEND_SERVICE_KEY
+python -m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8100
+```
+
+The backend needs the same key in the repo-root `.env` (`CV_SERVICE_KEY`, at
+least 32 characters) and the factories it may serve (`CV_SERVICE_FACTORIES`,
+e.g. `MAIN`). Then start a camera with `POST /cameras/{id}/start` (header
+`X-API-Key`) and watch its events in **Monitoring room**. Details, webcam / RTSP
+setup and the event contract: [computer-vision/README.md](computer-vision/README.md).
 
 ---
 
@@ -334,7 +358,11 @@ BunonBrain/
 │   └── BunonBrain.Domain/          entities and enums
 ├── database/                  where the schema, migrations and seed data live
 ├── rag/                       standalone Python PDF RAG (LangChain + Qdrant + Gemini)
+├── computer-vision/           standalone Python CV service: YOLO person detection + ByteTrack,
+│                              zone association, events to the monitoring API (see its README)
 ├── ARCHITECTURE.md            system diagrams
+├── ACCESS_CONTROL.md          roles, permissions, scope rules, API and page access
+├── MONITORING_EVENTS.md       the monitoring event contract (producers, alerts, real time)
 └── README.md
 ```
 

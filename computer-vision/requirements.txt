@@ -1,0 +1,18 @@
+# Computer-vision service dependencies (Python 3.11+).
+#
+# PyTorch decides CPU vs GPU. Install it FIRST from the right index (README):
+#   CPU:  pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cpu
+#   CUDA: pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
+# then:  pip install -r requirements.txt
+torch==2.6.0
+torchvision==0.21.0
+ultralytics==8.3.253        # YOLO + ByteTrack (AGPL-3.0, see README "Licensing")
+lap==0.5.12                 # linear assignment used by ByteTrack
+opencv-python==4.11.0.86
+numpy==1.26.4
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+pydantic==2.11.4
+pydantic-settings==2.9.1
+httpx==0.28.1
+psutil==7.0.0

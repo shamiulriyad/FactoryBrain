@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Secrets
+.env
+
+# Model weights are downloaded (scripts/download_model.py), never committed
+models/*
+!models/README.md
+
+# Videos, frames and working copies: never committed
+data/*
+!data/README.md
+
+# Ultralytics run output
+runs/

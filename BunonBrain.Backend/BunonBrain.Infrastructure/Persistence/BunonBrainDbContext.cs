@@ -69,6 +69,14 @@ public class BunonBrainDbContext : DbContext
     public DbSet<OvertimeApproval> OvertimeApprovals => Set<OvertimeApproval>();
     public DbSet<AttendanceCorrection> AttendanceCorrections => Set<AttendanceCorrection>();
     public DbSet<AttendancePolicy> AttendancePolicies => Set<AttendancePolicy>();
+    public DbSet<Camera> Cameras => Set<Camera>();
+    public DbSet<CameraSource> CameraSources => Set<CameraSource>();
+    public DbSet<CameraCoverage> CameraCoverage => Set<CameraCoverage>();
+    public DbSet<CameraZone> CameraZones => Set<CameraZone>();
+    public DbSet<CameraZoneRevision> CameraZoneRevisions => Set<CameraZoneRevision>();
+    public DbSet<Device> Devices => Set<Device>();
+    public DbSet<DeviceHeartbeat> DeviceHeartbeats => Set<DeviceHeartbeat>();
+    public DbSet<DeviceEvent> DeviceEvents => Set<DeviceEvent>();
     public DbSet<QcInspection>        QcInspections        => Set<QcInspection>();
     public DbSet<QcInspectionFinding> QcInspectionFindings => Set<QcInspectionFinding>();
     public DbSet<QcDefectCategory>    QcDefectCategories   => Set<QcDefectCategory>();

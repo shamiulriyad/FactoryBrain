@@ -105,7 +105,8 @@ active factory keeps only self-service permissions.
 | `monitoring.view` | ✓ | ✓ | ✓ | ✓ | ✓ | | | |
 | `monitoring.alerts.review` | ✓ | ✓ | | | ✓ | | | |
 | `monitoring.alerts.escalate` *R* | ✓ | ✓ | | | ✓ | | | |
-| `cameras.view` *R* | ✓ | ✓ | | | ✓ | | ✓ | |
+| `cameras.view` | ✓ | ✓ | ✓ | ✓ (their lines) | ✓ | | ✓ | |
+| `cameras.manage` | ✓ | ✓ | | | | | ✓ | |
 | **Production** |
 | `production.view` | ✓ | ✓ | ✓ | ✓ | | | | |
 | `production.manage` | ✓ | ✓ | ✓ | | | | | |
@@ -121,7 +122,8 @@ active factory keeps only self-service permissions.
 | **Devices** |
 | `devices.view` | ✓ | ✓ | ✓ | | | | ✓ | |
 | `devices.manage` | ✓ | ✓ | | | | | ✓ | |
-| `devices.logs.view` *R* | ✓ | ✓ | | | | | ✓ | |
+| `devices.logs.view` | ✓ | ✓ | | | | | ✓ | |
+| `devices.simulate` | ✓ | ✓ | | | | | ✓ | |
 | **Reports & AI** |
 | `reports.view` | ✓ | ✓ | ✓ | | | ✓ | | |
 | `knowledge.view` | ✓ | ✓ | ✓ | ✓ | | | | |
@@ -217,10 +219,45 @@ active factory keeps only self-service permissions.
     minutes are confirmed by `attendance.manage` (HR), up to the lower of
     approved and actual; nothing feeds salary automatically. Policy limits
     (daily / weekly overtime) only warn.
-13. **Audit.** Sign-ins and every user, role, scope, status, password, factory,
+13. **Cameras and devices.** Cameras are read with `cameras.view` (a
+    Production Supervisor: cameras whose main line or active coverage is one
+    of their lines; anything else answers 404) and changed with
+    `cameras.manage` plus factory-wide reach. Floor, department, line and
+    covered workstations must belong to the camera's factory, and a covered
+    workstation must be on the camera's floor. A zone is a 3–64 point simple
+    polygon with every coordinate in 0–1, drawn over the camera's reference
+    frame; a zone that names a workstation or line must be inside the
+    camera's coverage, and coverage used by an active zone can't be removed.
+    Zone edits bump a version (`expectedVersion` refuses stale edits) and
+    write an append-only revision. Video sources are versioned (one current
+    per camera); RTSP / HTTP URLs are validated (scheme; no loopback,
+    link-local / metadata, multicast or unspecified hosts; no secrets in the
+    query) and stored without credentials; user name and password are
+    AES-256-GCM encrypted with `AI_SETTINGS_ENCRYPTION_KEY`, bound to the
+    source row, and never returned, logged or audited. The server never
+    connects to a camera URL. Uploaded videos (MP4 / WebM) and frames (JPEG /
+    PNG / WebP) are identified by their bytes. A camera can be deleted only
+    without zones and without device history. Devices are read with
+    `devices.view`, their history with `devices.logs.view` (or
+    `devices.manage`), and registered / changed with `devices.manage`.
+    Every device message (real hardware with `devices.manage`, the simulator
+    with `devices.simulate`) goes through one pipeline under a row lock: a
+    repeated `messageId` is recorded once, messages more than 5 minutes
+    ahead or 7 days old are refused, a disabled device refuses everything,
+    and old buffered messages never move the state backwards. A simulated
+    device accepts only simulator messages and a real one only device
+    messages; check constraints enforce the same on every heartbeat and
+    event, and a simulated device is never reported as physically connected.
+    A device with no message inside its offline window counts as offline at
+    once, and the health monitor (every minute, or
+    `POST /api/devices/health/check`) records a *HeartbeatMissed* event.
+    `camera_zone_revisions`, `device_heartbeats` and `device_events` are
+    append-only (database triggers); a device with history can't be deleted.
+14. **Audit.** Sign-ins and every user, role, scope, status, password, factory,
    line, department, floor, worker, card, import, export, shift, shift
-   assignment, manual punch, correction, overtime decision, attendance policy
-   and reader change are recorded with
+   assignment, manual punch, correction, overtime decision, attendance policy,
+   reader, camera (registration, edit, status, coverage, source, reference
+   frame, deletion), zone and device change are recorded with
    actor, before/after and reason. Passwords are never logged, and worker edits
    record which fields changed, not their personal values.
 
@@ -295,6 +332,18 @@ Errors are RFC 7807 problem details with a stable `code`, e.g.
 | `POST /api/overtime/{id}/approve` `{approvedMinutes?, note?}`, `/{id}/reject` `{reason}` | `overtime.approve` (not the requester) |
 | `POST /api/overtime/{id}/confirm-payable` `{payableMinutes, note?}` | `attendance.manage` |
 | `GET /api/simulator/rfid/readers`, `/events`; `POST /api/simulator/rfid/check-in`, `/check-out`, `/break-start`, `/break-end` | `attendance.manage` |
+| `GET /api/cameras?search&factoryId&floorId&lineId&workstationId&status&type&source&health&sort&page&pageSize`, `GET /api/cameras/overview?factoryId`, `GET /api/cameras/{id}` | `cameras.view` (supervisors: their lines) |
+| `POST /api/cameras` `{factoryId, name, cameraType, floorId, code?, departmentId?, lineId?, location?, coverageLineIds?, workstationIds?, healthDevice?}`, `PUT /api/cameras/{id}`, `PATCH /api/cameras/{id}/status` `{status, reason}`, `DELETE /api/cameras/{id}` | `cameras.manage` |
+| `PUT /api/cameras/{id}/coverage` `{lineIds, workstationIds}` | `cameras.manage` |
+| `GET /api/cameras/{id}/sources` (versions, no credentials), `GET /api/cameras/{id}/source/video`, `GET /api/cameras/{id}/reference-frame` | `cameras.view` |
+| `PUT /api/cameras/{id}/source` `{sourceType, streamUrl?, userName?, password?, keepCredentials?, webcamLabel?, notes?}`, `PUT /api/cameras/{id}/source/video` (multipart `video`), `PUT /api/cameras/{id}/reference-frame` (multipart `image`, `source`, `frameSeconds`) | `cameras.manage` |
+| `GET /api/cameras/{id}/zones?includeInactive`, `GET /api/camera-zones/{id}/history` | `cameras.view` |
+| `POST /api/cameras/{id}/zones` `{name, zoneType, points:[{x,y}], workstationId?, lineId?, color?, notes?}`, `PUT /api/camera-zones/{id}` (+ `isActive`, `expectedVersion`) | `cameras.manage` |
+| `GET /api/devices?search&factoryId&category&status&health&simulated&lineId&cameraId&sort&page&pageSize`, `GET /api/devices/{id}`, `GET /api/devices/health?factoryId` | `devices.view` |
+| `POST /api/devices`, `PUT /api/devices/{id}`, `PATCH /api/devices/{id}/status`, `DELETE /api/devices/{id}`, `POST /api/devices/health/check` | `devices.manage` |
+| `POST /api/devices/{id}/heartbeat` `{occurredAt?, messageId?, firmwareVersion?, metrics?}`, `POST /api/devices/{id}/events` `{kind, code?, message?, severity?}`, `POST /api/devices/ingest` `{factoryId, deviceCode, kind, …}` (real devices only) | `devices.manage` |
+| `GET /api/devices/events?…filters…`, `GET /api/devices/{id}/events`, `GET /api/devices/{id}/heartbeats` | `devices.logs.view` or `devices.manage` |
+| `GET /api/simulator/devices`, `/events`; `POST /api/simulator/devices/online`, `/offline`, `/heartbeat` `{deviceId, count?, intervalSeconds?}`, `/error` (simulated devices only) | `devices.simulate` |
 | `PUT /api/workers/{id}/account` `{userId}` (link / unlink) | `users.update` |
 | `POST /api/workers/{id}/account` `{email, temporaryPassword}` (create a Worker login) | `users.create` |
 | `GET /api/audit?entityType&entityId&action&actorUserId&factoryId&limit&before` | `audit.view` (scoped) |
@@ -336,6 +385,16 @@ knowledge, settings, agents) are guarded by their module permissions; see
 | Overtime approval dashboard (pending, running, payable to confirm) | `/app/attendance/overtime/approvals` | `overtime.approve` |
 | RFID attendance simulator (SIMULATED) | `/app/attendance/simulator` | `attendance.manage` |
 | Attendance reports (per-worker totals, CSV) | `/app/attendance/reports` | `attendance.view` |
+| Camera & device overview (camera configuration, device health, needs attention, recent events) | `/app/cameras-devices` | `cameras.view` or `devices.view` |
+| Camera directory (search, filters, sort, pages) | `/app/cameras-devices/cameras` | `cameras.view` |
+| Register / edit camera (placement, coverage, health device) | `/app/cameras-devices/cameras/new`, `/{id}/edit` | `cameras.manage` |
+| Camera details (metadata, coverage, video source, recorded video / webcam preview, reference frame, health, zones, AI status) | `/app/cameras-devices/cameras/{id}` | `cameras.view` (actions: `cameras.manage`) |
+| Camera zone configuration (polygon editor, versions, history) | `/app/cameras-devices/cameras/{id}/zones` | `cameras.view` (editing: `cameras.manage`) |
+| Device directory | `/app/cameras-devices/devices` | `devices.view` |
+| Register / edit device | `/app/cameras-devices/devices/new`, `/{id}/edit` | `devices.manage` |
+| Device details (health, events, heartbeats, status, ingestion contract) | `/app/cameras-devices/devices/{id}` | `devices.view` (history: `devices.logs.view`) |
+| Device health dashboard and event log | `/app/cameras-devices/health` | `devices.view` |
+| Device simulator (SIMULATED) | `/app/cameras-devices/simulator` | `devices.simulate` |
 | Account settings (profile, password, my access) | `/app/account` | everyone |
 | My profile (worker self-service) | `/app/me` | `self.view` |
 | Access denied | shown in place, or `/app/access-denied` | — |
@@ -364,9 +423,8 @@ temporary password to `/app/account`, and starts users without an overview
   hold single-plant data without a factory column. They are permission-gated,
   and Production Supervisors are line-limited on QC writes, but their records
   are not yet partitioned by factory.
-- Leave, cameras, device logs, alert escalation and notifications are
-  reserved permissions: the roles carry them, but those modules aren't built
-  yet. Attendance doesn't yet account for leave or holidays: a scheduled
+- Leave, alert escalation and notifications are reserved permissions: the
+  roles carry them, but those modules aren't built yet. Attendance doesn't yet account for leave or holidays: a scheduled
   worker with no attendance counts as absent.
 - Attendance: a reader event with an unknown card UID is refused (404
   `card_not_recognised`) and not stored, since there is no worker to attach
@@ -375,6 +433,17 @@ temporary password to `/app/account`, and starts users without an overview
 - Factory shifts (`shifts`) are separate from production planning's
   plant-wide `production_shifts`; a factory shift can name a production
   shift code to link the two.
+- Cameras and devices: no computer vision runs (no detection, tracking or
+  AI results), and the server never connects to camera streams, so a
+  configured RTSP / HTTP source is *not checked*. Storing camera credentials
+  needs `AI_SETTINGS_ENCRYPTION_KEY` on the API server. Device hardware
+  authenticates as a user account with `devices.manage` (no per-device
+  tokens yet), and there is no MQTT bridge yet: the HTTP endpoints are the
+  contract it would call. Heartbeats and device events are kept without a
+  retention policy. Reference frames and recorded videos live on the local
+  file store (`CAMERA_FILE_STORAGE_PATH`, limits `CAMERA_IMAGE_MAX_MB` /
+  `CAMERA_VIDEO_MAX_MB`, default 8 / 50 MB); the browser downloads a video
+  whole to play it.
 - System roles are fixed; custom roles are not supported (by design for now).
 - Token freshness is cached for 30 s per API instance: on a multi-instance
   deployment another instance may accept an old token for up to 30 s.

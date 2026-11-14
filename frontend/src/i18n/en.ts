@@ -143,6 +143,7 @@ export const en = {
     workforce: "Workforce",
     workers: "Workers",
     attendance: "Attendance & shifts",
+    camerasDevices: "Cameras & devices",
     assignments: "Assignments",
     floorMap: "Live floor map",
     alerts: "Alerts",

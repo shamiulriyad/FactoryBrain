@@ -58,6 +58,45 @@ public sealed class SafeFileStore
         return key;
     }
 
+    /// <summary>
+    /// Stream <paramref name="content"/> to a new file without holding it in
+    /// memory. Stops and deletes the partial file once more than
+    /// <paramref name="maxBytes"/> arrive (<see cref="Application.Abstractions.Interfaces.FileTooLargeException"/>).
+    /// </summary>
+    public async Task<string> SaveAsync(Stream content, string extension, long maxBytes, CancellationToken ct)
+    {
+        if (!_extensions.Contains(extension)) throw new ArgumentException($"unsupported {_what} extension", nameof(extension));
+        var now = DateTime.UtcNow;
+        var key = $"{now:yyyy}/{now:MM}/{Guid.NewGuid():N}.{extension}";
+        var path = Resolve(key) ?? throw new InvalidOperationException("generated key failed validation");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+
+        var temp = path + ".tmp-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            await using (var fs = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, useAsync: true))
+            {
+                var buffer = new byte[81920];
+                long total = 0;
+                int read;
+                while ((read = await content.ReadAsync(buffer, ct)) > 0)
+                {
+                    total += read;
+                    if (total > maxBytes) throw new Application.Abstractions.Interfaces.FileTooLargeException(maxBytes);
+                    await fs.WriteAsync(buffer.AsMemory(0, read), ct);
+                }
+                await fs.FlushAsync(ct);
+            }
+            File.Move(temp, path, overwrite: false);
+        }
+        catch
+        {
+            TryDelete(temp);
+            throw;
+        }
+        return key;
+    }
+
     public Task<Stream?> OpenReadAsync(string key, CancellationToken ct)
     {
         var path = Resolve(key);

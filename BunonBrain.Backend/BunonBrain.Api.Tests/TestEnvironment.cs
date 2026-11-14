@@ -46,6 +46,7 @@ public static class TestEnvironment
         "MERCH_REVIEW_CONFIDENCE", "MERCH_MAX_ATTEMPTS", "MERCH_DOCUMENT_STORAGE_PATH", "MERCH_DOCUMENT_MAX_MB", "MERCH_MAX_PAGES",
         "MERCH_WORKER_ENABLED",
         "WORKER_PHOTO_STORAGE_PATH",
+        "CAMERA_FILE_STORAGE_PATH", "CAMERA_IMAGE_MAX_MB", "CAMERA_VIDEO_MAX_MB",
     };
 
     private static readonly object Gate = new();
@@ -93,6 +94,11 @@ public static class TestEnvironment
         // The attendance review worker: tests run the review through the API so timing is deterministic.
         foreach (var d in services.Where(d => d.ServiceType == typeof(IHostedService)
                                               && d.ImplementationType == typeof(BunonBrain.Infrastructure.Attendance.AttendanceReviewWorker)).ToList())
+            services.Remove(d);
+
+        // The device health monitor: tests run the health check through the API.
+        foreach (var d in services.Where(d => d.ServiceType == typeof(IHostedService)
+                                              && d.ImplementationType == typeof(BunonBrain.Infrastructure.Devices.DeviceHealthMonitor)).ToList())
             services.Remove(d);
 
         // Likewise the merchandising document worker: tests call IMerchDocumentProcessor.

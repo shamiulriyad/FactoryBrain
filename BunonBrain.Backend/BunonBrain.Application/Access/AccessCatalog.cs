@@ -86,6 +86,7 @@ public static class Permissions
     public const string MonitoringAlertsReview   = "monitoring.alerts.review";
     public const string MonitoringAlertsEscalate = "monitoring.alerts.escalate";
     public const string CamerasView              = "cameras.view";
+    public const string CamerasManage            = "cameras.manage";
 
     // Production, quality, merchandising, approvals
     public const string ProductionView         = "production.view";
@@ -104,6 +105,7 @@ public static class Permissions
     public const string DevicesView     = "devices.view";
     public const string DevicesManage   = "devices.manage";
     public const string DevicesLogsView = "devices.logs.view";
+    public const string DevicesSimulate = "devices.simulate";
 
     // Reports, knowledge & AI
     public const string ReportsView   = "reports.view";
@@ -182,7 +184,8 @@ public static class AccessCatalog
         P(Permissions.MonitoringView,           "Monitoring", "View monitoring", "Floor alerts, line board and live floor status."),
         P(Permissions.MonitoringAlertsReview,   "Monitoring", "Review monitoring alerts", "Acknowledge and resolve floor alerts."),
         P(Permissions.MonitoringAlertsEscalate, "Monitoring", "Escalate alerts", "Escalate uncertain events to supervisors.", reserved: true),
-        P(Permissions.CamerasView,              "Monitoring", "View camera feeds", "Watch assigned camera feeds and AI results.", reserved: true),
+        P(Permissions.CamerasView,              "Monitoring", "View cameras", "The cameras in your scope (supervisors: cameras covering their lines): placement, coverage, zones, video source type, reference frame and recorded video. Never camera passwords."),
+        P(Permissions.CamerasManage,            "Monitoring", "Manage cameras", "Register, edit, (de)activate and delete cameras, map their coverage, configure video sources (credentials stored encrypted), reference frames and zones."),
 
         P(Permissions.ProductionView,         "Production", "View production", "Plans, orders, output, efficiency and line balancing."),
         P(Permissions.ProductionManage,       "Production", "Manage production", "Record output, edit orders and plans, run line balancing."),
@@ -196,9 +199,10 @@ public static class AccessCatalog
         P(Permissions.ApprovalsDecide,        "Production", "Decide approvals", "Approve or reject low- and medium-risk recommendations."),
         P(Permissions.ApprovalsDecideHigh,    "Production", "Decide high-risk approvals", "Approve or reject high-risk recommendations."),
 
-        P(Permissions.DevicesView,     "Devices", "View devices", "Sensors, RFID readers, gateways and their health."),
-        P(Permissions.DevicesManage,   "Devices", "Manage devices", "Configure device integrations and send device readings."),
-        P(Permissions.DevicesLogsView, "Devices", "View technical logs", "Device and integration logs.", reserved: true),
+        P(Permissions.DevicesView,     "Devices", "View devices", "Sensors, RFID readers, gateways, cameras' health devices and the device health overview."),
+        P(Permissions.DevicesManage,   "Devices", "Manage devices", "Register and configure devices, change their status, and send device heartbeats, events and readings."),
+        P(Permissions.DevicesLogsView, "Devices", "View device logs", "Device heartbeats and event history (connections, errors, status changes)."),
+        P(Permissions.DevicesSimulate, "Devices", "Use the device simulator", "Make simulated devices come online, go offline, send heartbeats and report errors. Only simulated devices; always marked SIMULATED."),
 
         P(Permissions.ReportsView,   "Reports & AI", "View reports", "Morning brief and operational reports."),
         P(Permissions.KnowledgeView, "Reports & AI", "Use the assistant", "Ask questions, browse the knowledge base and see AI agents."),
@@ -235,7 +239,7 @@ public static class AccessCatalog
                 Permissions.ProductionView, Permissions.ProductionManage, Permissions.QcView,
                 Permissions.MerchandisingView, Permissions.MerchandisingManage,
                 Permissions.ApprovalsView, Permissions.ApprovalsDecide,
-                Permissions.DevicesView, Permissions.ReportsView, Permissions.KnowledgeView, Permissions.AgentsRun,
+                Permissions.DevicesView, Permissions.CamerasView, Permissions.ReportsView, Permissions.KnowledgeView, Permissions.AgentsRun,
                 Permissions.NotificationsView,
             }),
 
@@ -248,7 +252,7 @@ public static class AccessCatalog
                 Permissions.OvertimeView, Permissions.OvertimeManage, Permissions.OvertimeApprove,
                 Permissions.MonitoringView, Permissions.ProductionView, Permissions.ProductionAlertsReview,
                 Permissions.QcView, Permissions.QcManage, Permissions.ApprovalsView, Permissions.MerchandisingView,
-                Permissions.KnowledgeView, Permissions.NotificationsView,
+                Permissions.CamerasView, Permissions.KnowledgeView, Permissions.NotificationsView,
             }),
 
         new RoleDefinition(SystemRoles.MonitoringOperator, "Monitoring Operator",
@@ -272,12 +276,12 @@ public static class AccessCatalog
             }),
 
         new RoleDefinition(SystemRoles.DeviceAdmin, "IT / Device Administrator",
-            "Cameras, RFID readers, machine sensors and gateways: health, connectivity, integrations and technical logs. Cannot change HR or salary information.",
+            "Cameras (registration, coverage, video sources, zones), RFID readers, machine sensors and gateways: health, connectivity, the device simulator and technical logs. Cannot change HR or salary information.",
             RoleScope.Factory, 40, AdminTier, new[]
             {
                 Permissions.LinesView,
-                Permissions.DevicesView, Permissions.DevicesManage, Permissions.DevicesLogsView,
-                Permissions.CamerasView, Permissions.NotificationsView,
+                Permissions.DevicesView, Permissions.DevicesManage, Permissions.DevicesLogsView, Permissions.DevicesSimulate,
+                Permissions.CamerasView, Permissions.CamerasManage, Permissions.NotificationsView,
             }),
 
         new RoleDefinition(SystemRoles.Worker, "Worker",

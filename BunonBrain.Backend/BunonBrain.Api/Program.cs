@@ -548,6 +548,19 @@ builder.Services.AddScoped<IAttendanceService, BunonBrain.Infrastructure.Attenda
 builder.Services.AddScoped<IOvertimeService, BunonBrain.Infrastructure.Attendance.OvertimeService>();
 if (!builder.Environment.IsEnvironment("Testing"))
     builder.Services.AddHostedService<BunonBrain.Infrastructure.Attendance.AttendanceReviewWorker>();
+// Cameras (coverage, versioned video sources with encrypted credentials,
+// reference frames, zones) and devices (registration, heartbeat-based health,
+// one ingestion pipeline for real hardware and the device simulator). Frames
+// and recorded videos go to the file store (CAMERA_FILE_STORAGE_PATH). The
+// health monitor marks devices whose heartbeats stopped as offline every minute.
+builder.Services.AddSingleton<ICameraFileStore>(sp => BunonBrain.Infrastructure.Cameras.CameraFileStore.FromEnvironment(
+    Environment.GetEnvironmentVariable, builder.Environment.ContentRootPath,
+    sp.GetRequiredService<ILogger<BunonBrain.Infrastructure.Cameras.CameraFileStore>>()));
+builder.Services.AddScoped<ICameraService, BunonBrain.Infrastructure.Cameras.CameraService>();
+builder.Services.AddScoped<IDeviceService, BunonBrain.Infrastructure.Devices.DeviceService>();
+builder.Services.AddScoped<IDeviceIngestionService, BunonBrain.Infrastructure.Devices.DeviceIngestionService>();
+if (!builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddHostedService<BunonBrain.Infrastructure.Devices.DeviceHealthMonitor>();
 builder.Services.AddScoped<IAuditQueryService, BunonBrain.Infrastructure.Access.AuditQueryService>();
 
 // ─── RAG tuning config (Rag: section in appsettings.json, env Rag__*) ──────

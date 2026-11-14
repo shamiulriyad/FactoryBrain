@@ -18,8 +18,11 @@ public sealed record Gate(string Kind, IReadOnlyList<string> AnyOf)
     public static readonly Gate Anonymous = new("anonymous", Array.Empty<string>());
     public static readonly Gate Authenticated = new("authenticated", Array.Empty<string>());
     public static Gate Perm(params string[] anyOf) => new("permission", anyOf.OrderBy(p => p, StringComparer.Ordinal).ToArray());
+    /// <summary>Only the named service principal (service key), never a person.</summary>
+    public static Gate Service(string name) => new("service", new[] { name });
     public bool IsPermission => Kind == "permission";
-    public override string ToString() => IsPermission ? $"perm({string.Join("|", AnyOf)})" : Kind;
+    public bool IsService => Kind == "service";
+    public override string ToString() => IsPermission ? $"perm({string.Join("|", AnyOf)})" : IsService ? $"service({AnyOf[0]})" : Kind;
     public bool Same(Gate other) => Kind == other.Kind && AnyOf.SequenceEqual(other.AnyOf);
 }
 
@@ -245,6 +248,33 @@ public static class EndpointMatrix
         ("POST",  "/api/sensors/live",          G(P.DevicesManage)),
         ("*",     "/hubs/factory/negotiate",    G(P.MonitoringView, P.ProductionView, P.DevicesView)),
         ("*",     "/hubs/factory",              G(P.MonitoringView, P.ProductionView, P.DevicesView)),
+
+        // Central monitoring.
+        ("GET",   "/api/monitoring/overview",                 G(P.MonitoringView, P.DevicesView)),
+        ("GET",   "/api/monitoring/contract",                 G(P.MonitoringView, P.DevicesView, P.MonitoringEventsIngest)),
+        ("GET",   "/api/monitoring/cameras",                  G(P.MonitoringView, P.CamerasView)),
+        ("GET",   "/api/monitoring/cameras/{id}",             G(P.MonitoringView, P.CamerasView)),
+        ("GET",   "/api/monitoring/events",                   G(P.MonitoringView, P.DevicesView)),
+        ("POST",  "/api/monitoring/events",                   G(P.MonitoringEventsIngest)),
+        ("GET",   "/api/monitoring/events/{id}",              G(P.MonitoringView, P.DevicesView)),
+        ("POST",  "/api/monitoring/events/{id}/reviews",      G(P.MonitoringEventsReview)),
+        ("GET",   "/api/monitoring/alerts",                   G(P.MonitoringView, P.DevicesView)),
+        ("GET",   "/api/monitoring/alerts/{id}",              G(P.MonitoringView, P.DevicesView)),
+        ("POST",  "/api/monitoring/alerts/{id}/acknowledge",  G(P.MonitoringAlertsReview)),
+        ("POST",  "/api/monitoring/alerts/{id}/escalate",     G(P.MonitoringAlertsEscalate)),
+        ("POST",  "/api/monitoring/alerts/{id}/resolve",      G(P.MonitoringAlertsReview)),
+        ("POST",  "/api/monitoring/alerts/{id}/dismiss",      G(P.MonitoringAlertsDismiss)),
+        ("GET",   "/api/monitoring/simulator",                G(P.MonitoringSimulate)),
+        ("POST",  "/api/monitoring/simulator/start",          G(P.MonitoringSimulate)),
+        ("POST",  "/api/monitoring/simulator/{runId}/stop",   G(P.MonitoringSimulate)),
+        ("POST",  "/api/monitoring/simulator/events",         G(P.MonitoringSimulate)),
+        ("*",     "/hubs/monitoring/negotiate",               G(P.MonitoringView, P.DevicesView)),
+        ("*",     "/hubs/monitoring",                         G(P.MonitoringView, P.DevicesView)),
+
+        // Computer-vision service integration (service key only).
+        ("GET",   "/api/integrations/cv/cameras",             Gate.Service("computer-vision")),
+        ("GET",   "/api/integrations/cv/cameras/{id}",        Gate.Service("computer-vision")),
+        ("GET",   "/api/integrations/cv/cameras/{id}/video",  Gate.Service("computer-vision")),
 
         // Approvals.
         ("GET",   "/api/approvals",              G(P.ApprovalsView)),
@@ -479,6 +509,29 @@ public sealed class EndpointAccessMatrixTests
         }
     }
 
+    public static IEnumerable<object[]> ServiceEndpoints => EndpointMatrix.Where(g => g.IsService);
+
+    [Theory]
+    [MemberData(nameof(ServiceEndpoints))]
+    public async Task No_person_reaches_a_service_endpoint_whatever_their_permissions(string method, string route)
+    {
+        var all = AccessCatalog.AllPermissions.Select(p => p.Code);
+        using var client = _factory.ClientWithToken(_factory.TokenWith(new[] { SystemRoles.SuperAdmin }, all));
+        using var response = await client.SendAsync(EndpointMatrix.Request(method, route));
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Theory]
+    [MemberData(nameof(ServiceEndpoints))]
+    public async Task A_wrong_service_key_is_refused(string method, string route)
+    {
+        using var client = _factory.CreateClient();
+        using var request = EndpointMatrix.Request(method, route);
+        request.Headers.Add(ServiceKeyDefaults.Header, "not-the-service-key-not-the-service-key");
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     [Fact]
     public async Task Super_admin_passes_authorization_on_a_platform_endpoint()
     {
@@ -539,7 +592,8 @@ public sealed class EndpointAccessMatrixTests
                 var allowed = true;
                 foreach (var policy in Policies(endpoint))
                     allowed &= (await authz.AuthorizeAsync(principal, null, policy)).Succeeded;
-                var expected = !gate.IsPermission || gate.AnyOf.Any(role.Permissions.Contains);
+                // Service endpoints are for the service principal only: no role passes them.
+                var expected = !gate.IsService && (!gate.IsPermission || gate.AnyOf.Any(role.Permissions.Contains));
                 if (allowed != expected) wrong.Add($"{method} {route}: {(allowed ? "allowed" : "denied")}, expected {(expected ? "allowed" : "denied")}");
             }
         }
@@ -607,6 +661,9 @@ public sealed class EndpointAccessMatrixTests
     private static Gate EffectiveGate(Endpoint endpoint)
     {
         if (endpoint.Metadata.GetMetadata<IAllowAnonymous>() is not null) return Gate.Anonymous;
+        var services = endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>()
+            .Select(a => RequireServiceAttribute.Parse(a.Policy)).Where(s => s is not null).ToList();
+        if (services.Count > 0) return Gate.Service(services[0]!);
         var perms = endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>()
             .Select(a => RequirePermissionAttribute.Parse(a.Policy)).Where(p => p is not null).ToList();
         if (perms.Count == 0) return Gate.Authenticated;

@@ -261,6 +261,18 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
   return res;
 }
 
+/**
+ * A current access token for transports that can't go through apiFetch
+ * (the SignalR hub connection): refreshed when it is about to expire.
+ * Empty when signed out, so the hub's negotiate gets 401.
+ */
+export async function getAccessToken(): Promise<string> {
+  if (!accessToken || Date.now() > expiresAtMs - EXPIRY_MARGIN_MS) {
+    await refreshSession();
+  }
+  return accessToken ?? "";
+}
+
 /** True when the user holds at least one of the permissions (any-of, like the API's policies). */
 export function can(user: SessionUser | null | undefined, ...anyOf: (Permission | string)[]): boolean {
   if (!user || user.mustChangePassword) return false;

@@ -5,6 +5,7 @@
 // every request.
 
 import {
+  MonitorDot,
   BarChart3,
   Bell,
   BookOpenText,
@@ -79,6 +80,7 @@ export const NAV_GROUPS: NavGroup[] = [
     labelKey: "sidebar.monitor",
     items: [
       { id: "overview", labelKey: "nav.overview", href: "/app", icon: LayoutGrid, perms: [P.ProductionView, P.MonitoringView, P.ReportsView], keywords: "dashboard home line board brief" },
+      { id: "monitoring", labelKey: "nav.monitoring", href: "/app/monitoring", icon: MonitorDot, perms: [P.MonitoringView, P.DevicesView], keywords: "monitoring room control room central live realtime real-time signalr events timeline alerts acknowledge escalate resolve dismiss camera grid cctv feed track zone simulator simulated" },
       { id: "floor-map", labelKey: "nav.floorMap", href: "/app/floor-map", icon: Layers, perms: [P.MonitoringView, P.ProductionView], keywords: "building floors map live" },
       { id: "alerts", labelKey: "nav.alerts", href: "/app/activity", icon: Bell, badge: "alerts", perms: [P.MonitoringView, P.ProductionView], keywords: "alerts whatsapp floor notifications activity" },
     ],

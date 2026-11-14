@@ -106,7 +106,9 @@ public sealed class DeviceService : IDeviceService
     public const int DefaultOfflineAfterSeconds = 180;
     private readonly BunonBrainDbContext _db;
 
-    public DeviceService(BunonBrainDbContext db) { _db = db; }
+    private readonly IMonitoringSystemHooks _monitoring;
+
+    public DeviceService(BunonBrainDbContext db, IMonitoringSystemHooks monitoring) { _db = db; _monitoring = monitoring; }
 
     private static AccessResult<T> NotFound<T>() => AccessResult<T>.NotFound("device_not_found", "Device not found.");
 
@@ -328,13 +330,14 @@ public sealed class DeviceService : IDeviceService
         var d = await _db.Devices.FirstAsync(x => x.Id == id, ct);
         var now = DateTimeOffset.UtcNow;
         var reason = Clean(r.Reason);
-        _db.DeviceEvents.Add(new DeviceEvent
+        var statusEvent = new DeviceEvent
         {
             DeviceId = d.Id, FactoryId = d.FactoryId, EventType = DeviceEventTypes.StatusChanged,
             Severity = status == DeviceStatuses.Active ? DeviceSeverities.Info : DeviceSeverities.Warning, Source = DeviceMessageSources.Manual,
             IsSimulated = d.IsSimulated, OccurredAt = now, ReceivedAt = now, FromState = d.Status, ToState = status, Message = reason,
             RecordedByUserId = caller.UserId, RecordedByEmail = caller.Email,
-        });
+        };
+        _db.DeviceEvents.Add(statusEvent);
         _db.AuditLog.Add(AccessAudit.Entry(caller.Actor, "device.status_changed", AccessAudit.EntityDevice, d.Id.ToString(), d.Status, status,
             $"device {d.Code}: {d.Status} → {status}" + (reason is null ? "" : $" ({reason})"), traceId, d.FactoryId));
         d.Status = status;
@@ -342,6 +345,7 @@ public sealed class DeviceService : IDeviceService
         d.UpdatedAt = now;
         await _db.SaveChangesAsync(ct);
         _db.ChangeTracker.Clear();
+        await _monitoring.DeviceEventsAsync(new[] { statusEvent.Id }, caller, ct);
         return await GetAsync(caller, id, ct);
     }
 

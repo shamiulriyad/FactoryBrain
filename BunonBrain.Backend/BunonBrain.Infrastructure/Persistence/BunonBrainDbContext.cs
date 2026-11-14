@@ -77,6 +77,11 @@ public class BunonBrainDbContext : DbContext
     public DbSet<Device> Devices => Set<Device>();
     public DbSet<DeviceHeartbeat> DeviceHeartbeats => Set<DeviceHeartbeat>();
     public DbSet<DeviceEvent> DeviceEvents => Set<DeviceEvent>();
+    public DbSet<MonitoringEvent> MonitoringEvents => Set<MonitoringEvent>();
+    public DbSet<MonitoringEventReview> MonitoringEventReviews => Set<MonitoringEventReview>();
+    public DbSet<MonitoringAlert> MonitoringAlerts => Set<MonitoringAlert>();
+    public DbSet<MonitoringAlertAction> MonitoringAlertActions => Set<MonitoringAlertAction>();
+    public DbSet<MonitoringSimulationRun> MonitoringSimulationRuns => Set<MonitoringSimulationRun>();
     public DbSet<QcInspection>        QcInspections        => Set<QcInspection>();
     public DbSet<QcInspectionFinding> QcInspectionFindings => Set<QcInspectionFinding>();
     public DbSet<QcDefectCategory>    QcDefectCategories   => Set<QcDefectCategory>();
@@ -107,6 +112,7 @@ public class BunonBrainDbContext : DbContext
         mb.ApplyConfigurationsFromAssembly(typeof(BunonBrainDbContext).Assembly);
         // Worker IDs (W-001, …) come from this sequence: a value is never handed out twice.
         mb.HasSequence<long>(Configurations.WorkerProfileConfiguration.NumberSequence).StartsAt(1).IncrementsBy(1);
+        mb.HasSequence<long>(Configurations.MonitoringAlertConfiguration.NumberSequence).StartsAt(1).IncrementsBy(1);
 
         // The pgvector column on document_chunks is intentionally mapped as
         // "vector" with no fixed dimension. The dimension lives in the

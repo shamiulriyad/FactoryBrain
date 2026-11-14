@@ -430,6 +430,10 @@ public sealed class DbApiFactory : WebApplicationFactory<Program>
     /// <summary>Per-host worker photo store under the temp folder, removed with the host.</summary>
     public string WorkerPhotoStoragePath { get; } = Path.Combine(Path.GetTempPath(), "bunonbrain-worker-photo-tests", Guid.NewGuid().ToString("N"));
 
+    /// <summary>The computer-vision service key of this host, and the one factory code it reaches.</summary>
+    public string CvServiceKey { get; } = TestEnvironment.RandomSecret(40);
+    public const string CvServiceFactory = "CVSVC1";
+
     /// <summary>Per-host camera frame / video store under the temp folder, removed with the host.</summary>
     public string CameraStoragePath { get; } = Path.Combine(Path.GetTempPath(), "bunonbrain-camera-tests", Guid.NewGuid().ToString("N"));
 
@@ -559,6 +563,8 @@ public sealed class DbApiFactory : WebApplicationFactory<Program>
             ["WORKER_PHOTO_STORAGE_PATH"]   = WorkerPhotoStoragePath,
             ["CAMERA_FILE_STORAGE_PATH"]    = CameraStoragePath,
             ["CAMERA_VIDEO_MAX_MB"]         = "1",
+            ["CV_SERVICE_KEY"]              = CvServiceKey,
+            ["CV_SERVICE_FACTORIES"]        = CvServiceFactory,
         };
         foreach (var (k, v) in _overrides) env[k] = v;
         _environment = env;

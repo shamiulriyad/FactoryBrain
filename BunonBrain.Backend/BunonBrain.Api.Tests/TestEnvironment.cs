@@ -47,6 +47,7 @@ public static class TestEnvironment
         "MERCH_WORKER_ENABLED",
         "WORKER_PHOTO_STORAGE_PATH",
         "CAMERA_FILE_STORAGE_PATH", "CAMERA_IMAGE_MAX_MB", "CAMERA_VIDEO_MAX_MB",
+        "CV_SERVICE_KEY", "CV_SERVICE_FACTORIES",
     };
 
     private static readonly object Gate = new();

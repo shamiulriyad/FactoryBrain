@@ -53,6 +53,13 @@ const nextConfig = {
         source: '/api/:path*',
         destination: `${target}/api/:path*`,
       },
+      // SignalR hubs (/hubs/monitoring). If a proxy in between drops the
+      // WebSocket upgrade, the client falls back to Server-Sent Events or
+      // long polling automatically.
+      {
+        source: '/hubs/:path*',
+        destination: `${target}/hubs/:path*`,
+      },
     ];
   },
   // `src/services/rag/vector-store.ts` (and friends) lazy-resolves

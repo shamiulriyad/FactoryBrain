@@ -85,6 +85,10 @@ public static class Permissions
     public const string MonitoringView           = "monitoring.view";
     public const string MonitoringAlertsReview   = "monitoring.alerts.review";
     public const string MonitoringAlertsEscalate = "monitoring.alerts.escalate";
+    public const string MonitoringAlertsDismiss  = "monitoring.alerts.dismiss";
+    public const string MonitoringEventsReview   = "monitoring.events.review";
+    public const string MonitoringEventsIngest   = "monitoring.events.ingest";
+    public const string MonitoringSimulate       = "monitoring.simulate";
     public const string CamerasView              = "cameras.view";
     public const string CamerasManage            = "cameras.manage";
 
@@ -181,9 +185,13 @@ public static class AccessCatalog
         P(Permissions.OvertimeManage,    "Attendance", "Request overtime", "Submit and cancel overtime requests for workers in your scope."),
         P(Permissions.OvertimeApprove,   "Attendance", "Approve overtime", "Approve or reject overtime requested by someone else."),
 
-        P(Permissions.MonitoringView,           "Monitoring", "View monitoring", "Floor alerts, line board and live floor status."),
-        P(Permissions.MonitoringAlertsReview,   "Monitoring", "Review monitoring alerts", "Acknowledge and resolve floor alerts."),
-        P(Permissions.MonitoringAlertsEscalate, "Monitoring", "Escalate alerts", "Escalate uncertain events to supervisors.", reserved: true),
+        P(Permissions.MonitoringView,           "Monitoring", "View monitoring", "The central monitoring room, camera monitoring, the event timeline and alerts in your scope (supervisors: their lines), with live updates. Floor alerts, line board and live floor status."),
+        P(Permissions.MonitoringAlertsReview,   "Monitoring", "Review monitoring alerts", "Acknowledge and resolve monitoring alerts in your scope, and floor alerts."),
+        P(Permissions.MonitoringAlertsEscalate, "Monitoring", "Escalate alerts", "Escalate monitoring alerts (uncertain events, offline equipment) to a supervisor, manager or administrator."),
+        P(Permissions.MonitoringAlertsDismiss,  "Monitoring", "Dismiss alerts", "Close a monitoring alert without action, with a written reason."),
+        P(Permissions.MonitoringEventsReview,   "Monitoring", "Review monitoring events", "Record a review decision (confirmed, false positive, still uncertain) beside a monitoring event; the event itself never changes."),
+        P(Permissions.MonitoringEventsIngest,   "Monitoring", "Send monitoring events", "Send REAL monitoring events through the ingestion API (integration accounts, later the AI service). Worker identities only with a verified RFID card."),
+        P(Permissions.MonitoringSimulate,       "Monitoring", "Use the monitoring simulator", "Start and stop monitoring simulations and trigger demo events. Everything it produces is labelled SIMULATED."),
         P(Permissions.CamerasView,              "Monitoring", "View cameras", "The cameras in your scope (supervisors: cameras covering their lines): placement, coverage, zones, video source type, reference frame and recorded video. Never camera passwords."),
         P(Permissions.CamerasManage,            "Monitoring", "Manage cameras", "Register, edit, (de)activate and delete cameras, map their coverage, configure video sources (credentials stored encrypted), reference frames and zones."),
 
@@ -235,7 +243,8 @@ public static class AccessCatalog
                 Permissions.WorkersAssign,
                 Permissions.AttendanceView, Permissions.AttendanceApprove,
                 Permissions.OvertimeView, Permissions.OvertimeManage, Permissions.OvertimeApprove,
-                Permissions.MonitoringView,
+                Permissions.MonitoringView, Permissions.MonitoringAlertsReview, Permissions.MonitoringAlertsEscalate,
+                Permissions.MonitoringAlertsDismiss, Permissions.MonitoringEventsReview,
                 Permissions.ProductionView, Permissions.ProductionManage, Permissions.QcView,
                 Permissions.MerchandisingView, Permissions.MerchandisingManage,
                 Permissions.ApprovalsView, Permissions.ApprovalsDecide,
@@ -250,18 +259,20 @@ public static class AccessCatalog
                 Permissions.LinesView, Permissions.WorkersView, Permissions.WorkersAssign,
                 Permissions.AttendanceView, Permissions.AttendanceRecord, Permissions.ShiftsAssign,
                 Permissions.OvertimeView, Permissions.OvertimeManage, Permissions.OvertimeApprove,
-                Permissions.MonitoringView, Permissions.ProductionView, Permissions.ProductionAlertsReview,
+                Permissions.MonitoringView, Permissions.MonitoringAlertsReview, Permissions.MonitoringAlertsEscalate, Permissions.MonitoringEventsReview,
+                Permissions.ProductionView, Permissions.ProductionAlertsReview,
                 Permissions.QcView, Permissions.QcManage, Permissions.ApprovalsView, Permissions.MerchandisingView,
                 Permissions.CamerasView, Permissions.KnowledgeView, Permissions.NotificationsView,
             }),
 
         new RoleDefinition(SystemRoles.MonitoringOperator, "Monitoring Operator",
-            "Watches the central monitoring dashboard, camera feeds and AI results; acknowledges and escalates alerts. Cannot change attendance, salary or worker records.",
+            "Watches the central monitoring room, camera monitoring, the live event timeline and device health; reviews events, acknowledges and escalates alerts, and runs the monitoring simulator. Cannot change attendance, salary or worker records.",
             RoleScope.Factory, 40, AdminTier, new[]
             {
                 Permissions.LinesView, Permissions.WorkersView, Permissions.AttendanceView,
                 Permissions.MonitoringView, Permissions.MonitoringAlertsReview, Permissions.MonitoringAlertsEscalate,
-                Permissions.CamerasView, Permissions.NotificationsView,
+                Permissions.MonitoringEventsReview, Permissions.MonitoringSimulate,
+                Permissions.CamerasView, Permissions.DevicesView, Permissions.NotificationsView,
             }),
 
         new RoleDefinition(SystemRoles.HrOfficer, "HR / Attendance Officer",
@@ -276,12 +287,12 @@ public static class AccessCatalog
             }),
 
         new RoleDefinition(SystemRoles.DeviceAdmin, "IT / Device Administrator",
-            "Cameras (registration, coverage, video sources, zones), RFID readers, machine sensors and gateways: health, connectivity, the device simulator and technical logs. Cannot change HR or salary information.",
+            "Cameras (registration, coverage, video sources, zones), RFID readers, machine sensors and gateways: health, connectivity, the device simulator, technical logs, camera / device / model status events and the monitoring ingestion API. Cannot change HR or salary information.",
             RoleScope.Factory, 40, AdminTier, new[]
             {
                 Permissions.LinesView,
                 Permissions.DevicesView, Permissions.DevicesManage, Permissions.DevicesLogsView, Permissions.DevicesSimulate,
-                Permissions.CamerasView, Permissions.CamerasManage, Permissions.NotificationsView,
+                Permissions.CamerasView, Permissions.CamerasManage, Permissions.MonitoringEventsIngest, Permissions.NotificationsView,
             }),
 
         new RoleDefinition(SystemRoles.Worker, "Worker",

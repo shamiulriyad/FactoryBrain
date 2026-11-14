@@ -51,9 +51,9 @@ Lines that existed before factories are attached to `MAIN` when it is created.
 | Factory Admin | Assigned factories | Super Admin | Users and roles, lines, departments, factory settings |
 | Factory Manager | Assigned factories | Super / Factory Admin | Operations oversight, production, approvals, reports |
 | Production Supervisor | Assigned **lines** | Super / Factory Admin | Workers and workstations on their lines, production, line alerts |
-| Monitoring Operator | Assigned factories | Super / Factory Admin | Monitoring dashboard, cameras, acknowledge and escalate alerts |
+| Monitoring Operator | Assigned factories | Super / Factory Admin | Monitoring room, camera monitoring, event timeline and reviews, acknowledge and escalate alerts, monitoring simulator |
 | HR / Attendance Officer | Assigned factories | Super / Factory Admin | Worker records, attendance, shifts, leave, overtime |
-| IT / Device Administrator | Assigned factories | Super / Factory Admin | Devices, integrations, technical logs |
+| IT / Device Administrator | Assigned factories | Super / Factory Admin | Cameras, devices, integrations, technical logs, camera / device / model status events, the monitoring ingestion API |
 | Worker | Own records | Super / Factory Admin | Own profile, workstation, attendance and notifications |
 
 A user's reach is the widest of their roles. A non-platform user with no
@@ -102,9 +102,13 @@ active factory keeps only self-service permissions.
 | `overtime.manage` | ✓ | ✓ | ✓ | ✓ | | ✓ | | |
 | `overtime.approve` | ✓ | ✓ | ✓ | ✓ | | ✓ | | |
 | **Monitoring** |
-| `monitoring.view` | ✓ | ✓ | ✓ | ✓ | ✓ | | | |
-| `monitoring.alerts.review` | ✓ | ✓ | | | ✓ | | | |
-| `monitoring.alerts.escalate` *R* | ✓ | ✓ | | | ✓ | | | |
+| `monitoring.view` | ✓ | ✓ | ✓ | ✓ (their lines) | ✓ | | | |
+| `monitoring.alerts.review` | ✓ | ✓ | ✓ | ✓ (their lines) | ✓ | | | |
+| `monitoring.alerts.escalate` | ✓ | ✓ | ✓ | ✓ (their lines) | ✓ | | | |
+| `monitoring.alerts.dismiss` | ✓ | ✓ | ✓ | | | | | |
+| `monitoring.events.review` | ✓ | ✓ | ✓ | ✓ (their lines) | ✓ | | | |
+| `monitoring.events.ingest` | ✓ | ✓ | | | | | ✓ | |
+| `monitoring.simulate` | ✓ | ✓ | | | ✓ | | | |
 | `cameras.view` | ✓ | ✓ | ✓ | ✓ (their lines) | ✓ | | ✓ | |
 | `cameras.manage` | ✓ | ✓ | | | | | ✓ | |
 | **Production** |
@@ -120,7 +124,7 @@ active factory keeps only self-service permissions.
 | `approvals.decide` | ✓ | ✓ | ✓ | | | | | |
 | `approvals.decide_high` | ✓ | ✓ | | | | | | |
 | **Devices** |
-| `devices.view` | ✓ | ✓ | ✓ | | | | ✓ | |
+| `devices.view` | ✓ | ✓ | ✓ | | ✓ | | ✓ | |
 | `devices.manage` | ✓ | ✓ | | | | | ✓ | |
 | `devices.logs.view` | ✓ | ✓ | | | | | ✓ | |
 | `devices.simulate` | ✓ | ✓ | | | | | ✓ | |
@@ -253,11 +257,50 @@ active factory keeps only self-service permissions.
     `POST /api/devices/health/check`) records a *HeartbeatMissed* event.
     `camera_zone_revisions`, `device_heartbeats` and `device_events` are
     append-only (database triggers); a device with history can't be deleted.
-14. **Audit.** Sign-ins and every user, role, scope, status, password, factory,
+14. **Central monitoring.** One event pipeline for every producer: the
+    ingestion API (`monitoring.events.ingest`, REAL events only), the
+    monitoring simulator (`monitoring.simulate`, SIMULATED only), the device
+    pipeline (connection, error and status changes of real or simulated
+    devices; a camera's health device also reports the camera) and camera
+    status changes. It validates the contract per event type (see
+    `MONITORING_EVENTS.md`) and every reference against the event's factory,
+    stores one event per factory and `idempotencyKey` (a resend returns the
+    stored event as *Duplicate*), and applies the alert rules in the same
+    transaction. A `trackId` is a temporary camera-local number, never a
+    worker. A `workerId` is accepted only with `identity.method = RFID_BADGE`
+    and a card UID that is an active card of that worker in that factory;
+    visual identification is refused, an UNCERTAIN_DETECTION never names
+    anyone, and simulated events never do (check constraints enforce it too).
+    **Reach:** Super Admin every factory; factory roles their factories;
+    Production Supervisors only events and alerts on their lines. VISION
+    events (people, tracks, zones, activity) need `monitoring.view`; with only
+    `devices.view` (IT / Device Administrator) a user sees SYSTEM events
+    (camera, device, model status) and their alerts. **Alerts:** raised for
+    cameras / devices / models going offline or failing, uncertain detections
+    (review) and restricted-zone entries, never for productivity; a repeat
+    joins the open alert, a recovery is noted but a person still resolves it.
+    OPEN → ACKNOWLEDGED → ESCALATED → RESOLVED (resolving needs an
+    acknowledgement, a resolution code and a note), DISMISSED from any active
+    state with a reason (`monitoring.alerts.dismiss`); closed alerts never
+    change, a new occurrence raises a new alert. An optional
+    `expectedVersion` refuses an action on an alert someone else just
+    changed. Every action is written to the alert's history and the audit
+    log. Alerts never change pay, attendance or discipline. **Reviews** of an
+    event are stored beside it (`monitoring.events.review`).
+    `monitoring_events`, `monitoring_event_reviews` and
+    `monitoring_alert_actions` are append-only (database triggers).
+    **Real time:** `/hubs/monitoring` needs `monitoring.view` or
+    `devices.view` to connect; `Subscribe(factoryId?)` joins only the groups
+    the token allows (a factory's VISION / SYSTEM group, or a supervisor's
+    line groups); messages are sent to those groups only, never to everyone.
+    The connection closes when the token expires and the client reconnects
+    with a fresh one.
+15. **Audit.** Sign-ins and every user, role, scope, status, password, factory,
    line, department, floor, worker, card, import, export, shift, shift
    assignment, manual punch, correction, overtime decision, attendance policy,
    reader, camera (registration, edit, status, coverage, source, reference
-   frame, deletion), zone and device change are recorded with
+   frame, deletion), zone, device change, monitoring alert action, event
+   review and simulation start / stop are recorded with
    actor, before/after and reason. Passwords are never logged, and worker edits
    record which fields changed, not their personal values.
 
@@ -343,6 +386,17 @@ Errors are RFC 7807 problem details with a stable `code`, e.g.
 | `POST /api/devices`, `PUT /api/devices/{id}`, `PATCH /api/devices/{id}/status`, `DELETE /api/devices/{id}`, `POST /api/devices/health/check` | `devices.manage` |
 | `POST /api/devices/{id}/heartbeat` `{occurredAt?, messageId?, firmwareVersion?, metrics?}`, `POST /api/devices/{id}/events` `{kind, code?, message?, severity?}`, `POST /api/devices/ingest` `{factoryId, deviceCode, kind, …}` (real devices only) | `devices.manage` |
 | `GET /api/devices/events?…filters…`, `GET /api/devices/{id}/events`, `GET /api/devices/{id}/heartbeats` | `devices.logs.view` or `devices.manage` |
+| `GET /api/monitoring/overview?factoryId&departmentId&floorId&lineId&cameraId&eventType&alertStatus&from&to`, `GET /api/monitoring/events?…filters…&page&pageSize`, `GET /api/monitoring/events/{id}`, `GET /api/monitoring/alerts?…filters…&status (or ACTIVE)&sort`, `GET /api/monitoring/alerts/{id}` | `monitoring.view` or `devices.view` (SYSTEM only) |
+| `GET /api/monitoring/cameras?factoryId&floorId&lineId&connection&search`, `GET /api/monitoring/cameras/{id}` (no stream URLs or credentials) | `monitoring.view` or `cameras.view` |
+| `GET /api/monitoring/contract` | `monitoring.view`, `devices.view` or `monitoring.events.ingest` |
+| `POST /api/monitoring/events` (REAL events; 201, or 200 *Duplicate*; see `MONITORING_EVENTS.md`) | `monitoring.events.ingest` |
+| `POST /api/monitoring/events/{id}/reviews` `{decision, note?}` | `monitoring.events.review` |
+| `POST /api/monitoring/alerts/{id}/acknowledge` `{note?, expectedVersion?}`, `/resolve` `{resolutionCode, note, expectedVersion?}` | `monitoring.alerts.review` |
+| `POST /api/monitoring/alerts/{id}/escalate` `{toRole, reason, expectedVersion?}` | `monitoring.alerts.escalate` |
+| `POST /api/monitoring/alerts/{id}/dismiss` `{reason, expectedVersion?}` | `monitoring.alerts.dismiss` |
+| `GET /api/monitoring/simulator?factoryId`, `POST /api/monitoring/simulator/start` `{factoryId, cameraIds?, eventsPerMinute?, durationMinutes?, eventTypes?}`, `POST /api/monitoring/simulator/{runId}/stop` `{reason?}`, `POST /api/monitoring/simulator/events` `{factoryId, eventType, cameraId?, zoneId?, deviceId?, trackId?, confidence?, activity?, toStatus?}` | `monitoring.simulate` |
+| `GET /api/integrations/cv/cameras`, `/cameras/{id}`, `/cameras/{id}/video` (camera sources with decrypted stream credentials, active zones, recorded video) | the computer-vision **service key** only (`X-Service-Key`); 403 for every person |
+| SignalR `/hubs/monitoring` (methods `Subscribe(factoryId?)`, `Unsubscribe()`; messages `monitoringEvent`, `monitoringAlert`, `cameraStatus`, `deviceStatus`) | `monitoring.view` or `devices.view` |
 | `GET /api/simulator/devices`, `/events`; `POST /api/simulator/devices/online`, `/offline`, `/heartbeat` `{deviceId, count?, intervalSeconds?}`, `/error` (simulated devices only) | `devices.simulate` |
 | `PUT /api/workers/{id}/account` `{userId}` (link / unlink) | `users.update` |
 | `POST /api/workers/{id}/account` `{email, temporaryPassword}` (create a Worker login) | `users.create` |
@@ -395,6 +449,14 @@ knowledge, settings, agents) are guarded by their module permissions; see
 | Device details (health, events, heartbeats, status, ingestion contract) | `/app/cameras-devices/devices/{id}` | `devices.view` (history: `devices.logs.view`) |
 | Device health dashboard and event log | `/app/cameras-devices/health` | `devices.view` |
 | Device simulator (SIMULATED) | `/app/cameras-devices/simulator` | `devices.simulate` |
+| Central monitoring room (cameras, devices, alerts, live event feed, line and factory status; filters) | `/app/monitoring` | `monitoring.view` or `devices.view` |
+| Camera monitoring grid | `/app/monitoring/cameras` | `monitoring.view` or `cameras.view` |
+| Camera expanded view (recorded playback, local webcam preview, stream status, zones, AI status, alerts, live events) | `/app/monitoring/cameras/{id}` | `monitoring.view` or `cameras.view` |
+| Event timeline and event details (reviews, related alerts) | `/app/monitoring/events` | `monitoring.view` or `devices.view` (reviewing: `monitoring.events.review`) |
+| Alert management | `/app/monitoring/alerts` | `monitoring.view` or `devices.view` (actions: their permissions) |
+| Alert details (history, evidence, events) | `/app/monitoring/alerts/{id}` | `monitoring.view` or `devices.view` |
+| Device health overview (live) | `/app/monitoring/devices` | `devices.view` |
+| Monitoring simulator (SIMULATED) | `/app/monitoring/simulator` | `monitoring.simulate` |
 | Account settings (profile, password, my access) | `/app/account` | everyone |
 | My profile (worker self-service) | `/app/me` | `self.view` |
 | Access denied | shown in place, or `/app/access-denied` | — |
@@ -423,7 +485,7 @@ temporary password to `/app/account`, and starts users without an overview
   hold single-plant data without a factory column. They are permission-gated,
   and Production Supervisors are line-limited on QC writes, but their records
   are not yet partitioned by factory.
-- Leave, alert escalation and notifications are reserved permissions: the
+- Leave and notifications are reserved permissions: the
   roles carry them, but those modules aren't built yet. Attendance doesn't yet account for leave or holidays: a scheduled
   worker with no attendance counts as absent.
 - Attendance: a reader event with an unknown card UID is refused (404
@@ -444,6 +506,22 @@ temporary password to `/app/account`, and starts users without an overview
   file store (`CAMERA_FILE_STORAGE_PATH`, limits `CAMERA_IMAGE_MAX_MB` /
   `CAMERA_VIDEO_MAX_MB`, default 8 / 50 MB); the browser downloads a video
   whole to play it.
+- Central monitoring: vision events come from the computer-vision service
+  (REAL: YOLO person detection + ByteTrack, see `computer-vision/README.md`),
+  from the monitoring simulator (SIMULATED) or from producers calling the
+  ingestion API. The computer-vision service signs in with its own service
+  key (`CV_SERVICE_KEY`, factories in `CV_SERVICE_FACTORIES`); other producers
+  still use a user account with `monitoring.events.ingest`. One service key
+  exists (no rotation without a restart, no per-instance keys yet). Live camera
+  pictures aren't shown: RTSP / HTTP streams are not opened by the server,
+  recorded videos play back, and a "local webcam" preview uses the viewer's
+  own browser camera. HR has no central monitoring access (attendance events
+  stay in the attendance module). The hub checks the token when connecting
+  and closes at token expiry; a role or scope change applies to a live
+  connection at its next reconnect (at most one token lifetime). Events and
+  alert history are kept without a retention policy. A simulation run acts
+  with its starter's identity limited to the run's factory and ends by
+  itself (at most 2 hours, 5,000 events).
 - System roles are fixed; custom roles are not supported (by design for now).
 - Token freshness is cached for 30 s per API instance: on a multi-instance
   deployment another instance may accept an old token for up to 30 s.

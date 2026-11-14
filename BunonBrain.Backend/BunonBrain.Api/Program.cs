@@ -317,7 +317,22 @@ var jwtIssuer   = jwtOpts.Issuer   ?? "bunonbrain";
 var jwtAudience = jwtOpts.Audience ?? "bunonbrain";
 var jwtKey      = new SymmetricSecurityKey(jwtOpts.SigningKeyBytes);
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+// Two ways in: people use JWT bearer tokens; the computer-vision service uses
+// its service key (X-Service-Key). The "BunonBrain" policy scheme picks one per
+// request, so every endpoint and policy stays the same.
+var serviceKeys = BunonBrain.Api.Authorization.ServiceKeySettings.FromEnvironment(Environment.GetEnvironmentVariable);
+builder.Services.AddSingleton(serviceKeys);
+builder.Services.AddAuthentication(o =>
+    {
+        o.DefaultScheme = "BunonBrain";
+        o.DefaultChallengeScheme = "BunonBrain";
+    })
+    .AddPolicyScheme("BunonBrain", "JWT or service key", o =>
+        o.ForwardDefaultSelector = ctx => ctx.Request.Headers.ContainsKey(BunonBrain.Api.Authorization.ServiceKeyDefaults.Header)
+            ? BunonBrain.Api.Authorization.ServiceKeyDefaults.Scheme
+            : JwtBearerDefaults.AuthenticationScheme)
+    .AddScheme<BunonBrain.Api.Authorization.ServiceKeyAuthenticationOptions, BunonBrain.Api.Authorization.ServiceKeyAuthenticationHandler>(
+        BunonBrain.Api.Authorization.ServiceKeyDefaults.Scheme, _ => { })
     .AddJwtBearer(o =>
     {
         o.MapInboundClaims = false; // keep "sub" / "email" claim names verbatim
@@ -373,6 +388,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             }
         };
     });
+if (serviceKeys.Problem is not null)
+    Console.WriteLine($"[startup] Computer-vision service key: {serviceKeys.Problem}");
 
 // ─── Authorization policies ───────────────────────────────────────────────
 // Every endpoint requires an authenticated user unless it explicitly opts
@@ -561,6 +578,21 @@ builder.Services.AddScoped<IDeviceService, BunonBrain.Infrastructure.Devices.Dev
 builder.Services.AddScoped<IDeviceIngestionService, BunonBrain.Infrastructure.Devices.DeviceIngestionService>();
 if (!builder.Environment.IsEnvironment("Testing"))
     builder.Services.AddHostedService<BunonBrain.Infrastructure.Devices.DeviceHealthMonitor>();
+// Central monitoring: one event pipeline for every producer (ingestion API,
+// monitoring simulator, device pipeline, camera service), alerts and their
+// lifecycle, and live updates over /hubs/monitoring to authorized groups only.
+// The simulator worker generates due simulated events every second.
+builder.Services.AddScoped<IMonitoringPublisher, BunonBrain.Api.Realtime.SignalRMonitoringPublisher>();
+builder.Services.AddScoped<IMonitoringEventService, BunonBrain.Infrastructure.Monitoring.MonitoringEventService>();
+builder.Services.AddScoped<IMonitoringSystemHooks, BunonBrain.Infrastructure.Monitoring.MonitoringSystemHooks>();
+builder.Services.AddScoped<IMonitoringAlertService, BunonBrain.Infrastructure.Monitoring.MonitoringAlertService>();
+builder.Services.AddScoped<IMonitoringRoomService, BunonBrain.Infrastructure.Monitoring.MonitoringRoomService>();
+builder.Services.AddScoped<IMonitoringSimulatorService, BunonBrain.Infrastructure.Monitoring.MonitoringSimulatorService>();
+builder.Services.AddScoped<BunonBrain.Application.Dtos.Monitoring.ICvIntegrationService, BunonBrain.Infrastructure.Monitoring.CvIntegrationService>();
+builder.Services.AddSingleton<BunonBrain.Infrastructure.Monitoring.MonitoringSimulatorState>();
+builder.Services.AddSingleton<BunonBrain.Api.Hubs.MonitoringConnections>();
+if (!builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddHostedService<BunonBrain.Infrastructure.Monitoring.MonitoringSimulatorWorker>();
 builder.Services.AddScoped<IAuditQueryService, BunonBrain.Infrastructure.Access.AuditQueryService>();
 
 // ─── RAG tuning config (Rag: section in appsettings.json, env Rag__*) ──────
@@ -951,6 +983,10 @@ app.UseRateLimiter();                              // after auth so per-user pol
 
 app.MapControllers();                              // Attribute-routed controllers
 app.MapHub<FactoryHub>("/hubs/factory");           // SignalR hub — server→client only
+// Monitoring hub: permission-checked negotiate, per-factory / per-line groups;
+// the connection closes when its access token expires (the client reconnects
+// with a fresh token and subscribes again).
+app.MapHub<BunonBrain.Api.Hubs.MonitoringHub>("/hubs/monitoring", o => o.CloseOnAuthenticationExpiration = true);
 app.MapHealthChecks("/health").AllowAnonymous();   // Health probe — intentionally public, returns only Healthy/Unhealthy
 
 app.MapGet("/", () => Results.Ok(new

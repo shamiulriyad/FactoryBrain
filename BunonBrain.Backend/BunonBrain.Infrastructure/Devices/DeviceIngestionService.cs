@@ -34,7 +34,12 @@ public sealed class DeviceIngestionService : IDeviceIngestionService
     private readonly BunonBrainDbContext _db;
     private readonly ILogger<DeviceIngestionService> _log;
 
-    public DeviceIngestionService(BunonBrainDbContext db, ILogger<DeviceIngestionService> log) { _db = db; _log = log; }
+    private readonly IMonitoringSystemHooks _monitoring;
+
+    public DeviceIngestionService(BunonBrainDbContext db, IMonitoringSystemHooks monitoring, ILogger<DeviceIngestionService> log)
+    {
+        _db = db; _monitoring = monitoring; _log = log;
+    }
 
     private static AccessResult<T> NotFound<T>() => AccessResult<T>.NotFound("device_not_found", "Device not found.");
 
@@ -175,6 +180,8 @@ public sealed class DeviceIngestionService : IDeviceIngestionService
             return (Outcome: "Accepted", HeartbeatId: heartbeat?.Id, Events: events);
         });
         _db.ChangeTracker.Clear();
+        // Connection, error and status changes reach central monitoring (after the commit; never undoes it).
+        if (outcome.Events.Count > 0) await _monitoring.DeviceEventsAsync(outcome.Events.Select(e => e.Id).ToList(), caller, ct);
         if (outcome.Outcome == "Disabled")
             return AccessResult<DeviceMessageResult>.Conflict("device_disabled", $"{device.Code} is disabled; its messages are not accepted.");
         var saved = await _db.Devices.AsNoTracking().FirstAsync(x => x.Id == deviceId, ct);
@@ -258,11 +265,13 @@ public sealed class DeviceIngestionService : IDeviceIngestionService
         var candidates = await devices.Where(d => d.ConnectionStatus == ConnectionStatuses.Online && (d.OfflineDeadline == null || d.OfflineDeadline < now))
             .Select(d => d.Id).Take(1000).ToListAsync(ct);
         var marked = 0;
+        long? missedEventId = null;
         foreach (var id in candidates)
         {
             var strategy = _db.Database.CreateExecutionStrategy();
             var changed = await strategy.ExecuteAsync(async () =>
             {
+                missedEventId = null;
                 _db.ChangeTracker.Clear();
                 await using var tx = await _db.Database.BeginTransactionAsync(ct);
                 await DeviceLocks.DeviceAsync(_db, id, ct);
@@ -274,22 +283,29 @@ public sealed class DeviceIngestionService : IDeviceIngestionService
                     return false;
                 }
                 var at = d.OfflineDeadline ?? now;
-                _db.DeviceEvents.Add(new DeviceEvent
+                var missed = new DeviceEvent
                 {
                     DeviceId = d.Id, FactoryId = d.FactoryId, EventType = DeviceEventTypes.HeartbeatMissed, Severity = DeviceSeverities.Warning,
                     Source = DeviceMessageSources.System, IsSimulated = d.IsSimulated, OccurredAt = at, ReceivedAt = now,
                     Message = $"No message for {d.OfflineAfterSeconds} s (last seen {d.LastSeenAt:u}); marked offline",
                     FromState = ConnectionStatuses.Online, ToState = ConnectionStatuses.Offline,
                     RecordedByUserId = caller?.UserId, RecordedByEmail = caller?.Email ?? MonitorEmail,
-                });
+                };
+                _db.DeviceEvents.Add(missed);
                 d.ConnectionStatus = ConnectionStatuses.Offline;
                 d.LastDisconnectedAt = at;
                 d.ConnectionChangedAt = at;
                 await _db.SaveChangesAsync(ct);
                 await tx.CommitAsync(ct);
+                missedEventId = missed.Id;
                 return true;
             });
-            if (changed) marked++;
+            if (changed)
+            {
+                marked++;
+                _db.ChangeTracker.Clear();
+                if (missedEventId is { } eventId) await _monitoring.DeviceEventsAsync(new[] { eventId }, caller, ct);
+            }
         }
         _db.ChangeTracker.Clear();
         if (marked > 0) _log.LogInformation("Device health check marked {Count} device(s) offline.", marked);

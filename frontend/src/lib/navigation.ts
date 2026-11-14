@@ -28,7 +28,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { KeyRound, ShieldHalf, UserCircle2, UserCog, Building2, IdCard, Inbox, Globe, ArrowRightLeft, CalendarCheck } from "lucide-react";
+import { KeyRound, ShieldHalf, UserCircle2, UserCog, Building2, IdCard, Inbox, Globe, ArrowRightLeft, CalendarCheck, Cctv } from "lucide-react";
 import { P } from "@/lib/access";
 
 export type FloorId = "fabric" | "cutting" | "sewing" | "qc" | "packing";
@@ -116,6 +116,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: "qc", labelKey: "nav.qc", href: "/app/qc", icon: ClipboardCheck, perms: [P.QcView], keywords: "quality defects rework inspections history dhu taxonomy" },
       { id: "vision", labelKey: "nav.vision", href: "/app/vision", icon: ScanLine, perms: [P.QcView], keywords: "camera photo defect image inspect upload vision" },
       { id: "sensors", labelKey: "nav.sensors", href: "/app/sensors", icon: Gauge, perms: [P.DevicesView, P.MonitoringView], keywords: "telemetry energy rfid readings machines" },
+      { id: "cameras-devices", labelKey: "nav.camerasDevices", href: "/app/cameras-devices", icon: Cctv, perms: [P.CamerasView, P.DevicesView, P.DevicesSimulate], keywords: "camera cameras cctv ip rtsp webcam recorded video zone zones polygon reference frame coverage device devices iot rfid reader sensor counter esp32 gateway heartbeat health online offline simulator" },
       { id: "attendance", labelKey: "nav.attendance", href: "/app/attendance", icon: CalendarCheck, perms: [P.AttendanceView, P.AttendanceManage, P.ShiftsManage, P.ShiftsAssign, P.OvertimeView, P.OvertimeApprove], keywords: "attendance shift shifts check-in check-out punch rfid card simulator break lunch tea overtime ot late absent present correction roster schedule report" },
       { id: "assignments", labelKey: "nav.assignments", href: "/app/assignments", icon: ArrowRightLeft, perms: [P.WorkersView], keywords: "assignment assign workstation table transfer occupancy capacity line layout machine t-025" },
       { id: "workers", labelKey: "nav.workers", href: "/app/workers", icon: IdCard, perms: [P.WorkersView], keywords: "workers worker directory register employee staff id w-001 import csv export status hr profile" },

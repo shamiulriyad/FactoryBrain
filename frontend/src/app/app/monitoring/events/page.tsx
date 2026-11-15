@@ -23,13 +23,15 @@ import { Pagination } from "@/components/access/shared";
 import { useFactoryOrg, useMyFactories } from "@/components/workers/shared";
 import { SearchBox, tableCls, useQueryState } from "@/components/attendance/shared";
 import { AlertStatusBadge, LiveIndicator, MonitoringTabs, SeverityBadge, SourceBadge, eventWhere } from "@/components/monitoring/shared";
+import { ActivityBadge } from "@/components/monitoring/activity";
 import { useResource } from "@/lib/useResource";
 import { useMonitoringHub } from "@/lib/useMonitoringHub";
 import { apiJson, errorMessage } from "@/lib/api";
 import { P, type PagedResult } from "@/lib/access";
 import { cn } from "@/lib/cn";
 import {
-  EVENT_TYPES, EVENT_TYPE_LABEL, MON, PRODUCER_LABEL, REVIEW_DECISION_LABEL, SIMULATED_NOTE, dhaka, dhakaInputToIso, payloadString, qs,
+  ACTIVITIES, ACTIVITY_LABEL, GARMENT_ACTIVITIES, activityName, isGarmentEvent, EVENT_TYPES, EVENT_TYPE_LABEL, MON, PRODUCER_LABEL, REVIEW_DECISION_LABEL, SIMULATED_NOTE, dhaka, dhakaInputToIso,
+  isActivityEvent, payloadString, qs,
   type MonitoringCamera, type MonitoringEvent, type MonitoringEventDetail
 } from "@/lib/monitoring";
 
@@ -52,7 +54,7 @@ function Timeline() {
   const [showFilters, setShowFilters] = useState(false);
   const path = useMemo(() => `/api/monitoring/events${qs({
     factoryId: factory, lineId: q.get("line"), cameraId: q.get("camera"), eventType: q.get("type"), category: q.get("category"),
-    sourceType: q.get("source"), trackId: q.get("track"), search: q.get("search"), from: dhakaInputToIso(q.get("from")), to: dhakaInputToIso(q.get("to")),
+    sourceType: q.get("source"), trackId: q.get("track"), activity: q.get("activity"), search: q.get("search"), from: dhakaInputToIso(q.get("from")), to: dhakaInputToIso(q.get("to")),
     page: q.page, pageSize: PAGE_SIZE
   })}`, [factory, q]);
   const events = useResource<PagedResult<MonitoringEvent>>(path);
@@ -63,7 +65,8 @@ function Timeline() {
     onEvent: (e) => {
       const fits = (!q.get("line") || e.line?.id === q.get("line")) && (!q.get("camera") || e.camera?.id === q.get("camera"))
         && (!q.get("type") || e.eventType === q.get("type")) && (!q.get("source") || e.sourceType === q.get("source"))
-        && (!q.get("category") || e.category === q.get("category")) && !q.get("to");
+        && (!q.get("category") || e.category === q.get("category")) && !q.get("to")
+        && (!q.get("activity") || (isActivityEvent(e.eventType) && e.payload?.activity === q.get("activity")));
       if (fits) setIncoming((n) => n + 1);
     },
     onResync: () => void events.reload()
@@ -98,6 +101,11 @@ function Timeline() {
           <option value="">Real and simulated</option>
           <option value="REAL">Real only</option>
           <option value="SIMULATED">Simulated only</option>
+        </FilterSelect>
+        <FilterSelect label="Activity" value={q.get("activity")} onChange={(v) => q.set({ activity: v || null })} testId="events-activity">
+          <option value="">Any</option>
+          <optgroup label="Generic posture">{ACTIVITIES.map((a) => <option key={a} value={a}>{ACTIVITY_LABEL[a]}</option>)}</optgroup>
+          <optgroup label="Garment activity">{GARMENT_ACTIVITIES.filter((a) => !(ACTIVITIES as readonly string[]).includes(a)).map((a) => <option key={a} value={a}>{activityName(a)}</option>)}</optgroup>
         </FilterSelect>
         <FilterSelect label="Type" value={q.get("type")} onChange={(v) => q.set({ type: v || null })} testId="events-type">
           <option value="">All</option>
@@ -160,6 +168,10 @@ function Timeline() {
                     <td className={td}>
                       <span className="font-medium">{EVENT_TYPE_LABEL[e.eventType] ?? e.eventType}</span>
                       {payloadString(e, "toStatus") && <span className="ml-1.5"><Badge tone={payloadString(e, "toStatus") === "OFFLINE" ? "danger" : "neutral"}>{payloadString(e, "toStatus")}</Badge></span>}
+                      {isActivityEvent(e.eventType) && payloadString(e, "activity") && (
+                        <span className="ml-1.5"><ActivityBadge activity={payloadString(e, "activity")!} previous={payloadString(e, "previousActivity")} reason={payloadString(e, "reason")}
+                          garment={isGarmentEvent(e.eventType)} /></span>
+                      )}
                       <p className="text-caption text-fg-tertiary truncate max-w-[22rem]">{e.summary}</p>
                     </td>
                     <td className={cn(td, "text-caption")}>{eventWhere(e) || "—"}</td>

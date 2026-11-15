@@ -41,7 +41,8 @@ export default function MonitoringSimulatorPage() {
   );
 }
 
-const DEFAULT_TYPES = ["PERSON_DETECTED", "TRACK_UPDATED", "PERSON_LOST", "ZONE_ENTERED", "ZONE_EXITED", "ACTIVITY_CLASSIFIED", "UNCERTAIN_DETECTION",
+const DEFAULT_TYPES = ["PERSON_DETECTED", "TRACK_UPDATED", "PERSON_LOST", "ZONE_ENTERED", "ZONE_EXITED", "ACTIVITY_CLASSIFIED", "ACTIVITY_STATE_CHANGED",
+  "ACTIVITY_UNCERTAIN", "UNCERTAIN_DETECTION",
   "CAMERA_STATUS_CHANGED", "DEVICE_STATUS_CHANGED"];
 const STATUS_CHOICES: Record<string, string[]> = {
   CAMERA_STATUS_CHANGED: ["OFFLINE", "ONLINE"],
@@ -248,7 +249,7 @@ function TriggerPanel({ factory, cameras, devices }: { factory: string; cameras:
   const [device, setDevice] = useState("");
   const [track, setTrack] = useState("");
   const [confidence, setConfidence] = useState("");
-  const [activity, setActivity] = useState("SEWING");
+  const [activity, setActivity] = useState("STANDING");
   const [toStatus, setToStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [last, setLast] = useState<SimulatorTriggerResult | null>(null);
@@ -265,7 +266,7 @@ function TriggerPanel({ factory, cameras, devices }: { factory: string; cameras:
         method: "POST",
         body: {
           factoryId: factory, eventType: type, cameraId: needsCamera ? cam || null : null, zoneId: zone || null, deviceId: device || null,
-          trackId: track || null, confidence: confidence ? Number(confidence) : null, activity: type === "ACTIVITY_CLASSIFIED" ? activity : null, toStatus: toStatus || null
+          trackId: track || null, confidence: confidence ? Number(confidence) : null, activity: type === "ACTIVITY_CLASSIFIED" || type === "ACTIVITY_STATE_CHANGED" ? activity : null, toStatus: toStatus || null
         }
       });
       setLast(r);
@@ -331,16 +332,16 @@ function TriggerPanel({ factory, cameras, devices }: { factory: string; cameras:
             {(ids) => <Input id={ids.id} value={track} onChange={(e) => setTrack(e.target.value)} maxLength={64} />}
           </Field>
         )}
-        {["PERSON_DETECTED", "TRACK_UPDATED", "ACTIVITY_CLASSIFIED", "UNCERTAIN_DETECTION"].includes(type) && (
+        {["PERSON_DETECTED", "TRACK_UPDATED", "ACTIVITY_CLASSIFIED", "ACTIVITY_STATE_CHANGED", "ACTIVITY_UNCERTAIN", "UNCERTAIN_DETECTION"].includes(type) && (
           <Field label="Confidence (optional, 0–1)">
             {(ids) => <Input id={ids.id} type="number" step="0.01" min={0} max={1} value={confidence} onChange={(e) => setConfidence(e.target.value)} />}
           </Field>
         )}
-        {type === "ACTIVITY_CLASSIFIED" && (
+        {(type === "ACTIVITY_CLASSIFIED" || type === "ACTIVITY_STATE_CHANGED") && (
           <Field label="Sample activity">
             {(ids) => (
               <Select id={ids.id} value={activity} onChange={(e) => setActivity(e.target.value)}>
-                {["SEWING", "MATERIAL_HANDLING", "WALKING", "UNKNOWN"].map((a) => <option key={a} value={a}>{a}</option>)}
+                {["STANDING", "SITTING", "WALKING", "BENDING", "REACHING"].map((a) => <option key={a} value={a}>{a}</option>)}
               </Select>
             )}
           </Field>

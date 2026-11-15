@@ -7,7 +7,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { AlertTriangle, Bell, Box, Cctv, CircleDot, Cpu, FlaskConical, Radio, ScanLine, ShieldCheck, Signal, WifiOff } from "lucide-react";
+import { AlertTriangle, Bell, Box, Cctv, CircleDot, Cpu, FlaskConical, HelpCircle, PersonStanding, Radio, ScanLine, Scissors, ShieldCheck, Signal, WifiOff } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -19,9 +19,10 @@ import { P } from "@/lib/access";
 import { apiJson, errorMessage } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import type { LiveState } from "@/lib/useMonitoringHub";
+import { ActivityBadge } from "@/components/monitoring/activity";
 import {
   ALERT_STATUS_LABEL, ALERT_STATUS_TONE, ALERT_TYPE_LABEL, CONNECTION_TONE, ESCALATION_TARGETS, EVENT_TYPE_LABEL, MON, RESOLUTION_LABEL,
-  SEVERITY_TONE, ago, dhaka, dhakaTime, payloadString,
+  SEVERITY_TONE, ago, dhaka, dhakaTime, isActivityEvent, isGarmentEvent, payloadString,
   type MonitoringAlert, type MonitoringAlertDetail, type MonitoringEvent
 } from "@/lib/monitoring";
 
@@ -30,6 +31,7 @@ import {
 const SECTIONS: { href: string; label: string; perms: string[]; exact?: boolean }[] = [
   { href: MON, label: "Monitoring room", perms: [P.MonitoringView, P.DevicesView], exact: true },
   { href: `${MON}/cameras`, label: "Cameras", perms: [P.MonitoringView, P.CamerasView] },
+  { href: `${MON}/activity`, label: "Activity", perms: [P.MonitoringView] },
   { href: `${MON}/events`, label: "Event timeline", perms: [P.MonitoringView, P.DevicesView] },
   { href: `${MON}/alerts`, label: "Alerts", perms: [P.MonitoringView, P.DevicesView] },
   { href: `${MON}/devices`, label: "Device health", perms: [P.DevicesView] },
@@ -109,6 +111,12 @@ function EventIcon({ type }: { type: string }) {
     case "DEVICE_STATUS_CHANGED": return <Cpu size={14} className={cls} aria-hidden />;
     case "MODEL_STATUS_CHANGED": return <Box size={14} className={cls} aria-hidden />;
     case "UNCERTAIN_DETECTION": return <AlertTriangle size={14} className="text-[var(--risk-medium)] shrink-0" aria-hidden />;
+    case "ACTIVITY_CLASSIFIED":
+    case "ACTIVITY_STATE_CHANGED": return <PersonStanding size={14} className={cls} aria-hidden />;
+    case "ACTIVITY_UNCERTAIN":
+    case "GARMENT_ACTIVITY_UNCERTAIN": return <HelpCircle size={14} className="text-fg-tertiary shrink-0" aria-hidden />;
+    case "GARMENT_ACTIVITY_CLASSIFIED":
+    case "GARMENT_ACTIVITY_CHANGED": return <Scissors size={14} className={cls} aria-hidden />;
     case "ZONE_ENTERED":
     case "ZONE_EXITED": return <ScanLine size={14} className={cls} aria-hidden />;
     default: return <CircleDot size={14} className={cls} aria-hidden />;
@@ -149,13 +157,15 @@ export function eventWhere(e: MonitoringEvent): string {
 }
 
 /** A compact, scannable list of events (newest first). */
-export function EventList({ rows, onOpen, highlight, empty, testId, dense }: {
+export function EventList({ rows, onOpen, highlight, empty, testId, dense, activityByTrack }: {
   rows: MonitoringEvent[];
   onOpen?: (e: MonitoringEvent) => void;
   highlight?: Set<string>;
   empty?: ReactNode;
   testId?: string;
   dense?: boolean;
+  /** Latest predicted activity per temporary track id, shown beside the track on its other events. */
+  activityByTrack?: Map<string, { activity: string; confidence?: number | null }>;
 }) {
   if (rows.length === 0) return <>{empty ?? <p className="px-4 py-6 text-caption text-fg-tertiary">No events yet.</p>}</>;
   return (
@@ -170,8 +180,15 @@ export function EventList({ rows, onOpen, highlight, empty, testId, dense }: {
                 <EventIcon type={e.eventType} />
                 <span className="text-body font-medium text-fg-primary">{EVENT_TYPE_LABEL[e.eventType] ?? e.eventType}</span>
                 {status && <Badge tone={status === "OFFLINE" || status === "ERROR" ? "danger" : status === "ONLINE" || status === "READY" ? "success" : "neutral"}>{status}</Badge>}
+                {isActivityEvent(e.eventType) && payloadString(e, "activity") && (
+                  <ActivityBadge activity={payloadString(e, "activity")!} previous={payloadString(e, "previousActivity")} reason={payloadString(e, "reason")}
+                    garment={isGarmentEvent(e.eventType)} />
+                )}
                 <SourceBadge source={e.sourceType} />
                 {e.trackId && <span className="font-mono text-caption text-fg-secondary" title="Temporary camera-local track number: not a worker identity">track {e.trackId}</span>}
+                {e.trackId && !isActivityEvent(e.eventType) && activityByTrack?.get(e.trackId) && (
+                  <ActivityBadge activity={activityByTrack.get(e.trackId)!.activity} confidence={activityByTrack.get(e.trackId)!.confidence} />
+                )}
                 {e.verifiedWorker && <Badge tone="accent" title="Identity verified by RFID card">{e.verifiedWorker.code}</Badge>}
                 {e.confidence != null && <span className="text-caption text-fg-tertiary">conf {e.confidence.toFixed(2)}</span>}
               </div>

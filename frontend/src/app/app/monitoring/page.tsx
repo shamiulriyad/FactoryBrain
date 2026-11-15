@@ -5,11 +5,12 @@
 // over SignalR. Filters live in the URL. Only data the signed-in user may see
 // is ever sent by the API or the hub. No AI results: computer vision is not
 // connected yet, so vision events here are SIMULATED or come from producers
-// using the ingestion API.
+// using the ingestion API. With the computer-vision service running, vision
+// events are REAL (producer CV_SERVICE) and include predicted activity.
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bell, Cctv, Cpu, Activity, ArrowRight, Factory as FactoryIcon, Filter, X } from "lucide-react";
+import { Bell, Cctv, Cpu, Activity, ArrowRight, Factory as FactoryIcon, Filter, PersonStanding, X } from "lucide-react";
 import { RequirePermission } from "@/components/auth/RequireRole";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
@@ -21,13 +22,14 @@ import { ErrorState, SkeletonRows } from "@/components/ui/Status";
 import { useFactoryOrg, useMyFactories } from "@/components/workers/shared";
 import { useQueryState } from "@/components/attendance/shared";
 import { AlertRow, EventList, LiveIndicator, MonitoringTabs, SeverityBadge, mergeEvents } from "@/components/monitoring/shared";
+import { ActivitySummary } from "@/components/monitoring/activity";
 import { useResource } from "@/lib/useResource";
 import { useMonitoringHub } from "@/lib/useMonitoringHub";
 import { P } from "@/lib/access";
 import { cn } from "@/lib/cn";
 import {
-  AI_NOT_CONNECTED, ALERT_STATUS_LABEL, EVENT_TYPES, EVENT_TYPE_LABEL, LINE_STATUS_LABEL, MON, ago, dhaka, dhakaInputToIso, qs,
-  type LineStatus, type MonitoringCamera, type MonitoringEvent, type MonitoringOverview
+  AI_NOT_CONNECTED, ALERT_STATUS_LABEL, EVENT_TYPES, EVENT_TYPE_LABEL, LINE_STATUS_LABEL, MON, ago, dhaka, dhakaInputToIso, isActivityEvent, qs,
+  type LineStatus, type MonitoringActivity, type MonitoringCamera, type MonitoringEvent, type MonitoringOverview
 } from "@/lib/monitoring";
 
 export default function MonitoringRoomPage() {
@@ -79,8 +81,10 @@ function Room() {
     && (!filters.eventType || e.eventType === filters.eventType)
     && (!filters.to), [filters.departmentId, filters.floorId, filters.lineId, filters.cameraId, filters.eventType, filters.to]);
 
+  const [activityKey, setActivityKey] = useState(0);
   const hub = useMonitoringHub(factory || null, {
     onEvent: (e) => {
+      if (isActivityEvent(e.eventType) || e.eventType === "PERSON_LOST") setActivityKey((k) => k + 1);
       if (matches(e)) {
         setFeed((cur) => mergeEvents(cur, e, 40));
         setFresh((cur) => new Set(cur).add(e.id));
@@ -218,6 +222,8 @@ function Room() {
             </Panel>
           </div>
 
+          {o.canSeeVision && <ActivityPanel factory={factory} reloadKey={activityKey} />}
+
           <Panel title="Production lines" subtitle="Camera coverage, alerts and activity per line" icon={<FactoryIcon size={15} />} className="mb-4" testId="room-lines">
             {o.lines.length === 0 ? (
               <p className="px-4 py-6 text-caption text-fg-tertiary">No production lines in your scope.</p>
@@ -249,6 +255,39 @@ function Room() {
         </>
       )}
     </div>
+  );
+}
+
+/** Current predicted activity of tracks in scope; refreshed (at most every 3 s) when activity events arrive. */
+function ActivityPanel({ factory, reloadKey }: { factory: string; reloadKey: number }) {
+  const activity = useResource<MonitoringActivity>(`/api/monitoring/activity${qs({ factoryId: factory })}`, { pollMs: 60_000 });
+  const reload = activity.reload;
+  const last = useRef(0);
+  useEffect(() => {
+    if (reloadKey === 0) return;
+    const wait = Math.max(0, 3000 - (Date.now() - last.current));
+    const t = setTimeout(() => { last.current = Date.now(); void reload(); }, wait);
+    return () => clearTimeout(t);
+  }, [reloadKey, reload]);
+  const a = activity.data;
+  return (
+    <Panel title="Predicted activity" subtitle="Tracks in view now · posture and movement predictions, not identities or productivity" icon={<PersonStanding size={15} />}
+      right={<Link href={`${MON}/activity${factory ? `?factory=${factory}` : ""}`} className="text-caption text-[var(--accent)] inline-flex items-center gap-1">Activity <ArrowRight size={12} /></Link>}
+      className="mb-4" testId="room-activity">
+      <div className="p-4 space-y-2">
+        {activity.error && !a ? <p className="text-caption text-fg-tertiary">Activity could not be loaded: {activity.error.message}</p>
+          : !a ? <SkeletonRows rows={1} />
+          : (
+            <>
+              <ActivitySummary data={a} compact />
+              <p className="text-caption text-fg-tertiary">
+                {a.counts.currentTracks} track(s) with a prediction in the last {Math.round(a.activeSeconds / 60)} min
+                {a.counts.uncertainRate != null && <> · {Math.round(a.counts.uncertainRate * 100)}% of the last hour&apos;s activity events were uncertain</>}
+              </p>
+            </>
+          )}
+      </div>
+    </Panel>
   );
 }
 

@@ -43,6 +43,7 @@ English and বাংলা.
 | 🕒 | **Attendance & shifts** | Shifts, attendance, breaks and overtime with approvals |
 | 📷 | **Cameras & devices** | Camera registration, coverage, video sources (encrypted credentials), polygon zones; IoT devices with heartbeat health and a device simulator |
 | 🖥 | **Central monitoring** | Monitoring room, camera grid, event timeline, alerts (acknowledge / escalate / resolve / dismiss) and a simulator, live over SignalR (`/hubs/monitoring`), scoped per factory and line ([MONITORING_EVENTS.md](MONITORING_EVENTS.md)) |
+| 🪪 | **Verified worker identity** | Links a camera track to a worker only when an active RFID card is read at a reader mapped to the worker's assigned workstation and exactly one track is in that workstation's camera zone; ambiguous cases go to a manual review queue with an audit trail. RFID simulator included. Never by face or appearance; raw card UIDs never exposed ([IDENTITY_ASSOCIATION.md](IDENTITY_ASSOCIATION.md)) |
 | 👁 | **Computer vision (Python)** | Separate FastAPI service in [`computer-vision/`](computer-vision/): YOLO person detection + ByteTrack tracking + zone association, plus optional activity recognition (YOLO pose + temporal classification of basic posture / movement: standing, sitting, walking, bending, reaching, or unknown) and a garment-activity pipeline (dataset tools, training, evaluation and live inference of a CNN + GRU model for sewing, cutting, packing…; no model trained yet, accuracy pending), sending REAL events to the monitoring room. No face recognition, no worker identities, no productivity scoring |
 | 🎭 | **Demo mode** | With no LLM key, Ask and agent runs return deterministic canned answers |
 | 📄 | **PDF RAG (Python)** | Standalone LangChain + Qdrant + Gemini pipeline in [`rag/`](rag/) |
@@ -245,6 +246,7 @@ The Python keys carry a `PYRAG_` prefix so they never clash with the API's
 | `/api/agents`, `/api/agents/{id}/run` | List and run agents |
 | `/api/approvals`, `/api/approvals/{id}/{approve,reject}` | Server-side approval queue (`approvals.decide`; High risk needs `approvals.decide_high`; reject needs a reason) |
 | `/api/users`, `/api/roles`, `/api/permissions`, `/api/factories`, `/api/workers`, `/api/account` | User, role, factory and worker-profile management, scoped by factory and line ([ACCESS_CONTROL.md](ACCESS_CONTROL.md)) |
+| `/api/identity/{rfid-reads,reads,readers,overview,tracks,associations,simulator}` | RFID read ingestion, reader location mappings, track-to-worker identity associations, manual review, RFID simulator ([IDENTITY_ASSOCIATION.md](IDENTITY_ASSOCIATION.md)) |
 | `/api/audit` | Append-only audit log of decisions (Admin) |
 | `/api/brief/morning` | Morning brief |
 | `/api/line-board` | Line metrics, `POST /refresh` |
@@ -364,6 +366,7 @@ BunonBrain/
 ├── ARCHITECTURE.md            system diagrams
 ├── ACCESS_CONTROL.md          roles, permissions, scope rules, API and page access
 ├── MONITORING_EVENTS.md       the monitoring event contract (producers, alerts, real time)
+├── IDENTITY_ASSOCIATION.md    verified worker identity: RFID + reader mapping + assignment + camera zone
 └── README.md
 ```
 

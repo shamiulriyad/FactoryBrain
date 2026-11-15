@@ -328,6 +328,14 @@ zone means unassigned (no `zoneId`). Zone presence says only that a detected
 person is in that part of the picture: not who, not that they work there, not
 productivity, not attendance.
 
+**Worker identity.** This service never names anyone and needs no change for
+identity: the backend links a track to a worker only from independent evidence
+(an RFID card read at a reader mapped to the worker's assigned workstation,
+plus exactly one track in that workstation's zone, from these `ZONE_ENTERED` /
+`ZONE_EXITED` / `PERSON_LOST` events). Keep zone ids accurate and send
+`PERSON_LOST` promptly: a lost track ends its identity. See
+[../IDENTITY_ASSOCIATION.md](../IDENTITY_ASSOCIATION.md).
+
 ## Activity recognition
 
 Full design, dataset, annotation, training and evaluation guide:

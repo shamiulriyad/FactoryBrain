@@ -161,6 +161,14 @@ A producer doesn't need to send those.
   confidence.
 - `UNCERTAIN_DETECTION` never names anyone (`uncertain_detection_cannot_identify`),
   and simulated events never do. The database enforces both.
+- Linking a track to a worker is the backend's job, not the producer's: the
+  identity association service combines an RFID read at a workstation-level
+  reader, the worker's active assignment and the track's `ZONE_ENTERED` /
+  `ZONE_EXITED` / `PERSON_LOST` events in that workstation's camera zone, and
+  marks the track VERIFIED only if all agree (otherwise AMBIGUOUS / UNVERIFIED /
+  MANUAL_REVIEW). A `PERSON_LOST` ends the track's identity. Changes go out as
+  the SignalR message `identityAssociation` to the VISION groups. See
+  [IDENTITY_ASSOCIATION.md](IDENTITY_ASSOCIATION.md).
 
 ## 4. What happens to an event
 

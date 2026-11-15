@@ -522,6 +522,15 @@ temporary password to `/app/account`, and starts users without an overview
   alert history are kept without a retention policy. A simulation run acts
   with its starter's identity limited to the run's factory and ends by
   itself (at most 2 hours, 5,000 events).
+- Worker identity association ([IDENTITY_ASSOCIATION.md](IDENTITY_ASSOCIATION.md))
+  uses existing permissions only: `monitoring.view` to see identities (factory
+  and line scope, also for the SignalR `identityAssociation` message),
+  `monitoring.events.review` to decide ambiguous cases (candidate workers and
+  read details only for reviewers), `devices.manage` to post reads and map
+  readers, `devices.simulate` for the RFID simulator. Card UIDs are never
+  returned (`…C3D4`); card management stays with `workers.manage`. Physical
+  readers post as a user account with `devices.manage` (no per-reader tokens
+  yet).
 - System roles are fixed; custom roles are not supported (by design for now).
 - Token freshness is cached for 30 s per API instance: on a multi-instance
   deployment another instance may accept an old token for up to 30 s.

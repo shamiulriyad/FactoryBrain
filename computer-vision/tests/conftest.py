@@ -48,6 +48,24 @@ class ScriptedDetector:
         return [Detection(BBox(x1, y1, x2, y2), conf, 0, "person", camera_id, frame_ts) for x1, y1, x2, y2, conf in rows]
 
 
+class ScriptedPoseEstimator:
+    """Pose model double: the keypoints scripted for each frame index, {index: [PoseDetection, ...]} (or raises if ``fail``)."""
+
+    def __init__(self, script: dict | None = None, loaded: bool = True, fail: bool = False) -> None:
+        from app.activity_recognition.pose_estimator import PoseModelInfo
+
+        self.script = script or {}
+        self.fail = fail
+        self.info = PoseModelInfo(name="scripted-pose", version="test", path="-", device="cpu", loaded=loaded)
+        self.calls = 0
+
+    def estimate(self, frame: np.ndarray):  # noqa: ANN201
+        self.calls += 1
+        if self.fail:
+            raise RuntimeError("pose model crashed")
+        return list(self.script.get(index_of(frame), []))
+
+
 class FakeSource:
     """``frames`` indexed frames; a file ends, a live source fails after ``drop_after`` frames until reopened."""
 

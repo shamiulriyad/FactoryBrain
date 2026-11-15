@@ -5,11 +5,12 @@
 // over SignalR. Filters live in the URL. Only data the signed-in user may see
 // is ever sent by the API or the hub. No AI results: computer vision is not
 // connected yet, so vision events here are SIMULATED or come from producers
-// using the ingestion API.
+// using the ingestion API. With the computer-vision service running, vision
+// events are REAL (producer CV_SERVICE) and include predicted activity.
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bell, Cctv, Cpu, Activity, ArrowRight, Factory as FactoryIcon, Filter, X } from "lucide-react";
+import { Bell, Cctv, Cpu, Activity, ArrowRight, Factory as FactoryIcon, Filter, Fingerprint, PersonStanding, X } from "lucide-react";
 import { RequirePermission } from "@/components/auth/RequireRole";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
@@ -21,13 +22,15 @@ import { ErrorState, SkeletonRows } from "@/components/ui/Status";
 import { useFactoryOrg, useMyFactories } from "@/components/workers/shared";
 import { useQueryState } from "@/components/attendance/shared";
 import { AlertRow, EventList, LiveIndicator, MonitoringTabs, SeverityBadge, mergeEvents } from "@/components/monitoring/shared";
+import { ActivitySummary } from "@/components/monitoring/activity";
+import type { IdentityOverview } from "@/lib/identity";
 import { useResource } from "@/lib/useResource";
 import { useMonitoringHub } from "@/lib/useMonitoringHub";
 import { P } from "@/lib/access";
 import { cn } from "@/lib/cn";
 import {
-  AI_NOT_CONNECTED, ALERT_STATUS_LABEL, EVENT_TYPES, EVENT_TYPE_LABEL, LINE_STATUS_LABEL, MON, ago, dhaka, dhakaInputToIso, qs,
-  type LineStatus, type MonitoringCamera, type MonitoringEvent, type MonitoringOverview
+  AI_NOT_CONNECTED, ALERT_STATUS_LABEL, EVENT_TYPES, EVENT_TYPE_LABEL, LINE_STATUS_LABEL, MON, ago, dhaka, dhakaInputToIso, isActivityEvent, qs,
+  type LineStatus, type MonitoringActivity, type MonitoringCamera, type MonitoringEvent, type MonitoringOverview
 } from "@/lib/monitoring";
 
 export default function MonitoringRoomPage() {
@@ -79,8 +82,10 @@ function Room() {
     && (!filters.eventType || e.eventType === filters.eventType)
     && (!filters.to), [filters.departmentId, filters.floorId, filters.lineId, filters.cameraId, filters.eventType, filters.to]);
 
+  const [activityKey, setActivityKey] = useState(0);
   const hub = useMonitoringHub(factory || null, {
     onEvent: (e) => {
+      if (isActivityEvent(e.eventType) || e.eventType === "PERSON_LOST" || e.eventType === "ZONE_ENTERED") setActivityKey((k) => k + 1);
       if (matches(e)) {
         setFeed((cur) => mergeEvents(cur, e, 40));
         setFresh((cur) => new Set(cur).add(e.id));
@@ -89,6 +94,7 @@ function Room() {
       if (e.category === "SYSTEM") reloadSoon();
     },
     onAlert: () => reloadSoon(),
+    onIdentity: () => setActivityKey((k) => k + 1),
     onCameraStatus: () => reloadSoon(),
     onDeviceStatus: () => reloadSoon(),
     onResync: () => void overview.reload()
@@ -218,6 +224,9 @@ function Room() {
             </Panel>
           </div>
 
+          {o.canSeeVision && <IdentityPanel factory={factory} reloadKey={activityKey} />}
+          {o.canSeeVision && <ActivityPanel factory={factory} reloadKey={activityKey} />}
+
           <Panel title="Production lines" subtitle="Camera coverage, alerts and activity per line" icon={<FactoryIcon size={15} />} className="mb-4" testId="room-lines">
             {o.lines.length === 0 ? (
               <p className="px-4 py-6 text-caption text-fg-tertiary">No production lines in your scope.</p>
@@ -249,6 +258,91 @@ function Room() {
         </>
       )}
     </div>
+  );
+}
+
+/** Worker identity at a glance: verified, unverified and ambiguous tracks, review queue, readers, recent changes. */
+function IdentityPanel({ factory, reloadKey }: { factory: string; reloadKey: number }) {
+  const data = useResource<IdentityOverview>(`/api/identity/overview${qs({ factoryId: factory })}`, { pollMs: 60_000 });
+  const reload = data.reload;
+  const last = useRef(0);
+  useEffect(() => {
+    if (reloadKey === 0) return;
+    const wait = Math.max(0, 3000 - (Date.now() - last.current));
+    const t = setTimeout(() => { last.current = Date.now(); void reload(); }, wait);
+    return () => clearTimeout(t);
+  }, [reloadKey, reload]);
+  const d = data.data;
+  const verified = d?.tracks.filter((t) => t.identity === "VERIFIED") ?? [];
+  return (
+    <Panel title="Worker identity" subtitle="Tracks verified by RFID card, reader location, assignment and camera zone. Never by appearance." icon={<Fingerprint size={15} />}
+      right={<Link href={`${MON}/identity${factory ? `?factory=${factory}` : ""}`} className="text-caption text-[var(--accent)] inline-flex items-center gap-1">Identity <ArrowRight size={12} /></Link>}
+      className="mb-4" testId="room-identity">
+      <div className="p-4">
+        {data.error && !d ? <p className="text-caption text-fg-tertiary">Identity could not be loaded: {data.error.message}</p>
+          : !d ? <SkeletonRows rows={1} />
+          : (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <dl className="grid grid-cols-2 gap-2 text-caption sm:col-span-2 xl:col-span-1">
+                <div><dt className="text-fg-tertiary">Verified now</dt><dd className="text-xl font-semibold tabular-nums">{d.counts.verifiedNow}</dd></div>
+                <div><dt className="text-fg-tertiary">Unverified tracks</dt><dd className="text-xl font-semibold tabular-nums">{d.counts.unverifiedTracks}</dd></div>
+                <div><dt className="text-fg-tertiary">Ambiguous</dt><dd className={cn("text-xl font-semibold tabular-nums", d.counts.ambiguousTracks > 0 && "text-[var(--risk-medium)]")}>{d.counts.ambiguousTracks}</dd></div>
+                <div><dt className="text-fg-tertiary">Pending review</dt><dd className="text-xl font-semibold tabular-nums">{d.counts.pendingReview}</dd></div>
+                <div className="col-span-2"><dt className="text-fg-tertiary">RFID readers online</dt><dd className="tabular-nums">{d.counts.readersOnline} / {d.counts.readers}</dd></div>
+              </dl>
+              <div className="text-caption">
+                <p className="text-fg-tertiary mb-1">Currently verified</p>
+                {verified.length === 0 ? <p className="text-fg-tertiary">None.</p> : (
+                  <ul className="space-y-0.5">{verified.slice(0, 6).map((t) => (
+                    <li key={`${t.cameraId}/${t.trackId}`}><span className="font-mono">{t.cameraCode} · {t.trackId}</span> → <span className="font-medium">{t.worker?.code}</span> · {t.workstation?.code}</li>
+                  ))}</ul>
+                )}
+              </div>
+              <div className="text-caption">
+                <p className="text-fg-tertiary mb-1">Recent changes</p>
+                {d.recentChanges.length === 0 ? <p className="text-fg-tertiary">None.</p> : (
+                  <ul className="space-y-0.5">{d.recentChanges.slice(0, 6).map((c) => (
+                    <li key={c.id} className="truncate"><span className="tabular-nums text-fg-tertiary">{dhaka(c.at)}</span> · {c.cameraCode} · {c.trackId} → {c.toStatus.toLowerCase().replace(/_/g, " ")}</li>
+                  ))}</ul>
+                )}
+              </div>
+            </div>
+          )}
+      </div>
+    </Panel>
+  );
+}
+
+/** Current predicted activity of tracks in scope; refreshed (at most every 3 s) when activity events arrive. */
+function ActivityPanel({ factory, reloadKey }: { factory: string; reloadKey: number }) {
+  const activity = useResource<MonitoringActivity>(`/api/monitoring/activity${qs({ factoryId: factory })}`, { pollMs: 60_000 });
+  const reload = activity.reload;
+  const last = useRef(0);
+  useEffect(() => {
+    if (reloadKey === 0) return;
+    const wait = Math.max(0, 3000 - (Date.now() - last.current));
+    const t = setTimeout(() => { last.current = Date.now(); void reload(); }, wait);
+    return () => clearTimeout(t);
+  }, [reloadKey, reload]);
+  const a = activity.data;
+  return (
+    <Panel title="Predicted activity" subtitle="Tracks in view now · posture and movement predictions, not identities or productivity" icon={<PersonStanding size={15} />}
+      right={<Link href={`${MON}/activity${factory ? `?factory=${factory}` : ""}`} className="text-caption text-[var(--accent)] inline-flex items-center gap-1">Activity <ArrowRight size={12} /></Link>}
+      className="mb-4" testId="room-activity">
+      <div className="p-4 space-y-2">
+        {activity.error && !a ? <p className="text-caption text-fg-tertiary">Activity could not be loaded: {activity.error.message}</p>
+          : !a ? <SkeletonRows rows={1} />
+          : (
+            <>
+              <ActivitySummary data={a} compact />
+              <p className="text-caption text-fg-tertiary">
+                {a.counts.currentTracks} track(s) with a prediction in the last {Math.round(a.activeSeconds / 60)} min
+                {a.counts.uncertainRate != null && <> · {Math.round(a.counts.uncertainRate * 100)}% of the last hour&apos;s activity events were uncertain</>}
+              </p>
+            </>
+          )}
+      </div>
+    </Panel>
   );
 }
 

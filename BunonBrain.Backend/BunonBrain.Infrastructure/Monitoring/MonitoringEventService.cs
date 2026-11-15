@@ -25,11 +25,12 @@ public sealed class MonitoringEventService : IMonitoringEventService
 {
     private readonly BunonBrainDbContext _db;
     private readonly IMonitoringPublisher _publisher;
+    private readonly ITrackObservationProcessor _tracks;
     private readonly ILogger<MonitoringEventService> _log;
 
-    public MonitoringEventService(BunonBrainDbContext db, IMonitoringPublisher publisher, ILogger<MonitoringEventService> log)
+    public MonitoringEventService(BunonBrainDbContext db, IMonitoringPublisher publisher, ITrackObservationProcessor tracks, ILogger<MonitoringEventService> log)
     {
-        _db = db; _publisher = publisher; _log = log;
+        _db = db; _publisher = publisher; _tracks = tracks; _log = log;
     }
 
     private static AccessResult<MonitoringIngestResult> Invalid(string code, string message) => AccessResult<MonitoringIngestResult>.Invalid(code, message);
@@ -172,6 +173,20 @@ public sealed class MonitoringEventService : IMonitoringEventService
         var activity = MonitoringRules.PayloadString(input.Payload, "activity");
         if (req.Activity && string.IsNullOrEmpty(activity)) return Invalid("activity_required", $"{type} needs payload.activity.");
         if (activity is { Length: > 40 }) return Invalid("activity_too_long", "payload.activity is at most 40 characters.");
+        var previousActivity = MonitoringRules.PayloadString(input.Payload, "previousActivity");
+        var garment = MonitoringEventTypes.GarmentActivity.Contains(type);
+        if (garment)
+        {
+            if (GarmentActivityLabels.Check(type, activity, previousActivity, input.ModelVersion) is { } badGarment) return Invalid(badGarment.Code, badGarment.Message);
+            activity = GarmentActivityLabels.Parse(activity);
+            previousActivity = GarmentActivityLabels.Parse(previousActivity);
+        }
+        else if (req.Activity)
+        {
+            if (ActivityLabels.Check(type, activity, previousActivity, producer) is { } bad) return Invalid(bad.Code, bad.Message);
+            activity = ActivityLabels.Parse(activity);
+            previousActivity = ActivityLabels.Parse(previousActivity);
+        }
         var modelVersion = input.ModelVersion?.Trim();
         if (modelVersion is { Length: > 40 }) return Invalid("model_version_too_long", "modelVersion is at most 40 characters.");
 
@@ -183,6 +198,8 @@ public sealed class MonitoringEventService : IMonitoringEventService
         {
             if (type == MonitoringEventTypes.UncertainDetection)
                 return Invalid("uncertain_detection_cannot_identify", "An uncertain detection stays uncertain: it can't carry a worker identity.");
+            if (type is MonitoringEventTypes.ActivityUncertain or MonitoringEventTypes.GarmentActivityUncertain)
+                return Invalid("uncertain_activity_cannot_identify", "An uncertain activity stays anonymous: it can't carry a worker identity.");
             if (!req.WorkerAllowed) return Invalid("worker_not_applicable", $"{type} is about equipment and can't carry a worker identity.");
             if (source == MonitoringSourceTypes.Simulated) return Invalid("simulated_events_cannot_identify", "Simulated events never name a worker.");
             var method = IdentityMethods.Normalise(input.Identity?.Method);
@@ -214,7 +231,8 @@ public sealed class MonitoringEventService : IMonitoringEventService
             trackId, input.Confidence, modelName, detail);
         var spec = MonitoringRules.AlertFor(ctx);
         var recovery = spec is null ? MonitoringRules.RecoveryDedupKey(ctx) : null;
-        var summary = MonitoringRules.Summary(type, simulated, cam?.Code, dev?.Code, zone?.Name, trackId, input.Confidence, toStatus, activity, modelName, workerId is not null);
+        var summary = MonitoringRules.Summary(type, simulated, cam?.Code, dev?.Code, zone?.Name, trackId, input.Confidence, toStatus, activity, modelName,
+            workerId is not null, previousActivity, type is MonitoringEventTypes.ActivityUncertain or MonitoringEventTypes.GarmentActivityUncertain ? detail : null);
         var severity = MonitoringRules.EventSeverity(type, toStatus, zone?.ZoneType);
         var actorEmail = caller?.Email ?? SystemEmail(producer);
         var actorRole = caller?.PrimaryRole;
@@ -306,6 +324,9 @@ public sealed class MonitoringEventService : IMonitoringEventService
                 }
                 await _publisher.EventAsync(eventDto, ct);
                 if (broadcast is not null) await _publisher.AlertAsync(broadcast, saved.Change!, ct);
+                // Track observations feed the identity association engine (zone entries, lost tracks). It never changes the event.
+                if (type is MonitoringEventTypes.ZoneEntered or MonitoringEventTypes.PersonLost)
+                    await _tracks.OnVisionEventAsync(eventDto, ct);
                 return AccessResult<MonitoringIngestResult>.Ok(new MonitoringIngestResult("Accepted", eventDto, alertDto));
             }
             catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: "23505" } pg)
@@ -373,6 +394,13 @@ public sealed class MonitoringEventService : IMonitoringEventService
         if (MonitoringSourceTypes.Parse(q.SourceType) is { } s) events = events.Where(e => e.SourceType == s);
         if (!string.IsNullOrWhiteSpace(q.TrackId)) { var tr = q.TrackId.Trim(); events = events.Where(e => e.TrackId == tr); }
         if (q.VerifiedWorker is { } vw) events = vw ? events.Where(e => e.WorkerId != null) : events.Where(e => e.WorkerId == null);
+        if (GarmentActivityLabels.Parse(q.Activity) is { } act)
+        {
+            // Matches the activity in either family (generic posture or garment).
+            var activityJson = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string> { ["activity"] = act });
+            var activityTypes = MonitoringEventTypes.Activity.Concat(MonitoringEventTypes.GarmentActivity).ToArray();
+            events = events.Where(e => activityTypes.Contains(e.EventType) && EF.Functions.JsonContains(e.Payload, activityJson));
+        }
         if (q.From is { } from) { var u = from.ToUniversalTime(); events = events.Where(e => e.OccurredAt >= u); }
         if (q.To is { } to) { var u = to.ToUniversalTime(); events = events.Where(e => e.OccurredAt <= u); }
         if (q.SimulationRunId is { } run) events = events.Where(e => e.SimulationRunId == run);

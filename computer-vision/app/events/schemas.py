@@ -9,11 +9,19 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 EventType = Literal["PERSON_DETECTED", "TRACK_UPDATED", "PERSON_LOST", "ZONE_ENTERED", "ZONE_EXITED",
-                    "UNCERTAIN_DETECTION", "CAMERA_STATUS_CHANGED", "MODEL_STATUS_CHANGED"]
+                    "UNCERTAIN_DETECTION", "CAMERA_STATUS_CHANGED", "MODEL_STATUS_CHANGED",
+                    "ACTIVITY_CLASSIFIED", "ACTIVITY_STATE_CHANGED", "ACTIVITY_UNCERTAIN",
+                    "GARMENT_ACTIVITY_CLASSIFIED", "GARMENT_ACTIVITY_CHANGED", "GARMENT_ACTIVITY_UNCERTAIN"]
+
+ACTIVITY_EVENT_TYPES = ("ACTIVITY_CLASSIFIED", "ACTIVITY_STATE_CHANGED", "ACTIVITY_UNCERTAIN")
+GARMENT_EVENT_TYPES = ("GARMENT_ACTIVITY_CLASSIFIED", "GARMENT_ACTIVITY_CHANGED", "GARMENT_ACTIVITY_UNCERTAIN")
+_GARMENT_LABEL = re.compile(r"^[A-Z][A-Z0-9_]{1,39}$")
+#: Activities this service may report (the backend refuses anything else from it).
+REPORTABLE_ACTIVITIES = ("STANDING", "SITTING", "WALKING", "BENDING", "REACHING", "UNKNOWN")
 
 _KEY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
 _TRACK = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$")
@@ -85,6 +93,46 @@ class MonitoringEvent(BaseModel):
             raise ValueError("payload is larger than 8 KB")
         _check_payload(v)
         return v
+
+    @model_validator(mode="after")
+    def _activity_rules(self) -> "MonitoringEvent":
+        if self.event_type in GARMENT_EVENT_TYPES:
+            return self._garment_rules()
+        if self.event_type not in ACTIVITY_EVENT_TYPES:
+            return self
+        activity = self.payload.get("activity")
+        if self.track_id is None:
+            raise ValueError(f"{self.event_type} needs a track id")
+        if activity not in REPORTABLE_ACTIVITIES:
+            raise ValueError(f"payload.activity must be one of {', '.join(REPORTABLE_ACTIVITIES)}")
+        if self.event_type == "ACTIVITY_UNCERTAIN" and activity != "UNKNOWN":
+            raise ValueError("ACTIVITY_UNCERTAIN carries activity UNKNOWN")
+        if self.event_type == "ACTIVITY_STATE_CHANGED" and activity == "UNKNOWN":
+            raise ValueError("a change to UNKNOWN is ACTIVITY_UNCERTAIN")
+        if self.event_type != "ACTIVITY_UNCERTAIN" and self.confidence is None:
+            raise ValueError(f"{self.event_type} needs a confidence")
+        if any(k in self.payload for k in ("keypoints", "pose", "skeleton")):
+            raise ValueError("raw keypoints are never sent")
+        return self
+
+    def _garment_rules(self) -> "MonitoringEvent":
+        """Garment predictions name their trained model; labels come from the configurable registry (format checked here)."""
+        activity = self.payload.get("activity")
+        if self.track_id is None:
+            raise ValueError(f"{self.event_type} needs a track id")
+        if not isinstance(activity, str) or not _GARMENT_LABEL.match(activity):
+            raise ValueError("payload.activity: an upper-case garment activity label (2-40 characters)")
+        if self.event_type == "GARMENT_ACTIVITY_UNCERTAIN" and activity != "UNKNOWN":
+            raise ValueError("GARMENT_ACTIVITY_UNCERTAIN carries activity UNKNOWN")
+        if self.event_type == "GARMENT_ACTIVITY_CHANGED" and activity == "UNKNOWN":
+            raise ValueError("a change to UNKNOWN is GARMENT_ACTIVITY_UNCERTAIN")
+        if self.event_type != "GARMENT_ACTIVITY_UNCERTAIN" and self.confidence is None:
+            raise ValueError(f"{self.event_type} needs a confidence")
+        if not self.model_name or not self.model_version:
+            raise ValueError("garment activity events name the trained model (modelName and modelVersion)")
+        if any(k in self.payload for k in ("keypoints", "pose", "skeleton", "crop", "image")):
+            raise ValueError("raw keypoints and images are never sent")
+        return self
 
     def to_wire(self) -> dict[str, Any]:
         data = self.model_dump(by_alias=True, exclude_none=True, mode="json")

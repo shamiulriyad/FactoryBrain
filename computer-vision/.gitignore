@@ -10,10 +10,33 @@ __pycache__/
 # Model weights are downloaded (scripts/download_model.py), never committed
 models/*
 !models/README.md
+!models/pose/
+!models/activity/
+models/pose/*
+models/activity/*
+!models/pose/README.md
+!models/activity/README.md
+!models/garment_activity/
+models/garment_activity/*
+!models/garment_activity/README.md
 
 # Videos, frames and working copies: never committed
 data/*
 !data/README.md
+# The activity dataset convention (folders, template) is documented; its footage and labels never are committed.
+!data/activity_dataset/
+data/activity_dataset/*
+!data/activity_dataset/README.md
+!data/activity_dataset/annotations.template.csv
+# Garment activity dataset: only the README and annotation templates are tracked; footage, labels, features never.
+!data/garment_activity/
+data/garment_activity/*
+!data/garment_activity/README.md
+!data/garment_activity/annotations.template.csv
+!data/garment_activity/annotations.template.jsonl
+# Local configs may name private cameras and model paths; only the examples and the label registry are tracked.
+configs/garment_inference.json
+configs/garment_training.json
 
 # Ultralytics run output
 runs/

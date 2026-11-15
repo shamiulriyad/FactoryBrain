@@ -2,6 +2,8 @@
 
     read frame → (skip to keep CV_PROCESS_FPS) → detect people → ByteTrack
     → zone of each track → lifecycle transitions → events → publisher
+    → (activity recognition on, at CV_ACTIVITY_PROCESS_FPS) pose → features
+      → temporal classification → activity state → activity events
 
 The loop never blocks on the network (events are queued) and keeps the
 source open only while running. A disconnected live source is retried
@@ -19,7 +21,9 @@ from enum import Enum
 
 import numpy as np
 
+from app.activity_recognition.activity_service import ActivityService
 from app.camera.metrics import SessionMetrics
+from app.garment_activities.activity_service import GarmentActivityService
 from app.camera.sources import FrameSource
 from app.core.errors import CvError
 from app.detection.detector import PersonDetector
@@ -52,7 +56,8 @@ class CameraSession:
     def __init__(self, cfg: CameraConfig, source: FrameSource, detector: PersonDetector, tracker: Tracker, publisher: EventPublisher,
                  builder: EventBuilder, lifecycle: TrackLifecycle, process_fps: float, directory: CameraDirectory | None = None,
                  reconnect_attempts: int = 5, reconnect_delay: float = 3.0, config_refresh_seconds: float = 60.0,
-                 keep_preview: bool = False, preview_window: bool = False, clock=time.time) -> None:  # noqa: ANN001
+                 keep_preview: bool = False, preview_window: bool = False, clock=time.time,  # noqa: ANN001
+                 activity: ActivityService | None = None, garment: GarmentActivityService | None = None) -> None:
         self.cfg = cfg
         self.source = source
         self.detector = detector
@@ -77,7 +82,10 @@ class CameraSession:
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name=f"cv-camera-{cfg.code}", daemon=True)
         self._frame_index = 0
-        self._last_preview: tuple[np.ndarray, list[tuple[TrackedObject, Zone | None]]] | None = None
+        self._last_preview: tuple[np.ndarray, list[tuple[TrackedObject, Zone | None]], dict] | None = None
+        self.activity = activity
+        self.activity_requested = activity is not None
+        self.garment = garment
         self._preview_lock = threading.Lock()
 
     # ── lifecycle ──
@@ -138,6 +146,10 @@ class CameraSession:
         finally:
             for t in self.lifecycle.flush():
                 self._emit(self.builder.from_transition(t, self._clock(), *self._frame_size(), self._frame_index, self.metrics.processing_fps))
+            if self.activity is not None:
+                self.activity.reset()
+            if self.garment is not None:
+                self.garment.reset()
             self.source.release()
             if self._preview_window:
                 _close_window(self.cfg.code)
@@ -154,14 +166,55 @@ class CameraSession:
         tracks = self.tracker.update(detections, w, h)
         visible = [(t, self.zones.zone_for_box(t.bbox, w, h)) for t in tracks]
         transitions = self.lifecycle.step(visible, now)
-        self.metrics.processed((time.perf_counter() - started) * 1000, len(detections), self.lifecycle.active)
         for t in transitions:
             self._emit(self.builder.from_transition(t, now, w, h, self._frame_index, self.metrics.processing_fps))
+        if self.activity is not None:
+            self._activity(frame, tracks, transitions, now, w, h, visible)
+        self.metrics.processed((time.perf_counter() - started) * 1000, len(detections), self.lifecycle.active)
         if self._keep_preview:
             with self._preview_lock:
-                self._last_preview = (frame.copy(), visible)
+                self._last_preview = (frame.copy(), visible, self._activity_overlay())
             if self._preview_window:
                 _show_window(self.cfg.code, self.preview_frame())
+
+    def _activity(self, frame: np.ndarray, tracks: list[TrackedObject], transitions, now: float, w: int, h: int,  # noqa: ANN001
+                  visible: list | None = None) -> None:  # noqa: ANN001
+        act = self.activity
+        for t in transitions:
+            if t.kind == "LOST":
+                act.track_lost(t.track.track_id)
+                if self.garment is not None:
+                    self.garment.track_lost(t.track.track_id)
+        if not act.active:
+            return
+        confirmed = {tid for tid, st in self.lifecycle.tracks.items() if st.confirmed}
+        classifier = (act.classifier.name, act.classifier.version)
+        pose_model = (act.estimator.info.name, act.estimator.info.version[:40])
+        for u in act.step(frame, tracks, confirmed, now):
+            self._emit(self.builder.activity(u, now, w, h, classifier, pose_model, self.metrics.processing_fps))
+        g = self.garment
+        if g is not None and g.active and act.last_tick_at == now:
+            # The pose stage ran on this frame: the garment model reuses its tracks and poses (no second pose inference).
+            contexts = {obj.track_id: self._context(zone) for obj, zone in (visible or [])}
+            model = g.clf.summary()
+            for u in g.step_frame(frame, tracks, confirmed, act.last_matched, now, contexts):
+                self._emit(self.builder.garment(u, now, w, h, model, g.context_for(u.track_id), self.metrics.processing_fps))
+
+    def _context(self, zone: Zone | None) -> dict:
+        """Where a track is, from the camera's configuration. Context only: never evidence of what the person does."""
+        return {"zoneId": zone.id if zone else None, "zoneName": zone.name if zone else None, "zoneType": zone.zone_type if zone else None,
+                "workstationId": zone.workstation_id if zone else None, "workstationCode": zone.workstation_code if zone else None,
+                "lineId": (zone.line_id if zone and zone.line_id else self.cfg.line_id), "machineId": None}
+
+    def _activity_overlay(self) -> dict:
+        """Per track: activity label + confidence and (if kept) the pose, for the development preview only."""
+        if self.activity is None:
+            return {}
+        out = {}
+        for tid in self.lifecycle.tracks:
+            garment = self.garment.label_for(tid) if self.garment is not None else None
+            out[tid] = (self.activity.label_for(tid), self.activity.last_poses.get(tid), garment)
+        return out
 
     def _frame_size(self) -> tuple[int, int]:
         return getattr(self, "_size", (self.cfg.frame_width or 1280, self.cfg.frame_height or 720))
@@ -174,6 +227,10 @@ class CameraSession:
         for t in self.lifecycle.flush():
             self._emit(self.builder.from_transition(t, self._clock(), *self._frame_size(), self._frame_index, self.metrics.processing_fps))
         self.tracker.reset()
+        if self.activity is not None:
+            self.activity.reset()
+        if self.garment is not None:
+            self.garment.reset()
         for attempt in range(1, self._reconnect_attempts + 1):
             if self._stop.wait(self._reconnect_delay):
                 return False
@@ -215,14 +272,16 @@ class CameraSession:
             self._stop.set()
 
     # ── preview ──
-    def preview_frame(self) -> np.ndarray | None:
+    def preview_frame(self, show_pose: bool = True) -> np.ndarray | None:
         from app.preview.overlay import draw_overlay
 
         with self._preview_lock:
             if self._last_preview is None:
                 return None
-            frame, visible = self._last_preview
-        return draw_overlay(frame, visible, self.zones.zones, self.cfg.code, self.metrics.processing_fps, self.builder.track_id)
+            frame, visible, activity = self._last_preview
+        act_fps = self.activity.metrics.activity_fps if self.activity is not None else None
+        return draw_overlay(frame, visible, self.zones.zones, self.cfg.code, self.metrics.processing_fps, self.builder.track_id,
+                            activity=activity, show_pose=show_pose, activity_fps=act_fps)
 
     def status(self) -> dict:
         return {
@@ -230,6 +289,12 @@ class CameraSession:
             "source": self.source.description, "sourceKind": self.source.kind, "zones": len(self.zones.zones),
             "sessionTag": self.builder.ctx.session_tag, "startedAt": self.started_at, "endedAt": self.ended_at, "error": self.error,
             "activeTracks": self.lifecycle.active, "processingFps": self.metrics.processing_fps,
+            "activityEnabled": self.activity is not None and self.activity.active,
+            "activityError": None if self.activity is None else self.activity.disabled_reason,
+            "garmentEnabled": self.garment is not None and self.garment.active,
+            "garmentModel": None if self.garment is None else {"name": self.garment.clf.name, "version": self.garment.clf.version,
+                                                              "evaluation": self.garment.clf.evaluation.get("status", "PENDING")},
+            "garmentError": None if self.garment is None else self.garment.disabled_reason,
         }
 
 

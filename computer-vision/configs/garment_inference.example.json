@@ -1,0 +1,22 @@
+{
+  "note": "Copy to configs/garment_inference.json (the path in CV_GARMENT_CONFIG) and set CV_GARMENT_ENABLED=true. Models must have been evaluated on a held-out test split (scripts/garment.py evaluate) unless allow_unevaluated is true (development only). Cameras not listed here don't run a garment model when 'cameras' is non-empty; '*' applies to every camera.",
+  "default_model": "models/garment_activity/garment-cnn-gru/0.1.0",
+  "cameras": {
+    "CAM-001": {"enabled": true},
+    "CAM-002": {"enabled": true, "model": "models/garment_activity/garment-cnn-gru/0.1.0"},
+    "CAM-003": {"enabled": false}
+  },
+  "inference_fps": 1.0,
+  "decision": {
+    "min_confidence": 0.6,
+    "min_margin": 0.15,
+    "min_person_ratio": 0.6,
+    "min_pose_ratio": 0.4,
+    "low_confidence": 0.75
+  },
+  "min_state_seconds": 4.0,
+  "unknown_after_seconds": 6.0,
+  "report_seconds": 30.0,
+  "reset_after_seconds": 4.0,
+  "allow_unevaluated": false
+}

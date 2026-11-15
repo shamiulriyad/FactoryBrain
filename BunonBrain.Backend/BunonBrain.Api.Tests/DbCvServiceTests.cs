@@ -166,7 +166,69 @@ public sealed class DbCvServiceTests
             new { eventType = "DEVICE_STATUS_CHANGED", factoryId = a.Factory, idempotencyKey = K(), payload = new { toStatus = "ONLINE" } }), "event_type_not_allowed_for_service");
         Is(HttpStatusCode.BadRequest, await SvcPost("/api/monitoring/events",
             new { eventType = "ACTIVITY_CLASSIFIED", factoryId = a.Factory, idempotencyKey = K(), cameraId = camA, trackId = "t1", confidence = 0.9, payload = new { activity = "SEWING" } }),
-            "event_type_not_allowed_for_service");
+            "activity_invalid");
+        // Garment-work activities are reserved for trained, validated models: pose rules can't claim them.
+        Is(HttpStatusCode.BadRequest, await SvcPost("/api/monitoring/events",
+            new { eventType = "ACTIVITY_STATE_CHANGED", factoryId = a.Factory, idempotencyKey = K(), cameraId = camA, trackId = "t1", confidence = 0.9, payload = new { activity = "SEWING_LIKE_MOTION" } }),
+            "activity_not_supported_by_service");
+
+        // Observable activities are accepted from the service, anonymous and labelled as predictions.
+        var changed = await SvcPost("/api/monitoring/events", new
+        {
+            eventType = "ACTIVITY_STATE_CHANGED", factoryId = a.Factory, idempotencyKey = K(), cameraId = camA, trackId = "s1a2-t1", confidence = 0.91,
+            modelName = "pose-temporal-baseline", modelVersion = "1.0",
+            payload = new { activity = "walking", previousActivity = "STANDING", observationStart = "2026-11-15T08:00:00Z", observationEnd = "2026-11-15T08:00:03Z" },
+        });
+        Is(HttpStatusCode.Created, changed);
+        var ce = changed.Body.GetProperty("event");
+        Assert.Equal("ACTIVITY_STATE_CHANGED", S(ce, "eventType"));
+        Assert.Contains("Predicted activity changed to WALKING from STANDING", S(ce, "summary"));
+        Assert.Null(S(ce, "verifiedWorker"));
+        Is(HttpStatusCode.Created, await SvcPost("/api/monitoring/events", new
+        {
+            eventType = "ACTIVITY_UNCERTAIN", factoryId = a.Factory, idempotencyKey = K(), cameraId = camA, trackId = "s1a2-t1",
+            payload = new { activity = "UNKNOWN", previousActivity = "WALKING", reason = "LOW_CONFIDENCE", candidate = "STANDING" },
+        }));
+        Is(HttpStatusCode.BadRequest, await SvcPost("/api/monitoring/events",
+            new { eventType = "ACTIVITY_UNCERTAIN", factoryId = a.Factory, idempotencyKey = K(), cameraId = camA, trackId = "t1", payload = new { activity = "SITTING" } }),
+            "activity_must_be_unknown");
+        Is(HttpStatusCode.BadRequest, await SvcPost("/api/monitoring/events",
+            new { eventType = "ACTIVITY_STATE_CHANGED", factoryId = a.Factory, idempotencyKey = K(), cameraId = camA, trackId = "t1", payload = new { activity = "SITTING" } }),
+            "confidence_required");
+        var walking = (await Get($"/api/monitoring/events?factoryId={a.Factory}&activity=WALKING", a.Monitor.Token)).Body.GetProperty("items").EnumerateArray().ToList();
+        Assert.Single(walking);
+        var activity = await Get($"/api/monitoring/activity?factoryId={a.Factory}&cameraId={camA}", a.Monitor.Token);
+        Is(HttpStatusCode.OK, activity);
+        var track = Assert.Single(activity.Body.GetProperty("tracks").EnumerateArray());
+        Assert.Equal("UNKNOWN", S(track, "activity"));
+        Assert.True(track.GetProperty("uncertain").GetBoolean());
+        Assert.Equal(2, activity.Body.GetProperty("transitions").GetArrayLength());
+
+        // Garment activities: a separate family, naming the trained model; factory-specific labels allowed; no identity.
+        var garment = await SvcPost("/api/monitoring/events", new
+        {
+            eventType = "GARMENT_ACTIVITY_CHANGED", factoryId = a.Factory, idempotencyKey = K(), cameraId = camA, trackId = "s1a2-t1", confidence = 0.83,
+            modelName = "garment-cnn-gru", modelVersion = "0.1.0",
+            payload = new { activity = "SEWING", previousActivity = "SITTING", model = new { name = "garment-cnn-gru", version = "0.1.0", evaluation = new { status = "EVALUATED" } },
+                            context = new { workstationCode = "WS-7", note = "context only" } },
+        });
+        Is(HttpStatusCode.Created, garment);
+        Assert.Contains("Predicted garment activity changed to SEWING from SITTING", S(garment.Body.GetProperty("event"), "summary"));
+        Is(HttpStatusCode.BadRequest, await SvcPost("/api/monitoring/events",
+            new { eventType = "GARMENT_ACTIVITY_CHANGED", factoryId = a.Factory, idempotencyKey = K(), cameraId = camA, trackId = "t1", confidence = 0.9,
+                  modelName = "garment-cnn-gru", payload = new { activity = "SEWING" } }), "model_version_required");
+        Is(HttpStatusCode.BadRequest, await SvcPost("/api/monitoring/events",
+            new { eventType = "GARMENT_ACTIVITY_UNCERTAIN", factoryId = a.Factory, idempotencyKey = K(), cameraId = camA, trackId = "t1",
+                  modelName = "garment-cnn-gru", modelVersion = "0.1.0", payload = new { activity = "SEWING" } }), "activity_must_be_unknown");
+        var garmentView = await Get($"/api/monitoring/activity?factoryId={a.Factory}&cameraId={camA}&kind=garment", a.Monitor.Token);
+        Is(HttpStatusCode.OK, garmentView);
+        Assert.Equal("garment", S(garmentView.Body, "kind"));
+        Assert.Equal("SEWING", S(Assert.Single(garmentView.Body.GetProperty("tracks").EnumerateArray()), "activity"));
+        var model = Assert.Single(garmentView.Body.GetProperty("models").EnumerateArray());
+        Assert.Equal("EVALUATED", S(model, "evaluationStatus"));
+        // The generic picture is unchanged by garment events.
+        Assert.Equal("UNKNOWN", S(Assert.Single((await Get($"/api/monitoring/activity?factoryId={a.Factory}&cameraId={camA}", a.Monitor.Token)).Body
+            .GetProperty("tracks").EnumerateArray()), "activity"));
         Is(HttpStatusCode.BadRequest, await SvcPost("/api/monitoring/events",
             new { eventType = "PERSON_DETECTED", factoryId = a.Factory, idempotencyKey = K(), cameraId = camA, workerId = Guid.NewGuid(),
                   identity = new { method = "RFID_BADGE", cardUid = "04AABBCCDD" } }), "cv_cannot_identify");

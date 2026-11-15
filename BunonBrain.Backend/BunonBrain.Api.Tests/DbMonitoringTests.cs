@@ -270,7 +270,7 @@ public sealed class DbMonitoringTests
         // The contract is published for producers.
         var contract = await Get("/api/monitoring/contract", s.Devices.Token);
         Is(HttpStatusCode.OK, contract);
-        Assert.Equal(10, contract.Body.GetProperty("eventTypes").GetArrayLength());
+        Assert.Equal(15, contract.Body.GetProperty("eventTypes").GetArrayLength());
         Assert.Contains("FACE_RECOGNITION", contract.Raw);
     }
 

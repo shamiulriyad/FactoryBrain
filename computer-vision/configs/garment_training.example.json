@@ -1,0 +1,41 @@
+{
+  "note": "Copy to configs/garment_training.json and adjust. Clip duration (2, 4 or 6 s) and sample rate must match between feature extraction and training: changing them means re-running 'clips' and 'features'.",
+  "clips": {
+    "duration_s": 4.0,
+    "stride_s": 2.0,
+    "sample_fps": 4.0,
+    "min_overlap": 0.5,
+    "min_segment_s": 1.0
+  },
+  "features": {
+    "backbone": "mobilenet_v3_small",
+    "input_size": 112,
+    "crop_padding": 0.15,
+    "keypoint_confidence": 0.35
+  },
+  "training": {
+    "model_name": "garment-cnn-gru",
+    "model_version": "0.1.0",
+    "architecture": "gru",
+    "input_parts": ["appearance", "pose", "motion"],
+    "hidden_size": 128,
+    "dropout": 0.3,
+    "batch_size": 32,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0001,
+    "epochs": 40,
+    "early_stopping_patience": 6,
+    "class_weighting": true,
+    "train_on_unknown": false,
+    "seed": 13,
+    "device": "auto",
+    "num_threads": 0
+  },
+  "decision": {
+    "min_confidence": 0.6,
+    "min_margin": 0.15,
+    "min_person_ratio": 0.6,
+    "min_pose_ratio": 0.4,
+    "low_confidence": 0.75
+  }
+}

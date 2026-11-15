@@ -36,6 +36,19 @@ public class MonitoringController : ControllerBase
         CancellationToken ct)
         => Ok(await _room.OverviewAsync(this.Caller(), new MonitoringOverviewQuery(factoryId, departmentId, floorId, lineId, cameraId, eventType, alertStatus, from, to), ct));
 
+    /// <summary>
+    /// GET /api/monitoring/activity?kind=generic|garment&amp;factoryId&amp;lineId&amp;cameraId&amp;activity&amp;sourceType&amp;uncertainOnly&amp;from&amp;to&amp;activeSeconds —
+    /// predicted posture / movement of temporary tracks: current tracks, distributions by camera and line, recent transitions.
+    /// Not identities and not productivity.
+    /// </summary>
+    [HttpGet("activity")]
+    [RequirePermission(Permissions.MonitoringView)]
+    public async Task<IActionResult> Activity([FromQuery] Guid? factoryId, [FromQuery] string? lineId, [FromQuery] Guid? cameraId, [FromQuery] string? activity,
+        [FromQuery] string? sourceType, [FromQuery] bool? uncertainOnly, [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to,
+        [FromQuery] int? activeSeconds, [FromQuery] string? kind, CancellationToken ct)
+        => Ok(await _room.ActivityAsync(this.Caller(), new MonitoringActivityQuery(factoryId, lineId, cameraId, activity, sourceType, uncertainOnly, from, to,
+            activeSeconds, kind), ct));
+
     /// <summary>GET /api/monitoring/contract — the event contract for producers (types, required fields, identity rules, limits).</summary>
     [HttpGet("contract")]
     [RequirePermission(Permissions.MonitoringView, Permissions.DevicesView, Permissions.MonitoringEventsIngest)]
@@ -65,9 +78,10 @@ public class MonitoringController : ControllerBase
     public async Task<IActionResult> Events([FromQuery] Guid? factoryId, [FromQuery] Guid? departmentId, [FromQuery] Guid? floorId, [FromQuery] string? lineId,
         [FromQuery] Guid? cameraId, [FromQuery] Guid? deviceId, [FromQuery] Guid? workstationId, [FromQuery] string? eventType, [FromQuery] string? category,
         [FromQuery] string? sourceType, [FromQuery] string? trackId, [FromQuery] bool? verifiedWorker, [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to,
-        [FromQuery] string? search, [FromQuery] Guid? simulationRunId, [FromQuery] int? page, [FromQuery] int? pageSize, CancellationToken ct)
+        [FromQuery] string? search, [FromQuery] Guid? simulationRunId, [FromQuery] int? page, [FromQuery] int? pageSize, [FromQuery] string? activity,
+        CancellationToken ct)
         => Ok(await _events.ListAsync(this.Caller(), new MonitoringEventQuery(factoryId, departmentId, floorId, lineId, cameraId, deviceId, workstationId,
-            eventType, category, sourceType, trackId, verifiedWorker, from, to, search, simulationRunId, page ?? 1, pageSize ?? 50), ct));
+            eventType, category, sourceType, trackId, verifiedWorker, from, to, search, simulationRunId, page ?? 1, pageSize ?? 50, activity), ct));
 
     /// <summary>
     /// POST /api/monitoring/events — a REAL event from a producer (gateway, later the Python AI service).

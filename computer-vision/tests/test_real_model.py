@@ -57,7 +57,8 @@ def test_the_full_pipeline_tracks_people_through_a_video(detector, settings):
     pub = MemoryPublisher()
     settings.process_fps = 5
     m = SessionManager(settings, FakeDirectory({cam.id: cam}), detector, pub, "cpu",
-                       source_factory=lambda cfg, opts: OpenCvSource(str(SAMPLE), "file", "sample video", realtime=False))
+                       # Played at its own speed, like a camera: unpaced playback made the number of analysed frames depend on machine load.
+                       source_factory=lambda cfg, opts: OpenCvSource(str(SAMPLE), "file", "sample video", realtime=True))
     m.start(cam.id)
     assert wait_for(lambda: m.get(cam.id).state.value == "FINISHED", timeout=300)
     types = pub.types()

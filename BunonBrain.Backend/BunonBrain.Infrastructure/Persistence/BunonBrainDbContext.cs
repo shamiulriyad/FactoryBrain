@@ -82,6 +82,13 @@ public class BunonBrainDbContext : DbContext
     public DbSet<MonitoringAlert> MonitoringAlerts => Set<MonitoringAlert>();
     public DbSet<MonitoringAlertAction> MonitoringAlertActions => Set<MonitoringAlertAction>();
     public DbSet<MonitoringSimulationRun> MonitoringSimulationRuns => Set<MonitoringSimulationRun>();
+
+    // Identity association (verified worker ↔ camera track).
+    public DbSet<RfidReaderMapping> RfidReaderMappings => Set<RfidReaderMapping>();
+    public DbSet<RfidReadEvent> RfidReadEvents => Set<RfidReadEvent>();
+    public DbSet<WorkerTrackAssociation> WorkerTrackAssociations => Set<WorkerTrackAssociation>();
+    public DbSet<IdentityAssociationEvidence> IdentityAssociationEvidence => Set<IdentityAssociationEvidence>();
+    public DbSet<IdentityAssociationHistory> IdentityAssociationHistory => Set<IdentityAssociationHistory>();
     public DbSet<QcInspection>        QcInspections        => Set<QcInspection>();
     public DbSet<QcInspectionFinding> QcInspectionFindings => Set<QcInspectionFinding>();
     public DbSet<QcDefectCategory>    QcDefectCategories   => Set<QcDefectCategory>();
@@ -113,6 +120,7 @@ public class BunonBrainDbContext : DbContext
         // Worker IDs (W-001, …) come from this sequence: a value is never handed out twice.
         mb.HasSequence<long>(Configurations.WorkerProfileConfiguration.NumberSequence).StartsAt(1).IncrementsBy(1);
         mb.HasSequence<long>(Configurations.MonitoringAlertConfiguration.NumberSequence).StartsAt(1).IncrementsBy(1);
+        mb.HasSequence<long>(Configurations.WorkerTrackAssociationConfiguration.NumberSequence).StartsAt(1).IncrementsBy(1);
 
         // The pgvector column on document_chunks is intentionally mapped as
         // "vector" with no fixed dimension. The dimension lives in the

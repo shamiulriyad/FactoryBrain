@@ -17,15 +17,30 @@ namespace BunonBrain.Infrastructure.Monitoring;
 /// <summary>
 /// The central monitoring room (see <see cref="IMonitoringRoomService"/>).
 /// Camera connection comes from each camera's health device (real or
-/// SIMULATED, never mixed); a camera without one is UNKNOWN. Nothing here is
-/// an AI result: computer vision is not connected in this phase.
+/// SIMULATED, never mixed); a camera without one is UNKNOWN. A camera's AI
+/// status says whether the computer-vision service has reported on it
+/// recently; activity figures are predictions about temporary tracks.
 /// </summary>
 public sealed class MonitoringRoomService : IMonitoringRoomService
 {
     public const string AiStatus = "NOT_CONNECTED";
     public const string AiMessage =
-        "Computer-vision processing is not connected in this phase. No detection, tracking or recognition runs on any camera; " +
-        "vision events shown here come from the monitoring simulator (labelled SIMULATED) or from producers using the ingestion API.";
+        "The computer-vision service has not reported on this camera. Vision events shown here come from the monitoring simulator " +
+        "(labelled SIMULATED) or from producers using the ingestion API.";
+    public static readonly TimeSpan CvActiveWindow = TimeSpan.FromMinutes(5);
+
+    /// <summary>CONNECTED when the computer-vision service reported on the camera in the last 5 minutes, IDLE when it did before, else NOT_CONNECTED.</summary>
+    public static (string Status, string Message) CvStatus(DateTimeOffset? lastCvEventAt, bool activitySeen, DateTimeOffset now)
+    {
+        if (lastCvEventAt is null) return (AiStatus, AiMessage);
+        var activity = activitySeen
+            ? " Activity recognition (pose estimation + temporal classification) has reported predicted postures for its temporary tracks."
+            : " No activity predictions have been received from it.";
+        return now - lastCvEventAt.Value <= CvActiveWindow
+            ? ("CONNECTED", "The computer-vision service (YOLO person detection + ByteTrack) is analysing this camera." + activity +
+                            " Track ids are temporary camera numbers, not identities; activities are predictions, not verified work or performance.")
+            : ("IDLE", $"The computer-vision service last reported on this camera at {lastCvEventAt.Value:u}; it is not analysing it now." + activity);
+    }
 
     private readonly BunonBrainDbContext _db;
     public MonitoringRoomService(BunonBrainDbContext db) { _db = db; }
@@ -160,8 +175,139 @@ public sealed class MonitoringRoomService : IMonitoringRoomService
             .OrderByDescending(e => e.OccurredAt).ThenByDescending(e => e.ReceivedAt).Take(30).ToListAsync(ct);
         var alerts = await MonitoringQueries.AlertsInScope(_db, caller).Where(a => a.CameraId == id && AlertStatuses.Active.Contains(a.Status))
             .OrderByDescending(a => a.LastOccurredAt).Take(20).ToListAsync(ct);
+        var cvEvents = _db.MonitoringEvents.AsNoTracking().Where(e => e.CameraId == id && e.Producer == MonitoringProducers.CvService);
+        var lastCv = await cvEvents.MaxAsync(e => (DateTimeOffset?)e.OccurredAt, ct);
+        var activityTypes = MonitoringEventTypes.Activity;
+        var activitySeen = lastCv is not null && await cvEvents.AnyAsync(e => activityTypes.Contains(e.EventType), ct);
+        var (aiStatus, aiMessage) = CvStatus(lastCv, activitySeen, DateTimeOffset.UtcNow);
         return AccessResult<MonitoringCameraDetailDto>.Ok(new MonitoringCameraDetailDto(cam, zones,
-            await MonitoringQueries.EventDtosAsync(_db, events, ct), await MonitoringQueries.AlertDtosAsync(_db, caller, alerts, ct), AiStatus, AiMessage));
+            await MonitoringQueries.EventDtosAsync(_db, events, ct), await MonitoringQueries.AlertDtosAsync(_db, caller, alerts, ct), aiStatus, aiMessage));
+    }
+
+    // ─── Activity ──────────────────────────────────────────────────────────
+
+    public const int ActivityMaxRows = 20000;
+    public const string ActivityNote =
+        "Activities are predictions of basic posture and movement (standing, sitting, walking, bending, reaching) for temporary camera tracks. " +
+        "They are not worker identities, not verified work activities and not productivity or performance measures. UNKNOWN means the " +
+        "evidence was not good enough. Observed time is the time between a track's consecutive activity events (at most 2 minutes each).";
+
+    public const string GarmentNote =
+        "Garment activities are predictions of a trained model for temporary camera tracks, shown with the model's name, version and evaluation " +
+        "status. They are not worker identities, not verified work, and not productivity or performance measures; workstation context is shown " +
+        "beside them, never used as evidence. UNKNOWN means the evidence was not good enough.";
+
+    private sealed record ParsedActivity(string? Activity, string? Reason, string? Candidate, string? Evaluation);
+
+    private static ParsedActivity ParseActivityPayload(string json, ActivityFamily family)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var p = doc.RootElement;
+            string? S(System.Text.Json.JsonElement e, string name) =>
+                e.ValueKind == System.Text.Json.JsonValueKind.Object && e.TryGetProperty(name, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? v.GetString() : null;
+            string? evaluation = null;
+            if (p.TryGetProperty("model", out var m) && m.ValueKind == System.Text.Json.JsonValueKind.Object && m.TryGetProperty("evaluation", out var ev))
+                evaluation = S(ev, "status");
+            return new ParsedActivity(family.Parse(S(p, "activity")), S(p, "reason"), family.Parse(S(p, "candidate")), evaluation);
+        }
+        catch (System.Text.Json.JsonException) { return new ParsedActivity(null, null, null, null); }
+    }
+
+    public async Task<MonitoringActivityDto> ActivityAsync(AccessContext caller, MonitoringActivityQuery q, CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var family = ActivityFamily.For(q.Kind);
+        var to = q.To?.ToUniversalTime() ?? now;
+        if (to > now) to = now;
+        var from = q.From?.ToUniversalTime() ?? to.AddHours(-1);
+        if (from >= to) from = to.AddHours(-1);
+        if (to - from > MonitoringRules.MaxBackdate) from = to - MonitoringRules.MaxBackdate;
+        var activeSeconds = Math.Clamp(q.ActiveSeconds ?? ActivityAggregation.DefaultActiveSeconds, 30, 3600);
+        var note = family == ActivityFamily.Garment ? GarmentNote : ActivityNote;
+        if (!MonitoringQueries.CanSeeVision(caller))
+            return new MonitoringActivityDto(now, from, to, activeSeconds, new ActivityCountsDto(0, Array.Empty<ActivityCountDto>(), 0, 0, 0, null),
+                Array.Empty<ActivityTrackDto>(), Array.Empty<ActivityDistributionDto>(), Array.Empty<ActivityDistributionDto>(),
+                Array.Empty<MonitoringEventDto>(), family.Labels, false, "Activity predictions need the monitoring permission.", family.Kind,
+                Array.Empty<ActivityModelDto>());
+
+        var types = family.Types.Append(MonitoringEventTypes.PersonLost).ToArray();
+        var events = MonitoringQueries.EventsInScope(_db, caller)
+            .Where(e => types.Contains(e.EventType) && e.CameraId != null && e.TrackId != null && e.OccurredAt >= from && e.OccurredAt <= to);
+        if (q.FactoryId is { } f) events = events.Where(e => e.FactoryId == f);
+        if (!string.IsNullOrWhiteSpace(q.LineId)) { var line = q.LineId.Trim(); events = events.Where(e => e.LineId == line); }
+        if (q.CameraId is { } c) events = events.Where(e => e.CameraId == c);
+        if (MonitoringSourceTypes.Parse(q.SourceType) is { } src) events = events.Where(e => e.SourceType == src);
+        var raw = await events.OrderByDescending(e => e.OccurredAt).ThenByDescending(e => e.Id).Take(ActivityMaxRows + 1)
+            .Select(e => new { e.Id, e.EventType, CameraId = e.CameraId!.Value, TrackId = e.TrackId!, e.LineId, e.OccurredAt, e.Payload, e.Confidence,
+                               e.ModelName, e.ModelVersion, e.SourceType, e.WorkerId })
+            .ToListAsync(ct);
+        var truncated = raw.Count > ActivityMaxRows;
+        if (truncated) raw = raw.Take(ActivityMaxRows).ToList();
+        var rows = raw.Select(r =>
+        {
+            var p = r.EventType == MonitoringEventTypes.PersonLost ? new ParsedActivity(null, null, null, null) : ParseActivityPayload(r.Payload, family);
+            return new ActivityEventRow(r.Id, r.EventType, r.CameraId, r.TrackId, r.LineId, r.OccurredAt, p.Activity, p.Reason, p.Candidate, r.Confidence,
+                r.ModelName, r.ModelVersion, r.SourceType, r.WorkerId, p.Evaluation);
+        }).ToList();
+        var picture = ActivityAggregation.Build(rows, to, TimeSpan.FromSeconds(activeSeconds), family);
+        // Labels shown: the family's defaults first, then any factory-specific label that appears in the data.
+        var labels = family.Labels.Concat(rows.Where(r => r.Activity is not null).Select(r => r.Activity!).Distinct().OrderBy(a => a))
+            .Distinct().ToList();
+        var models = rows.Where(r => r.EventType != MonitoringEventTypes.PersonLost && r.ModelName is not null)
+            .GroupBy(r => (r.ModelName!, r.ModelVersion))
+            .Select(g => new ActivityModelDto(g.Key.Item1, g.Key.ModelVersion, g.Count(),
+                g.OrderByDescending(x => x.OccurredAt).Select(x => x.Evaluation).FirstOrDefault(x => x is not null), g.Max(x => x.OccurredAt)))
+            .OrderByDescending(m => m.LastAt).ToList();
+
+        var cameraIds = rows.Select(r => r.CameraId).Distinct().ToList();
+        var cams = await _db.Cameras.AsNoTracking().Where(x => cameraIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => (x.Code, x.Name), ct);
+        var lineIds = rows.Where(r => r.LineId != null).Select(r => r.LineId!).Distinct().ToList();
+        var lineNames = await _db.ProductionLines.AsNoTracking().Where(l => lineIds.Contains(l.Id)).ToDictionaryAsync(l => l.Id, l => l.Name, ct);
+        var workerIds = picture.Tracks.Where(t => t.WorkerId != null).Select(t => t.WorkerId!.Value).Distinct().ToList();
+        var workers = workerIds.Count == 0 ? new Dictionary<Guid, (string, string)>()
+            : (await _db.Workers.AsNoTracking().Where(w => workerIds.Contains(w.Id)).Select(w => new { w.Id, w.WorkerCode, w.FullName }).ToListAsync(ct))
+                .ToDictionary(w => w.Id, w => (w.WorkerCode, w.FullName));
+
+        var wantActivity = family.Parse(q.Activity);
+        var tracks = picture.Tracks
+            .Where(t => wantActivity is null || t.Activity == wantActivity)
+            .Where(t => q.UncertainOnly != true || t.Activity == ActivityLabels.Unknown)
+            .Take(200)
+            .Select(t => new ActivityTrackDto(t.CameraId, cams.TryGetValue(t.CameraId, out var cm) ? cm.Code : "?",
+                t.LineId is null ? null : new MonLine(t.LineId, lineNames.GetValueOrDefault(t.LineId, t.LineId)), t.TrackId, t.Activity, t.Confidence,
+                t.Activity == ActivityLabels.Unknown, t.Reason, t.Candidate, t.Since, t.LastAt, t.Current, t.Ended, t.Changes, t.ModelName, t.ModelVersion,
+                t.SourceType, t.WorkerId is { } wid && workers.TryGetValue(wid, out var wk) ? new MonRef(wid, wk.Item1, wk.Item2) : null, t.LastEventId))
+            .ToList();
+
+        var currentTracks = picture.Tracks.Where(t => t.Current).ToList();
+        var counts = new ActivityCountsDto(currentTracks.Count,
+            labels.Select(a => new ActivityCountDto(a, currentTracks.Count(t => t.Activity == a))).ToList(),
+            picture.Classified, picture.StateChanges, picture.Uncertain,
+            picture.Classified + picture.StateChanges + picture.Uncertain is var n && n > 0 ? Math.Round((double)picture.Uncertain / n, 3) : null);
+
+        IReadOnlyList<ActivityShareDto> Shares(ActivityTotals t) => labels.Concat(t.Predictions.Keys).Distinct()
+            .Where(a => t.Predictions.ContainsKey(a))
+            .Select(a => new ActivityShareDto(a, Math.Round(t.Seconds.GetValueOrDefault(a), 1), t.Predictions[a])).ToList();
+        var byCamera = picture.ByCamera.Select(kv => new ActivityDistributionDto(kv.Key.ToString(), cams.TryGetValue(kv.Key, out var cm) ? cm.Code : "?",
+                Shares(kv.Value), Math.Round(kv.Value.Seconds.Values.Sum(), 1), kv.Value.Tracks.Count, kv.Value.Uncertain, kv.Value.PredictionCount))
+            .OrderBy(d => d.Name).ToList();
+        var byLine = picture.ByLine.Select(kv => new ActivityDistributionDto(kv.Key, lineNames.GetValueOrDefault(kv.Key, kv.Key),
+                Shares(kv.Value), Math.Round(kv.Value.Seconds.Values.Sum(), 1), kv.Value.Tracks.Count, kv.Value.Uncertain, kv.Value.PredictionCount))
+            .OrderBy(d => d.Name).ToList();
+
+        var transitionIds = rows
+            .Where(r => r.EventType == family.Changed || r.EventType == family.Uncertain)
+            .Where(r => wantActivity is null || r.Activity == wantActivity || (r.EventType == family.Uncertain && wantActivity == ActivityLabels.Unknown))
+            .Where(r => q.UncertainOnly != true || r.EventType == family.Uncertain)
+            .OrderByDescending(r => r.OccurredAt).Take(50).Select(r => r.Id).ToList();
+        var transitionRows = await _db.MonitoringEvents.AsNoTracking().Where(e => transitionIds.Contains(e.Id)).ToListAsync(ct);
+        var transitions = (await MonitoringQueries.EventDtosAsync(_db, transitionRows, ct)).OrderByDescending(e => e.OccurredAt).ThenByDescending(e => e.Id).ToList();
+        if (truncated) note += $" Only the latest {ActivityMaxRows} activity events of the range were used: narrow the range or the filters.";
+        return new MonitoringActivityDto(now, from, to, activeSeconds, counts, tracks, byCamera, byLine, transitions, labels, truncated, note, family.Kind,
+            models);
     }
 
     // ─── Overview ──────────────────────────────────────────────────────────

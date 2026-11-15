@@ -203,6 +203,68 @@ export type MonitoringCameraDetail = {
   aiMessage: string;
 };
 
+// ─── Activity (predicted posture / movement of temporary tracks) ──────────
+
+export type ActivityTrack = {
+  cameraId: string;
+  cameraCode: string;
+  line?: MonLine | null;
+  trackId: string;
+  activity: string;
+  confidence?: number | null;
+  uncertain: boolean;
+  reason?: string | null;
+  candidate?: string | null;
+  since: string;
+  lastPredictionAt: string;
+  current: boolean;
+  ended: boolean;
+  changes: number;
+  modelName?: string | null;
+  modelVersion?: string | null;
+  sourceType: SourceType;
+  verifiedWorker?: MonRef | null;
+  lastEventId: string;
+};
+
+export type ActivityShare = { activity: string; seconds: number; predictions: number };
+export type ActivityDistribution = {
+  key: string;
+  name: string;
+  activities: ActivityShare[];
+  observedSeconds: number;
+  tracks: number;
+  uncertainPredictions: number;
+  predictions: number;
+};
+
+export type MonitoringActivity = {
+  asOf: string;
+  from: string;
+  to: string;
+  activeSeconds: number;
+  counts: {
+    currentTracks: number;
+    current: { activity: string; tracks: number }[];
+    classified: number;
+    stateChanges: number;
+    uncertain: number;
+    uncertainRate?: number | null;
+  };
+  tracks: ActivityTrack[];
+  byCamera: ActivityDistribution[];
+  byLine: ActivityDistribution[];
+  transitions: MonitoringEvent[];
+  activities: string[];
+  truncated: boolean;
+  note: string;
+  kind: ActivityKind;
+  models?: ActivityModel[] | null;
+};
+
+export type ActivityKind = "generic" | "garment";
+export type ActivityModel = { name: string; version?: string | null; events: number; evaluationStatus?: string | null; lastAt: string };
+
 export type SimulationRun = {
   id: string;
   factoryId: string;
@@ -238,9 +300,91 @@ export type SimulatorTriggerResult = { outcome: string; event?: MonitoringEvent 
 export const MON = "/app/monitoring";
 
 export const EVENT_TYPES = [
-  "PERSON_DETECTED", "TRACK_UPDATED", "PERSON_LOST", "ZONE_ENTERED", "ZONE_EXITED", "ACTIVITY_CLASSIFIED", "UNCERTAIN_DETECTION",
+  "PERSON_DETECTED", "TRACK_UPDATED", "PERSON_LOST", "ZONE_ENTERED", "ZONE_EXITED", "ACTIVITY_CLASSIFIED", "ACTIVITY_STATE_CHANGED",
+  "ACTIVITY_UNCERTAIN", "GARMENT_ACTIVITY_CLASSIFIED", "GARMENT_ACTIVITY_CHANGED", "GARMENT_ACTIVITY_UNCERTAIN", "UNCERTAIN_DETECTION",
   "CAMERA_STATUS_CHANGED", "DEVICE_STATUS_CHANGED", "MODEL_STATUS_CHANGED"
 ] as const;
+
+export const ACTIVITY_EVENT_TYPES = ["ACTIVITY_CLASSIFIED", "ACTIVITY_STATE_CHANGED", "ACTIVITY_UNCERTAIN"] as const;
+export const GARMENT_EVENT_TYPES = ["GARMENT_ACTIVITY_CLASSIFIED", "GARMENT_ACTIVITY_CHANGED", "GARMENT_ACTIVITY_UNCERTAIN"] as const;
+export const isGarmentEvent = (type: string) => (GARMENT_EVENT_TYPES as readonly string[]).includes(type);
+/** Generic posture or garment activity events (both carry payload.activity). */
+export const isActivityEvent = (type: string) => (ACTIVITY_EVENT_TYPES as readonly string[]).includes(type) || isGarmentEvent(type);
+
+/** Default garment activity classes (factories may add their own; they appear when the data has them). */
+export const GARMENT_ACTIVITIES = [
+  "SEWING", "FABRIC_HANDLING", "CUTTING", "IRONING", "MATERIAL_PICKING", "MACHINE_OPERATION", "QUALITY_INSPECTION", "PACKING", "WALKING", "STANDING",
+  "SITTING", "UNKNOWN"
+] as const;
+
+/** Observable activities the computer-vision service can predict (UNKNOWN = not enough evidence). */
+export const ACTIVITIES = ["STANDING", "SITTING", "WALKING", "BENDING", "REACHING", "UNKNOWN"] as const;
+export const ACTIVITY_LABEL: Record<string, string> = {
+  STANDING: "Standing",
+  SITTING: "Sitting",
+  WALKING: "Walking",
+  BENDING: "Bending",
+  REACHING: "Reaching",
+  UNKNOWN: "Unknown",
+  SEWING_LIKE_MOTION: "Sewing-like motion",
+  HANDLING_MATERIAL: "Handling material",
+  OPERATING_MACHINE: "Operating machine",
+  PICKING_ITEM: "Picking item",
+  SEWING: "Sewing",
+  FABRIC_HANDLING: "Fabric handling",
+  CUTTING: "Cutting",
+  IRONING: "Ironing",
+  MATERIAL_PICKING: "Material picking",
+  MACHINE_OPERATION: "Machine operation",
+  QUALITY_INSPECTION: "Quality inspection",
+  PACKING: "Packing"
+};
+
+/** "BUTTON_ATTACHING" → "Button attaching" for labels without a fixed name (factory-specific classes). */
+export function activityName(a: string): string {
+  return ACTIVITY_LABEL[a] ?? a.charAt(0) + a.slice(1).toLowerCase().replace(/_/g, " ");
+}
+/** Distinct, colour-blind-friendly hues per activity; UNKNOWN is neutral grey. */
+export const ACTIVITY_COLOR: Record<string, string> = {
+  STANDING: "#2563eb",
+  SITTING: "#0d9488",
+  WALKING: "#d97706",
+  BENDING: "#9333ea",
+  REACHING: "#db2777",
+  UNKNOWN: "#94a3b8",
+  SEWING: "#0f766e",
+  FABRIC_HANDLING: "#7c3aed",
+  CUTTING: "#dc2626",
+  IRONING: "#ea580c",
+  MATERIAL_PICKING: "#ca8a04",
+  MACHINE_OPERATION: "#0369a1",
+  QUALITY_INSPECTION: "#16a34a",
+  PACKING: "#be185d"
+};
+
+const EXTRA_COLORS = ["#4f46e5", "#0891b2", "#65a30d", "#c026d3", "#b45309", "#475569"];
+/** A stable colour for any activity label, including factory-specific ones. */
+export function activityColor(a: string): string {
+  if (ACTIVITY_COLOR[a]) return ACTIVITY_COLOR[a];
+  let h = 0;
+  for (const ch of a) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return EXTRA_COLORS[h % EXTRA_COLORS.length];
+}
+export const UNCERTAIN_REASON_LABEL: Record<string, string> = {
+  NO_POSE: "no pose found",
+  INSUFFICIENT_POSE: "too little of the body visible",
+  INSUFFICIENT_HISTORY: "seen too briefly",
+  LOW_CONFIDENCE: "low confidence",
+  CONFLICTING: "conflicting evidence",
+  NO_PERSON: "person not seen",
+  INSUFFICIENT_FRAMES: "person seen too little",
+  MODEL_UNKNOWN: "the model answered unknown"
+};
+export const GARMENT_DISCLAIMER =
+  "Garment activities are predictions of a trained model, shown with its name, version and evaluation status. They are not worker identities, not verified work, and never a basis for pay or performance. Workstation context is shown beside a prediction, never used as evidence.";
+
+export const ACTIVITY_DISCLAIMER =
+  "Activities are predictions of basic posture and movement for temporary camera tracks. They are not worker identities, not verified work and not a measure of productivity or performance.";
 
 export const EVENT_TYPE_LABEL: Record<string, string> = {
   PERSON_DETECTED: "Person detected",
@@ -249,6 +393,11 @@ export const EVENT_TYPE_LABEL: Record<string, string> = {
   ZONE_ENTERED: "Zone entered",
   ZONE_EXITED: "Zone exited",
   ACTIVITY_CLASSIFIED: "Activity classified",
+  ACTIVITY_STATE_CHANGED: "Activity changed",
+  ACTIVITY_UNCERTAIN: "Activity uncertain",
+  GARMENT_ACTIVITY_CLASSIFIED: "Garment activity",
+  GARMENT_ACTIVITY_CHANGED: "Garment activity changed",
+  GARMENT_ACTIVITY_UNCERTAIN: "Garment activity uncertain",
   UNCERTAIN_DETECTION: "Uncertain detection",
   CAMERA_STATUS_CHANGED: "Camera status",
   DEVICE_STATUS_CHANGED: "Device status",
@@ -311,7 +460,7 @@ export const PRODUCER_LABEL: Record<string, string> = {
   SIMULATOR: "Monitoring simulator",
   DEVICE_PIPELINE: "Device pipeline",
   CAMERA_SERVICE: "Camera settings",
-  CV_SERVICE: "Computer-vision service (YOLO + ByteTrack)"
+  CV_SERVICE: "Computer-vision service (YOLO + ByteTrack, pose activity)"
 };
 
 export const CONNECTION_TONE: Record<string, BadgeTone> = {
@@ -337,7 +486,7 @@ export const FEED_KIND_LABEL: Record<string, string> = {
 };
 
 export const AI_NOT_CONNECTED =
-  "Computer vision is not connected in this phase. No detection, tracking or recognition runs on any camera. Vision events come from the monitoring simulator (labelled SIMULATED) or from producers using the ingestion API.";
+  "Vision events come from the computer-vision service (REAL: person detection, tracking and predicted activity), the monitoring simulator (labelled SIMULATED) or producers using the ingestion API. Track ids are temporary camera numbers, never identities.";
 
 export const SIMULATED_NOTE = "SIMULATED: generated by the monitoring simulator for demonstration. Not a camera AI result and never a real person's identity.";
 
@@ -373,6 +522,14 @@ export function dhakaInputToIso(local: string): string | null {
   if (!local) return null;
   const d = new Date(`${local.length === 16 ? `${local}:00` : local}+06:00`);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/** "45 s", "12 min", "1 h 05 min". */
+export function duration(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  if (s < 60) return `${s} s`;
+  if (s < 3600) return `${Math.floor(s / 60)} min${s % 60 ? ` ${s % 60} s` : ""}`;
+  return `${Math.floor(s / 3600)} h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")} min`;
 }
 
 /** "5 s ago", "3 min ago", "2 h ago". */

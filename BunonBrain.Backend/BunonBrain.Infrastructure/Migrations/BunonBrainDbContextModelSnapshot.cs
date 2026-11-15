@@ -29,6 +29,8 @@ namespace BunonBrain.Infrastructure.Migrations
 
             modelBuilder.HasSequence("worker_number_seq");
 
+            modelBuilder.HasSequence("worker_track_association_number_seq");
+
             modelBuilder.Entity("BunonBrain.Domain.Entities.ActivityEvent", b =>
                 {
                     b.Property<string>("Id")
@@ -1767,6 +1769,122 @@ namespace BunonBrain.Infrastructure.Migrations
                     b.ToTable("floor_alerts", (string)null);
                 });
 
+            modelBuilder.Entity("BunonBrain.Domain.Entities.IdentityAssociationEvidence", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("AssociationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Detail")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Effect")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<Guid>("FactoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<DateTimeOffset?>("ObservedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("RefId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("RefType")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssociationId");
+
+                    b.ToTable("identity_association_evidence", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_identity_association_evidence_effect", "\"Effect\" IN ('SUPPORTS','CONTRADICTS','CONTEXT')");
+                        });
+                });
+
+            modelBuilder.Entity("BunonBrain.Domain.Entities.IdentityAssociationHistory", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<string>("ActorEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ActorRole")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AssociationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<Guid>("FactoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FromStatus")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<bool>("IsManual")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("ToStatus")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid?>("WorkerId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssociationId", "At");
+
+                    b.HasIndex("FactoryId", "At");
+
+                    b.ToTable("identity_association_history", (string)null);
+                });
+
             modelBuilder.Entity("BunonBrain.Domain.Entities.Inquiry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3282,9 +3400,9 @@ namespace BunonBrain.Infrastructure.Migrations
 
                             t.HasCheckConstraint("CK_monitoring_events_source", "\"SourceType\" IN ('SIMULATED','REAL')");
 
-                            t.HasCheckConstraint("CK_monitoring_events_type", "\"EventType\" IN ('PERSON_DETECTED','TRACK_UPDATED','PERSON_LOST','ZONE_ENTERED','ZONE_EXITED','ACTIVITY_CLASSIFIED','UNCERTAIN_DETECTION','CAMERA_STATUS_CHANGED','DEVICE_STATUS_CHANGED','MODEL_STATUS_CHANGED')");
+                            t.HasCheckConstraint("CK_monitoring_events_type", "\"EventType\" IN ('PERSON_DETECTED','TRACK_UPDATED','PERSON_LOST','ZONE_ENTERED','ZONE_EXITED','ACTIVITY_CLASSIFIED','ACTIVITY_STATE_CHANGED','ACTIVITY_UNCERTAIN','GARMENT_ACTIVITY_CLASSIFIED','GARMENT_ACTIVITY_CHANGED','GARMENT_ACTIVITY_UNCERTAIN','UNCERTAIN_DETECTION','CAMERA_STATUS_CHANGED','DEVICE_STATUS_CHANGED','MODEL_STATUS_CHANGED')");
 
-                            t.HasCheckConstraint("CK_monitoring_events_uncertain_anonymous", "\"EventType\" <> 'UNCERTAIN_DETECTION' OR \"WorkerId\" IS NULL");
+                            t.HasCheckConstraint("CK_monitoring_events_uncertain_anonymous", "\"EventType\" NOT IN ('UNCERTAIN_DETECTION','ACTIVITY_UNCERTAIN','GARMENT_ACTIVITY_UNCERTAIN') OR \"WorkerId\" IS NULL");
 
                             t.HasCheckConstraint("CK_monitoring_events_worker_verified", "(\"WorkerId\" IS NULL) = (\"IdentityMethod\" IS NULL) AND (\"IdentityMethod\" IS NULL OR \"IdentityMethod\" = 'RFID_BADGE')");
                         });
@@ -4746,6 +4864,198 @@ namespace BunonBrain.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("BunonBrain.Domain.Entities.RfidReadEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("CardHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("CardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CardSuffix")
+                        .IsRequired()
+                        .HasMaxLength(4)
+                        .HasColumnType("character varying(4)");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("EvaluatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("Evaluation")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("EvaluationCode")
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)");
+
+                    b.Property<Guid>("FactoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<bool>("IsSimulated")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("MappingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("OutcomeCode")
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("RecordedByEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("RecordedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<Guid?>("WorkerId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CardId");
+
+                    b.HasIndex("DeviceId", "OccurredAt");
+
+                    b.HasIndex("FactoryId", "Evaluation");
+
+                    b.HasIndex("FactoryId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("IX_rfid_read_events_FactoryId_IdempotencyKey");
+
+                    b.HasIndex("MappingId", "OccurredAt");
+
+                    b.HasIndex("WorkerId", "OccurredAt");
+
+                    b.ToTable("rfid_read_events", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_rfid_read_events_evaluation", "\"Evaluation\" IS NULL OR \"Evaluation\" IN ('PENDING','VERIFIED','AMBIGUOUS','UNVERIFIED','MANUAL_REVIEW')");
+
+                            t.HasCheckConstraint("CK_rfid_read_events_outcome", "\"Outcome\" IN ('ACCEPTED','REJECTED')");
+
+                            t.HasCheckConstraint("CK_rfid_read_events_rejected", "\"Outcome\" = 'ACCEPTED' OR (\"WorkerId\" IS NULL AND \"Evaluation\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_rfid_read_events_simulator", "(\"Source\" = 'Simulator') = \"IsSimulated\"");
+
+                            t.HasCheckConstraint("CK_rfid_read_events_source", "\"Source\" IN ('Device','Api','Simulator')");
+                        });
+                });
+
+            modelBuilder.Entity("BunonBrain.Domain.Entities.RfidReaderMapping", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CameraZoneId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CreatedByEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("DepartmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("EffectiveFrom")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<DateTimeOffset?>("EffectiveTo")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("EndedByEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("FactoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("FloorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("LineId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Precision")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid?>("WorkstationId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CameraZoneId");
+
+                    b.HasIndex("DepartmentId");
+
+                    b.HasIndex("DeviceId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_rfid_reader_mappings_one_active")
+                        .HasFilter("\"EffectiveTo\" IS NULL");
+
+                    b.HasIndex("FactoryId");
+
+                    b.HasIndex("FloorId");
+
+                    b.HasIndex("LineId");
+
+                    b.HasIndex("WorkstationId");
+
+                    b.HasIndex("DeviceId", "EffectiveFrom");
+
+                    b.ToTable("rfid_reader_mappings", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_rfid_reader_mappings_precision", "\"Precision\" IN ('WORKSTATION','ZONE','LINE','FLOOR','AREA')");
+                        });
+                });
+
             modelBuilder.Entity("BunonBrain.Domain.Entities.Role", b =>
                 {
                     b.Property<string>("Id")
@@ -5555,6 +5865,149 @@ namespace BunonBrain.Infrastructure.Migrations
                     b.ToTable("worker_status_history", (string)null);
                 });
 
+            modelBuilder.Entity("BunonBrain.Domain.Entities.WorkerTrackAssociation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AssignmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CameraId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CandidateTracks")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("CandidateWorkers")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<DateTimeOffset?>("EndAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<Guid>("FactoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsSimulated")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LineId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<long>("Number")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValueSql("nextval('worker_track_association_number_seq')");
+
+                    b.Property<string>("ReasonCode")
+                        .IsRequired()
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("ReviewedByEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("RfidReadEventId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("StartAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<string>("TrackId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("VerificationMethod")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("WorkerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("WorkstationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ZoneId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignmentId");
+
+                    b.HasIndex("LineId");
+
+                    b.HasIndex("Number")
+                        .IsUnique();
+
+                    b.HasIndex("RfidReadEventId");
+
+                    b.HasIndex("WorkstationId");
+
+                    b.HasIndex("ZoneId");
+
+                    b.HasIndex("CameraId", "TrackId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_worker_track_associations_one_verified_track")
+                        .HasFilter("\"Status\" = 'VERIFIED'");
+
+                    b.HasIndex("WorkerId", "CameraId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_worker_track_associations_one_verified_worker_camera")
+                        .HasFilter("\"Status\" = 'VERIFIED'");
+
+                    b.HasIndex("WorkerId", "CreatedAt");
+
+                    b.HasIndex("CameraId", "TrackId", "CreatedAt");
+
+                    b.HasIndex("FactoryId", "Status", "UpdatedAt");
+
+                    b.ToTable("worker_track_associations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_worker_track_associations_expiry", "\"ExpiresAt\" > \"StartAt\"");
+
+                            t.HasCheckConstraint("CK_worker_track_associations_method", "\"VerificationMethod\" IS NULL OR \"VerificationMethod\" IN ('RFID_WORKSTATION','MANUAL_REVIEW')");
+
+                            t.HasCheckConstraint("CK_worker_track_associations_status", "\"Status\" IN ('PENDING','VERIFIED','AMBIGUOUS','UNVERIFIED','EXPIRED','REVOKED','MANUAL_REVIEW')");
+
+                            t.HasCheckConstraint("CK_worker_track_associations_verified_worker", "\"Status\" <> 'VERIFIED' OR \"WorkerId\" IS NOT NULL");
+                        });
+                });
+
             modelBuilder.Entity("BunonBrain.Domain.Entities.Workstation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6042,6 +6495,24 @@ namespace BunonBrain.Infrastructure.Migrations
                         .WithMany("Chunks")
                         .HasForeignKey("DocumentId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BunonBrain.Domain.Entities.IdentityAssociationEvidence", b =>
+                {
+                    b.HasOne("BunonBrain.Domain.Entities.WorkerTrackAssociation", null)
+                        .WithMany()
+                        .HasForeignKey("AssociationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BunonBrain.Domain.Entities.IdentityAssociationHistory", b =>
+                {
+                    b.HasOne("BunonBrain.Domain.Entities.WorkerTrackAssociation", null)
+                        .WithMany()
+                        .HasForeignKey("AssociationId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
@@ -6606,6 +7077,76 @@ namespace BunonBrain.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("BunonBrain.Domain.Entities.RfidReadEvent", b =>
+                {
+                    b.HasOne("BunonBrain.Domain.Entities.WorkerCard", null)
+                        .WithMany()
+                        .HasForeignKey("CardId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BunonBrain.Domain.Entities.Device", null)
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BunonBrain.Domain.Entities.Factory", null)
+                        .WithMany()
+                        .HasForeignKey("FactoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BunonBrain.Domain.Entities.RfidReaderMapping", null)
+                        .WithMany()
+                        .HasForeignKey("MappingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BunonBrain.Domain.Entities.WorkerProfile", null)
+                        .WithMany()
+                        .HasForeignKey("WorkerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("BunonBrain.Domain.Entities.RfidReaderMapping", b =>
+                {
+                    b.HasOne("BunonBrain.Domain.Entities.CameraZone", null)
+                        .WithMany()
+                        .HasForeignKey("CameraZoneId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BunonBrain.Domain.Entities.Department", null)
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BunonBrain.Domain.Entities.Device", null)
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BunonBrain.Domain.Entities.Factory", null)
+                        .WithMany()
+                        .HasForeignKey("FactoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BunonBrain.Domain.Entities.ProductionFloor", null)
+                        .WithMany()
+                        .HasForeignKey("FloorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BunonBrain.Domain.Entities.ProductionLine", null)
+                        .WithMany()
+                        .HasForeignKey("LineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BunonBrain.Domain.Entities.Workstation", null)
+                        .WithMany()
+                        .HasForeignKey("WorkstationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("BunonBrain.Domain.Entities.RolePermission", b =>
                 {
                     b.HasOne("BunonBrain.Domain.Entities.Permission", null)
@@ -6775,6 +7316,51 @@ namespace BunonBrain.Infrastructure.Migrations
                         .HasForeignKey("WorkerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("BunonBrain.Domain.Entities.WorkerTrackAssociation", b =>
+                {
+                    b.HasOne("BunonBrain.Domain.Entities.WorkstationAssignment", null)
+                        .WithMany()
+                        .HasForeignKey("AssignmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BunonBrain.Domain.Entities.Camera", null)
+                        .WithMany()
+                        .HasForeignKey("CameraId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BunonBrain.Domain.Entities.Factory", null)
+                        .WithMany()
+                        .HasForeignKey("FactoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BunonBrain.Domain.Entities.ProductionLine", null)
+                        .WithMany()
+                        .HasForeignKey("LineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BunonBrain.Domain.Entities.RfidReadEvent", null)
+                        .WithMany()
+                        .HasForeignKey("RfidReadEventId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BunonBrain.Domain.Entities.WorkerProfile", null)
+                        .WithMany()
+                        .HasForeignKey("WorkerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BunonBrain.Domain.Entities.Workstation", null)
+                        .WithMany()
+                        .HasForeignKey("WorkstationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BunonBrain.Domain.Entities.CameraZone", null)
+                        .WithMany()
+                        .HasForeignKey("ZoneId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("BunonBrain.Domain.Entities.Workstation", b =>

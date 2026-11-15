@@ -64,7 +64,8 @@ public sealed class CvServiceUnitTests
         Assert.Contains(MonitoringEventTypes.ZoneEntered, MonitoringProducers.CvEventTypes);
         Assert.Contains(MonitoringEventTypes.ModelStatusChanged, MonitoringProducers.CvEventTypes);
         Assert.DoesNotContain(MonitoringEventTypes.DeviceStatusChanged, MonitoringProducers.CvEventTypes);
-        Assert.DoesNotContain(MonitoringEventTypes.ActivityClassified, MonitoringProducers.CvEventTypes);
+        // Activity recognition reports predicted posture / movement of its own temporary tracks.
+        foreach (var t in MonitoringEventTypes.Activity) Assert.Contains(t, MonitoringProducers.CvEventTypes);
     }
 
     [Theory]

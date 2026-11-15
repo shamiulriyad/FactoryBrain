@@ -151,6 +151,7 @@ export const en = {
     orders: "Orders & shipments",
     inventory: "Inventory",
     reports: "Reports",
+    analytics: "Factory analytics",
     help: "Help",
     floors: {
       fabric: "Fabric inspection",

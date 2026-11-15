@@ -44,6 +44,7 @@ English and বাংলা.
 | 📷 | **Cameras & devices** | Camera registration, coverage, video sources (encrypted credentials), polygon zones; IoT devices with heartbeat health and a device simulator |
 | 🖥 | **Central monitoring** | Monitoring room, camera grid, event timeline, alerts (acknowledge / escalate / resolve / dismiss) and a simulator, live over SignalR (`/hubs/monitoring`), scoped per factory and line ([MONITORING_EVENTS.md](MONITORING_EVENTS.md)) |
 | 🪪 | **Verified worker identity** | Links a camera track to a worker only when an active RFID card is read at a reader mapped to the worker's assigned workstation and exactly one track is in that workstation's camera zone; ambiguous cases go to a manual review queue with an audit trail. RFID simulator included. Never by face or appearance; raw card UIDs never exposed ([IDENTITY_ASSOCIATION.md](IDENTITY_ASSOCIATION.md)) |
+| 📊 | **Factory analytics & reports** | Factory overview, production (line / shift / machine, hourly / daily, planned vs actual), machine uptime and downtime (missing data is never downtime), workforce (attendance, overtime, assignments), AI activity observations (estimates, aggregate only) and rule-based operational insights with evidence; daily / weekly / monthly and topic reports as CSV / PDF, scoped and audited ([ANALYTICS.md](ANALYTICS.md)) |
 | 🏭 | **Machine monitoring & IoT** | Machine states from sensor telemetry (RUNNING / IDLE / STOPPED / ERROR, OFFLINE or UNKNOWN when sensors can't be trusted, maintenance), production counts from piece counters with configurable counting rules, shifts and audited corrections, machine alerts through the existing alert workflow, device health; MQTT (preferred), HTTP device keys and an IoT simulator through one pipeline. Simulated and real data never mix ([IOT_INTEGRATION.md](IOT_INTEGRATION.md)) |
 | 👁 | **Computer vision (Python)** | Separate FastAPI service in [`computer-vision/`](computer-vision/): YOLO person detection + ByteTrack tracking + zone association, plus optional activity recognition (YOLO pose + temporal classification of basic posture / movement: standing, sitting, walking, bending, reaching, or unknown) and a garment-activity pipeline (dataset tools, training, evaluation and live inference of a CNN + GRU model for sewing, cutting, packing…; no model trained yet, accuracy pending), sending REAL events to the monitoring room. No face recognition, no worker identities, no productivity scoring |
 | 🎭 | **Demo mode** | With no LLM key, Ask and agent runs return deterministic canned answers |
@@ -249,6 +250,7 @@ The Python keys carry a `PYRAG_` prefix so they never clash with the API's
 | `/api/users`, `/api/roles`, `/api/permissions`, `/api/factories`, `/api/workers`, `/api/account` | User, role, factory and worker-profile management, scoped by factory and line ([ACCESS_CONTROL.md](ACCESS_CONTROL.md)) |
 | `/api/identity/{rfid-reads,reads,readers,overview,tracks,associations,simulator}` | RFID read ingestion, reader location mappings, track-to-worker identity associations, manual review, RFID simulator ([IDENTITY_ASSOCIATION.md](IDENTITY_ASSOCIATION.md)) |
 | `/api/iot/{ingest,device,overview,machines,state-history,production,devices,bridge,contract,simulator}` | Machine telemetry and counter ingestion, machine states and history, production reports and corrections, IoT device configuration and keys, MQTT bridge status, IoT simulator ([IOT_INTEGRATION.md](IOT_INTEGRATION.md)) |
+| `/api/analytics/{metrics,overview,production,machines,workforce,activity,insights,reports}` | Factory analytics, metric definitions, operational insights, reports and CSV / PDF exports ([ANALYTICS.md](ANALYTICS.md)) |
 | `/api/audit` | Append-only audit log of decisions (Admin) |
 | `/api/brief/morning` | Morning brief |
 | `/api/line-board` | Line metrics, `POST /refresh` |
@@ -370,6 +372,7 @@ BunonBrain/
 ├── MONITORING_EVENTS.md       the monitoring event contract (producers, alerts, real time)
 ├── IDENTITY_ASSOCIATION.md    verified worker identity: RFID + reader mapping + assignment + camera zone
 ├── IOT_INTEGRATION.md         machine monitoring, production counters, MQTT / HTTP / ESP32 / gateway integration
+├── ANALYTICS.md               factory analytics: KPI definitions, insights, reports, permissions
 ├── deploy/                    local MQTT broker (Mosquitto, per-device ACL) and example ESP32 firmware
 └── README.md
 ```

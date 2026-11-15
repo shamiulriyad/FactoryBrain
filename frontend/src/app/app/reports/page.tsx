@@ -1,9 +1,6 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { ComingSoon } from "@/components/ui/ComingSoon";
-import { useT } from "@/lib/useT";
-
+// Reports live in Factory analytics (generation, CSV / PDF export).
 export default function ReportsPage() {
-  const { t } = useT();
-  return <ComingSoon title={t("nav.reports")} description={t("placeholder.reportsBody")} related={["production", "qc", "orders"]} />;
+  redirect("/app/analytics/reports");
 }

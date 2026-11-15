@@ -543,6 +543,15 @@ temporary password to `/app/account`, and starts users without an overview
   authenticate at the broker (per-device accounts and ACL); HTTP devices with
   a per-device key (stored hashed) on `POST /api/iot/device/{channel}`, the
   only anonymous IoT route.
+- Factory analytics ([ANALYTICS.md](ANALYTICS.md)) adds no permission: each
+  section needs the permission of its data (production: `production.view` /
+  `monitoring.view`; machines: `monitoring.view` / `devices.view` /
+  `production.view`; attendance: `attendance.view`; overtime: `overtime.view` /
+  `attendance.view`; assignments: `workers.view`; AI activity:
+  `monitoring.view`; devices and alerts: `devices.view` / `monitoring.view`),
+  within the usual factory / line scope. Sections a role can't see are marked
+  NOT_PERMITTED and never computed; reports and exports follow the same rules
+  and are audited (`analytics.report_generated` / `analytics.report_exported`).
 - System roles are fixed; custom roles are not supported (by design for now).
 - Token freshness is cached for 30 s per API instance: on a multi-instance
   deployment another instance may accept an old token for up to 30 s.

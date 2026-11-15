@@ -29,7 +29,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { KeyRound, ShieldHalf, UserCircle2, UserCog, Building2, IdCard, Inbox, Globe, ArrowRightLeft, CalendarCheck, Cctv } from "lucide-react";
+import { KeyRound, ShieldHalf, UserCircle2, UserCog, Building2, IdCard, Inbox, Globe, ArrowRightLeft, CalendarCheck, Cctv, ChartNoAxesCombined } from "lucide-react";
 import { P } from "@/lib/access";
 
 export type FloorId = "fabric" | "cutting" | "sewing" | "qc" | "packing";
@@ -105,7 +105,8 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { id: "orders", labelKey: "nav.orders", href: "/app/merchandising", icon: Truck, perms: [P.MerchandisingView], keywords: "merchandising buyer order po purchase order shipment tech pack milestones deadlines" },
       { id: "inventory", labelKey: "nav.inventory", href: "/app/inventory", icon: Box, perms: [P.ProductionView], keywords: "stock fabric trims warehouse" },
-      { id: "reports", labelKey: "nav.reports", href: "/app/reports", icon: BarChart3, perms: [P.ReportsView], keywords: "report export summary" },
+      { id: "analytics", labelKey: "nav.analytics", href: "/app/analytics", icon: ChartNoAxesCombined, perms: [P.ProductionView, P.MonitoringView, P.DevicesView, P.AttendanceView, P.OvertimeView, P.WorkersView, P.ReportsView], keywords: "analytics kpi dashboard overview production output trend line shift machine uptime downtime attendance workforce overtime ai activity insights bottleneck coverage" },
+      { id: "reports", labelKey: "nav.reports", href: "/app/analytics/reports", icon: BarChart3, perms: [P.ProductionView, P.MonitoringView, P.DevicesView, P.AttendanceView, P.OvertimeView, P.WorkersView, P.ReportsView], keywords: "report export summary csv pdf daily weekly monthly" },
     ],
   },
   {

@@ -150,6 +150,7 @@ export const bn: Dict = {
     orders: "অর্ডার ও শিপমেন্ট",
     inventory: "ইনভেন্টরি",
     reports: "রিপোর্ট",
+    analytics: "ফ্যাক্টরি অ্যানালিটিক্স",
     help: "সাহায্য",
     floors: {
       fabric: "ফ্যাব্রিক ইন্সপেকশন",

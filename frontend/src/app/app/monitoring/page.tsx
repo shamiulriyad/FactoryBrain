@@ -24,6 +24,8 @@ import { useQueryState } from "@/components/attendance/shared";
 import { AlertRow, EventList, LiveIndicator, MonitoringTabs, SeverityBadge, mergeEvents } from "@/components/monitoring/shared";
 import { ActivitySummary } from "@/components/monitoring/activity";
 import type { IdentityOverview } from "@/lib/identity";
+import type { MachineOverview } from "@/lib/iot";
+import { useCan } from "@/lib/auth";
 import { useResource } from "@/lib/useResource";
 import { useMonitoringHub } from "@/lib/useMonitoringHub";
 import { P } from "@/lib/access";
@@ -83,6 +85,8 @@ function Room() {
     && (!filters.to), [filters.departmentId, filters.floorId, filters.lineId, filters.cameraId, filters.eventType, filters.to]);
 
   const [activityKey, setActivityKey] = useState(0);
+  const [machineKey, setMachineKey] = useState(0);
+  const canSeeMachines = useCan(P.MonitoringView, P.DevicesView, P.ProductionView);
   const hub = useMonitoringHub(factory || null, {
     onEvent: (e) => {
       if (isActivityEvent(e.eventType) || e.eventType === "PERSON_LOST" || e.eventType === "ZONE_ENTERED") setActivityKey((k) => k + 1);
@@ -95,6 +99,8 @@ function Room() {
     },
     onAlert: () => reloadSoon(),
     onIdentity: () => setActivityKey((k) => k + 1),
+    onMachine: () => setMachineKey((k) => k + 1),
+    onProduction: () => setMachineKey((k) => k + 1),
     onCameraStatus: () => reloadSoon(),
     onDeviceStatus: () => reloadSoon(),
     onResync: () => void overview.reload()
@@ -224,6 +230,7 @@ function Room() {
             </Panel>
           </div>
 
+          {canSeeMachines && <MachinePanel factory={factory} reloadKey={machineKey} />}
           {o.canSeeVision && <IdentityPanel factory={factory} reloadKey={activityKey} />}
           {o.canSeeVision && <ActivityPanel factory={factory} reloadKey={activityKey} />}
 
@@ -258,6 +265,41 @@ function Room() {
         </>
       )}
     </div>
+  );
+}
+
+/** Machines at a glance: running / idle / stopped / offline counts, pieces today, active machine alerts. Real machines only. */
+function MachinePanel({ factory, reloadKey }: { factory: string; reloadKey: number }) {
+  const data = useResource<MachineOverview>(`/api/iot/overview${qs({ factoryId: factory, source: "REAL" })}`, { pollMs: 60_000 });
+  const reload = data.reload;
+  const last = useRef(0);
+  useEffect(() => {
+    if (reloadKey === 0) return;
+    const wait = Math.max(0, 3000 - (Date.now() - last.current));
+    const t = setTimeout(() => { last.current = Date.now(); void reload(); }, wait);
+    return () => clearTimeout(t);
+  }, [reloadKey, reload]);
+  const d = data.data;
+  if (d && d.counts.total === 0) return null;
+  return (
+    <Panel title="Machines" subtitle="States from machine sensors; counts from production counters. Machine data, not worker data." icon={<Cpu size={15} />}
+      right={<Link href={`${MON}/machines${factory ? `?factory=${factory}` : ""}`} className="text-caption text-[var(--accent)] inline-flex items-center gap-1">Machines <ArrowRight size={12} /></Link>}
+      className="mb-4" testId="room-machines">
+      <div className="p-4">
+        {data.error && !d ? <p className="text-caption text-fg-tertiary">Machines could not be loaded: {data.error.message}</p>
+          : !d ? <SkeletonRows rows={1} />
+          : (
+            <dl className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-caption">
+              <div><dt className="text-fg-tertiary">Running</dt><dd className="text-xl font-semibold tabular-nums">{d.counts.running}</dd></div>
+              <div><dt className="text-fg-tertiary">Idle</dt><dd className="text-xl font-semibold tabular-nums">{d.counts.idle}</dd></div>
+              <div><dt className="text-fg-tertiary">Stopped</dt><dd className={cn("text-xl font-semibold tabular-nums", d.counts.stopped > 0 && "text-[var(--risk-medium)]")}>{d.counts.stopped}</dd></div>
+              <div><dt className="text-fg-tertiary">Offline / error</dt><dd className={cn("text-xl font-semibold tabular-nums", d.counts.offline + d.counts.error > 0 && "text-[var(--risk-high)]")}>{d.counts.offline + d.counts.error}</dd></div>
+              <div><dt className="text-fg-tertiary">Pieces today</dt><dd className="text-xl font-semibold tabular-nums">{d.canSeeProduction ? d.piecesToday : "—"}</dd></div>
+              <div><dt className="text-fg-tertiary">Machine alerts</dt><dd className="text-xl font-semibold tabular-nums">{d.alerts.length}</dd></div>
+            </dl>
+          )}
+      </div>
+    </Panel>
   );
 }
 

@@ -27,6 +27,8 @@ export type MonitoringEvent = {
   workstation?: MonRef | null;
   camera?: MonRef | null;
   device?: MonRef | null;
+  /** The machine a machine-monitoring event or alert is about. */
+  machine?: MonRef | null;
   zone?: MonZone | null;
   trackId?: string | null;
   verifiedWorker?: MonRef | null;
@@ -68,6 +70,8 @@ export type MonitoringAlert = {
   workstation?: MonRef | null;
   camera?: MonRef | null;
   device?: MonRef | null;
+  /** The machine a machine-monitoring event or alert is about. */
+  machine?: MonRef | null;
   zone?: MonZone | null;
   eventId: string;
   lastEventId?: string | null;
@@ -302,7 +306,7 @@ export const MON = "/app/monitoring";
 export const EVENT_TYPES = [
   "PERSON_DETECTED", "TRACK_UPDATED", "PERSON_LOST", "ZONE_ENTERED", "ZONE_EXITED", "ACTIVITY_CLASSIFIED", "ACTIVITY_STATE_CHANGED",
   "ACTIVITY_UNCERTAIN", "GARMENT_ACTIVITY_CLASSIFIED", "GARMENT_ACTIVITY_CHANGED", "GARMENT_ACTIVITY_UNCERTAIN", "UNCERTAIN_DETECTION",
-  "CAMERA_STATUS_CHANGED", "DEVICE_STATUS_CHANGED", "MODEL_STATUS_CHANGED"
+  "CAMERA_STATUS_CHANGED", "DEVICE_STATUS_CHANGED", "MODEL_STATUS_CHANGED", "MACHINE_STATE_CHANGED", "MACHINE_CONDITION"
 ] as const;
 
 export const ACTIVITY_EVENT_TYPES = ["ACTIVITY_CLASSIFIED", "ACTIVITY_STATE_CHANGED", "ACTIVITY_UNCERTAIN"] as const;
@@ -401,7 +405,9 @@ export const EVENT_TYPE_LABEL: Record<string, string> = {
   UNCERTAIN_DETECTION: "Uncertain detection",
   CAMERA_STATUS_CHANGED: "Camera status",
   DEVICE_STATUS_CHANGED: "Device status",
-  MODEL_STATUS_CHANGED: "Model status"
+  MODEL_STATUS_CHANGED: "Model status",
+  MACHINE_STATE_CHANGED: "Machine state",
+  MACHINE_CONDITION: "Machine condition"
 };
 
 export const ALERT_STATUSES = ["OPEN", "ACKNOWLEDGED", "ESCALATED", "RESOLVED", "DISMISSED"] as const;

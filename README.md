@@ -43,7 +43,7 @@ English and বাংলা.
 | 🕒 | **Attendance & shifts** | Shifts, attendance, breaks and overtime with approvals |
 | 📷 | **Cameras & devices** | Camera registration, coverage, video sources (encrypted credentials), polygon zones; IoT devices with heartbeat health and a device simulator |
 | 🖥 | **Central monitoring** | Monitoring room, camera grid, event timeline, alerts (acknowledge / escalate / resolve / dismiss) and a simulator, live over SignalR (`/hubs/monitoring`), scoped per factory and line ([MONITORING_EVENTS.md](MONITORING_EVENTS.md)) |
-| 👁 | **Computer vision (Python)** | Separate FastAPI service in [`computer-vision/`](computer-vision/): YOLO person detection + ByteTrack tracking + zone association, sending REAL events to the monitoring room. No face recognition, no worker identities |
+| 👁 | **Computer vision (Python)** | Separate FastAPI service in [`computer-vision/`](computer-vision/): YOLO person detection + ByteTrack tracking + zone association, plus optional activity recognition (YOLO pose + temporal classification of basic posture / movement: standing, sitting, walking, bending, reaching, or unknown) and a garment-activity pipeline (dataset tools, training, evaluation and live inference of a CNN + GRU model for sewing, cutting, packing…; no model trained yet, accuracy pending), sending REAL events to the monitoring room. No face recognition, no worker identities, no productivity scoring |
 | 🎭 | **Demo mode** | With no LLM key, Ask and agent runs return deterministic canned answers |
 | 📄 | **PDF RAG (Python)** | Standalone LangChain + Qdrant + Gemini pipeline in [`rag/`](rag/) |
 
@@ -359,7 +359,8 @@ BunonBrain/
 ├── database/                  where the schema, migrations and seed data live
 ├── rag/                       standalone Python PDF RAG (LangChain + Qdrant + Gemini)
 ├── computer-vision/           standalone Python CV service: YOLO person detection + ByteTrack,
-│                              zone association, events to the monitoring API (see its README)
+│                              zone association, pose-based activity recognition, events to the
+│                              monitoring API (see its README and docs/ACTIVITY_RECOGNITION.md)
 ├── ARCHITECTURE.md            system diagrams
 ├── ACCESS_CONTROL.md          roles, permissions, scope rules, API and page access
 ├── MONITORING_EVENTS.md       the monitoring event contract (producers, alerts, real time)

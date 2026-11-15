@@ -15,8 +15,9 @@ rule 14). The first real producer is the computer-vision service in
 factories in `CV_SERVICE_FACTORIES` (codes, or `*`). That principal has no role
 and exactly one permission, `monitoring.events.ingest`; its events are stored
 with producer `CV_SERVICE`, must be REAL, must concern an active camera, may
-only be vision, camera-status or model-status events, and can never carry a
-worker id. It alone may read `GET /api/integrations/cv/cameras[/{id}[/video]]`
+only be vision (including activity), camera-status or model-status events,
+may only report the observable activities (section 2.1), and can never carry
+a worker id. It alone may read `GET /api/integrations/cv/cameras[/{id}[/video]]`
 (sources with decrypted stream credentials, active zones); people get 403
 there whatever their permissions.
 
@@ -80,7 +81,12 @@ fields, status values, limits).
 | `TRACK_UPDATED` | VISION | `cameraId`, `trackId` | e.g. `bbox` |
 | `PERSON_LOST` | VISION | `cameraId`, `trackId` | |
 | `ZONE_ENTERED`, `ZONE_EXITED` | VISION | `zoneId` (camera taken from it), `trackId` | |
-| `ACTIVITY_CLASSIFIED` | VISION | `cameraId`, `trackId`, `confidence` | `activity` (≤ 40 characters) |
+| `ACTIVITY_CLASSIFIED` | VISION | `cameraId`, `trackId`, `confidence` | `activity` (catalog, section 2.1): a periodic confirmation of a track's predicted activity |
+| `ACTIVITY_STATE_CHANGED` | VISION | `cameraId`, `trackId`, `confidence` | `activity` (not UNKNOWN), optional `previousActivity`, `observationStart` / `observationEnd`, `quality`, `scores` |
+| `ACTIVITY_UNCERTAIN` | VISION | `cameraId`, `trackId` | `activity` = `UNKNOWN`, optional `previousActivity`, `reason`, `candidate`. Never carries a worker. |
+| `GARMENT_ACTIVITY_CLASSIFIED` | VISION | `cameraId`, `trackId`, `confidence`, `modelName`, `modelVersion` | `activity` (garment label), `model`, `context` |
+| `GARMENT_ACTIVITY_CHANGED` | VISION | `cameraId`, `trackId`, `confidence`, `modelName`, `modelVersion` | `activity` (not UNKNOWN), optional `previousActivity` |
+| `GARMENT_ACTIVITY_UNCERTAIN` | VISION | `cameraId`, `trackId`, `modelName`, `modelVersion` | `activity` = `UNKNOWN`, `reason`, `candidate`. Never carries a worker. |
 | `UNCERTAIN_DETECTION` | VISION | `cameraId`, `confidence` | e.g. `reason`. Never carries a worker. |
 | `CAMERA_STATUS_CHANGED` | SYSTEM | `cameraId` | `toStatus`: ONLINE, OFFLINE, ACTIVE, INACTIVE, MAINTENANCE |
 | `DEVICE_STATUS_CHANGED` | SYSTEM | `deviceId` | `toStatus`: ONLINE, OFFLINE, ERROR, ACTIVE, MAINTENANCE, DISABLED |
@@ -88,6 +94,54 @@ fields, status values, limits).
 
 VISION events are visible with `monitoring.view` only. SYSTEM events are also
 visible to IT / Device Administrators (`devices.view`).
+
+### 2.1 Activity events
+
+An activity is a **prediction** about a temporary track: its posture or
+movement over a few seconds, with a confidence. It is not a worker identity,
+not verified work and not a productivity or performance measure, and no
+alert rule acts on it.
+
+| `payload.activity` | Who may send it |
+|---|---|
+| `STANDING`, `SITTING`, `WALKING`, `BENDING`, `REACHING`, `UNKNOWN` (observable) | every producer, including the computer-vision service |
+| `SEWING_LIKE_MOTION`, `HANDLING_MATERIAL`, `OPERATING_MACHINE`, `PICKING_ITEM` (reserved) | producers with a trained, validated model; **refused from the computer-vision service** (`activity_not_supported_by_service`) |
+
+Anything else is refused (`activity_invalid`), and so is a previous activity
+outside the catalog (`previous_activity_invalid`). `ACTIVITY_UNCERTAIN` must
+carry `UNKNOWN` (`activity_must_be_unknown`); a change to UNKNOWN is never an
+`ACTIVITY_STATE_CHANGED` (`activity_state_unknown`). `ACTIVITY_UNCERTAIN`
+can't carry a worker (`uncertain_activity_cannot_identify`; the database
+enforces it too). Values are upper-cased on the way in. Summaries read
+"Predicted activity changed to WALKING from STANDING on CAM-001 (track …)".
+
+### 2.2 Garment activity events
+
+A separate family from the generic posture activity, predicted by a trained
+model (computer-vision/docs/GARMENT_ACTIVITIES.md). `payload.activity` is
+any upper-snake-case label of 2–40 characters (the classes live in the CV
+service's configurable registry: SEWING, FABRIC_HANDLING, CUTTING, IRONING,
+MATERIAL_PICKING, MACHINE_OPERATION, QUALITY_INSPECTION, PACKING, WALKING,
+STANDING, SITTING, UNKNOWN, plus factory-specific ones). The event must name
+its model (`model_version_required` otherwise); `GARMENT_ACTIVITY_UNCERTAIN`
+must carry UNKNOWN and can never name a worker (database-enforced);
+`GARMENT_ACTIVITY_CHANGED` never carries UNKNOWN. `payload.model` holds the
+dataset version and evaluation status; `payload.context` (zone,
+workstation, line) is context only, never evidence of the activity.
+`GET /api/monitoring/activity?kind=garment` returns the garment picture
+(same shape, plus `kind` and `models`: name, version, event count,
+evaluation status). The timeline's `activity` filter matches both families.
+
+`GET /api/monitoring/activity?factoryId&lineId&cameraId&activity&sourceType&uncertainOnly&from&to&activeSeconds`
+(`monitoring.view`) returns the activity picture: tracks whose latest
+activity event is recent and who weren't lost (`current`), each track's
+latest predicted activity, confidence, since when, reason / best guess when
+uncertain and verified worker (RFID only, never from a camera); observed
+seconds and prediction counts per activity by camera and by line (time
+between a track's consecutive activity events, at most 2 minutes each); the
+latest 50 transitions (state changes and uncertain periods). Default range:
+the last hour; at most 20 000 events are used (`truncated`). `GET
+/api/monitoring/events?activity=WALKING` filters the timeline.
 
 Device connection, error and status changes recorded by the device module are
 mirrored here automatically (`producer: DEVICE_PIPELINE`), and a camera's

@@ -54,8 +54,40 @@ class Settings(BaseSettings):
     publish_queue_size: int = Field(1000, ge=10, le=100_000)
     publish_max_attempts: int = Field(5, ge=1, le=20)
 
+    # ── Activity recognition (pose estimation + temporal classification) ──
+    # Off by default: it loads a second model. CV_ACTIVITY_CAMERAS chooses which cameras use it
+    # ("*" = every camera, or a comma-separated list of camera codes / ids); a start request can override it.
+    activity_enabled: bool = Field(False, description="Load the pose model at startup and allow activity recognition.")
+    activity_cameras: str = Field("*", description="Cameras analysed for activity by default: * or comma-separated codes / ids.")
+    activity_model_path: Path = ROOT / "models" / "pose" / "yolo11n-pose.pt"
+    activity_pose_confidence: float = Field(0.35, ge=0.05, le=0.95, description="Minimum pose-model box confidence.")
+    activity_keypoint_confidence: float = Field(0.35, ge=0.05, le=0.95, description="A keypoint below this confidence counts as missing.")
+    activity_image_size: int = Field(640, ge=160, le=1920)
+    activity_process_fps: float = Field(4.0, gt=0, le=15, description="Pose inferences per second per camera (independent of CV_PROCESS_FPS).")
+    activity_window_seconds: float = Field(3.0, ge=0.5, le=30, description="Temporal window the classifier looks at.")
+    activity_min_window_seconds: float = Field(1.0, ge=0.2, le=30, description="Shortest observed span before any prediction.")
+    activity_min_observations: int = Field(4, ge=2, le=100, description="Usable pose observations needed in the window.")
+    activity_max_gap_seconds: float = Field(1.5, gt=0, le=30, description="A longer gap between observations of a track restarts its window.")
+    activity_reset_after_seconds: float = Field(3.0, gt=0, le=120, description="A track unseen this long loses its buffer and state.")
+    activity_min_confidence: float = Field(0.55, ge=0.05, le=0.99, description="Predictions below this confidence become UNKNOWN.")
+    activity_conflict_margin: float = Field(0.15, ge=0, le=0.9, description="Top two activities closer than this are uncertain (UNKNOWN).")
+    activity_min_state_seconds: float = Field(1.5, ge=0, le=60, description="A new activity must persist this long before the state changes.")
+    activity_unknown_after_seconds: float = Field(3.0, ge=0, le=120, description="UNKNOWN must persist this long before it replaces a known state.")
+    activity_report_seconds: float = Field(15.0, ge=1, le=600, description="At most one ACTIVITY_CLASSIFIED per track per interval while the state is stable.")
+    activity_walking_speed: float = Field(0.30, gt=0, le=5, description="Body-centre speed (body heights per second) at which movement counts as walking.")
+    activity_match_iou: float = Field(0.30, ge=0.05, le=0.95, description="Minimum overlap between a pose box and a track box to associate them.")
+    activity_classifier: str = Field("baseline", description="baseline (pose-feature rules) | sequence (a TorchScript model, see docs)")
+    activity_sequence_model_path: Path | None = Field(None, description="TorchScript sequence model for CV_ACTIVITY_CLASSIFIER=sequence.")
+
+    # ── Garment activity recognition (a trained model; see docs/GARMENT_ACTIVITIES.md) ──
+    # Off by default. Needs the pose model (it reuses the pose stage), a trained and evaluated model, and
+    # configs/garment_inference.json (per-camera models, inference rate, thresholds).
+    garment_enabled: bool = Field(False, description="Run garment activity models on the cameras configured in CV_GARMENT_CONFIG.")
+    garment_config: Path = ROOT / "configs" / "garment_inference.json"
+
     # ── Development only ──
     enable_preview: bool = Field(False, description="GET /cameras/{id}/preview.jpg (API key required). Off in production.")
+    preview_pose: bool = Field(True, description="Draw pose keypoints in the development preview (GET preview.jpg?pose=false hides them).")
     preview_window: bool = Field(False, description="Show an OpenCV window per camera on the machine running the service.")
     allow_source_override: bool = Field(False, description="Allow POST /cameras/{id}/start to use a local file or webcam index instead of the camera's configured source.")
 
@@ -66,9 +98,11 @@ class Settings(BaseSettings):
     def _strip_slash(cls, v: str) -> str:
         return v.rstrip("/")
 
-    @field_validator("model_path", "data_dir")
+    @field_validator("model_path", "data_dir", "activity_model_path", "activity_sequence_model_path", "garment_config")
     @classmethod
-    def _absolute(cls, v: Path) -> Path:
+    def _absolute(cls, v: Path | None) -> Path | None:
+        if v is None or str(v) == "":
+            return None
         return v if v.is_absolute() else (ROOT / v).resolve()
 
     @property

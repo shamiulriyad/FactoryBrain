@@ -24,6 +24,8 @@ class ModelHealth(BaseModel):
     loaded_at: float | None
     inference_count: int
     avg_inference_ms: float
+    pose: dict | None = None
+    garment: dict | None = None
 
 
 class SourceOverrideIn(BaseModel):
@@ -38,6 +40,8 @@ class StartRequest(BaseModel):
     process_fps: float | None = Field(None, gt=0, le=30, description="Override CV_PROCESS_FPS for this camera.")
     loop: bool = Field(False, description="Recorded video only: start again at the end.")
     source: SourceOverrideIn | None = None
+    activity: bool | None = Field(None, description="Activity recognition for this camera: true / false; omitted = CV_ACTIVITY_CAMERAS decides.")
+    garment: bool | None = Field(None, description="Garment activity model for this camera: true / false; omitted = CV_GARMENT_CONFIG decides.")
 
 
 class SessionStatus(BaseModel):
@@ -54,6 +58,11 @@ class SessionStatus(BaseModel):
     error: str | None
     activeTracks: int
     processingFps: float
+    activityEnabled: bool = False
+    activityError: str | None = None
+    garmentEnabled: bool = False
+    garmentModel: dict | None = None
+    garmentError: str | None = None
 
 
 class CameraListItem(BaseModel):

@@ -1,0 +1,5 @@
+annotation_id,video_id,clip_id,camera_id,start_s,end_s,labels,status,annotator,confidence,subject_group,roi_x,roi_y,roi_w,roi_h,notes
+a-0001,v-0123456789ab,,CAM-001,12.0,31.5,SEWING,LABELLED,ann-02,0.9,P017,0.42,0.30,0.12,0.40,example: hands guiding fabric under the needle
+a-0002,v-0123456789ab,,CAM-001,31.5,36.0,SEWING|FABRIC_HANDLING,LABELLED,ann-02,0.7,P017,0.42,0.30,0.12,0.40,example: realigning the panel while sewing
+a-0003,v-0123456789ab,,CAM-001,36.0,44.0,,AMBIGUOUS,ann-02,0.5,P017,,,,,example: hands hidden behind the machine head
+a-0004,v-0123456789ab,,CAM-001,44.0,50.0,,UNUSABLE,ann-02,1.0,,,,,,example: camera blocked by a trolley

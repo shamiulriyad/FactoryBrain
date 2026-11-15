@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "note": "Garment activity classes. Add factory-specific classes under 'labels' with kind 'task'; never remove UNKNOWN. A label needs visible evidence of the task itself (see docs/GARMENT_ACTIVITIES.md).",
+  "labels": [
+    {"name": "SEWING", "kind": "task", "description": "Operating a sewing machine or performing sewing work: hands guiding fabric under the needle / presser foot, or hand stitching.", "evidence": "Hands at the needle area moving fabric through, or a needle and thread in hand. Sitting at a machine alone is not enough."},
+    {"name": "FABRIC_HANDLING", "kind": "task", "description": "Handling, arranging, folding or moving fabric or cut panels.", "evidence": "Fabric visibly being manipulated (spread, stacked, folded, carried). Merely holding fabric while doing something else is not enough."},
+    {"name": "CUTTING", "kind": "task", "description": "Cutting fabric by hand or operating cutting equipment.", "evidence": "Scissors, a knife or a cutting machine moving through fabric."},
+    {"name": "IRONING", "kind": "task", "description": "Ironing or pressing work.", "evidence": "An iron or press moving over / closing on a garment."},
+    {"name": "MATERIAL_PICKING", "kind": "task", "description": "Picking or collecting materials (bundles, trims, thread, accessories).", "evidence": "Reaching into a bin, rack or trolley and taking items."},
+    {"name": "MACHINE_OPERATION", "kind": "task", "description": "Operating a production machine other than a sewing machine (e.g. fusing, button, bartack, embroidery).", "evidence": "Hands on the machine's controls or loading / unloading it while it works. Standing beside a machine is not enough."},
+    {"name": "QUALITY_INSPECTION", "kind": "task", "description": "Inspecting garments or materials.", "evidence": "A garment held up, turned over and examined, measured or compared against a standard."},
+    {"name": "PACKING", "kind": "task", "description": "Folding, bagging or packing finished garments.", "evidence": "Finished garments being folded into shape, put into bags or cartons, or sealed."},
+    {"name": "WALKING", "kind": "movement", "description": "Walking or moving between work areas.", "evidence": "Continuous steps from one place to another (about a second or more)."},
+    {"name": "STANDING", "kind": "posture", "description": "Standing without a confidently recognised task.", "evidence": "Upright and stationary, and no task above is clearly visible."},
+    {"name": "SITTING", "kind": "posture", "description": "Sitting without a confidently recognised task.", "evidence": "Seated, and no task above is clearly visible. Sitting at a sewing machine is SITTING unless sewing is visible."},
+    {"name": "UNKNOWN", "kind": "unknown", "description": "Insufficient evidence or uncertain activity.", "evidence": "Use whenever the task can't be seen or is ambiguous. Always a valid answer."}
+  ]
+}

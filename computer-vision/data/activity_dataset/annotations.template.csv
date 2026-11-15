@@ -1,0 +1,2 @@
+clip_id,file,split,recording_id,subject_group,camera_angle,label,start_s,end_s,roi_x,roi_y,roi_w,roi_h,annotator,notes
+c0001,raw/line1_cam3_2026-11-20_0900.mp4,,rec-L1C3-1120-0900,P017,high-front,SITTING,12.0,31.5,0.42,0.30,0.12,0.40,ann-02,example row: replace with your own

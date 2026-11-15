@@ -636,6 +636,16 @@ builder.Services.AddScoped<IIotQueryService, BunonBrain.Infrastructure.Iot.IotQu
 builder.Services.AddScoped<IIotConfigService, BunonBrain.Infrastructure.Iot.IotConfigService>();
 builder.Services.AddScoped<IProductionCorrectionService, BunonBrain.Infrastructure.Iot.ProductionCorrectionService>();
 builder.Services.AddScoped<IIotSimulatorService, BunonBrain.Infrastructure.Iot.IotSimulatorService>();
+// Factory analytics and reports: read-only aggregation over the existing
+// modules' records (attendance, assignments, production counters, machine
+// state, monitoring events and alerts, identity associations, plans).
+builder.Services.AddScoped<IOverviewAnalytics, BunonBrain.Infrastructure.Analytics.OverviewAnalyticsService>();
+builder.Services.AddScoped<IProductionAnalytics, BunonBrain.Infrastructure.Analytics.ProductionAnalyticsService>();
+builder.Services.AddScoped<IMachineAnalytics, BunonBrain.Infrastructure.Analytics.MachineAnalyticsService>();
+builder.Services.AddScoped<IWorkforceAnalytics, BunonBrain.Infrastructure.Analytics.WorkforceAnalyticsService>();
+builder.Services.AddScoped<IActivityAnalytics, BunonBrain.Infrastructure.Analytics.ActivityAnalyticsService>();
+builder.Services.AddScoped<IOperationalInsights, BunonBrain.Infrastructure.Analytics.OperationalInsightsService>();
+builder.Services.AddScoped<IAnalyticsReports, BunonBrain.Infrastructure.Analytics.AnalyticsReportService>();
 if (!builder.Environment.IsEnvironment("Testing"))
 {
     builder.Services.AddHostedService<BunonBrain.Infrastructure.Iot.MachineMonitorWorker>();

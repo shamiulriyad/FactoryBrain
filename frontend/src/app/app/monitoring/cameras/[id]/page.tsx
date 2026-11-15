@@ -10,7 +10,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Bell, Bot, Cctv, PersonStanding, Radio, Scissors, Settings2, Shapes, Video, Webcam } from "lucide-react";
+import { ArrowLeft, Bell, Bot, Cctv, Fingerprint, PersonStanding, Radio, Scissors, Settings2, Shapes, Video, Webcam } from "lucide-react";
 import { RequirePermission } from "@/components/auth/RequireRole";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
@@ -24,6 +24,8 @@ import {
   AlertActionButtons, AlertActionDialog, AlertRow, ConnectionBadge, EventList, LiveIndicator, MonitoringTabs, mergeEvents, type AlertAction
 } from "@/components/monitoring/shared";
 import { ActivityTrackTable, IdentityLegend } from "@/components/monitoring/activity";
+import { IdentityCaseDrawer, TrackIdentityCard } from "@/components/monitoring/identity";
+import type { TrackIdentity } from "@/lib/identity";
 import { useResource } from "@/lib/useResource";
 import { useMonitoringHub } from "@/lib/useMonitoringHub";
 import { useCan } from "@/lib/auth";
@@ -51,14 +53,16 @@ function Expanded() {
   const canSeeActivity = useCan(P.MonitoringView);
   const activity = useResource<MonitoringActivity>(canSeeActivity ? `/api/monitoring/activity?cameraId=${id}` : null, { pollMs: 30_000 });
   const garment = useResource<MonitoringActivity>(canSeeActivity ? `/api/monitoring/activity?cameraId=${id}&kind=garment` : null, { pollMs: 30_000 });
+  const identity = useResource<TrackIdentity[]>(canSeeActivity ? `/api/identity/tracks?cameraId=${id}` : null, { pollMs: 30_000 });
+  const [identityCase, setIdentityCase] = useState<string | null>(null);
   const [events, setEvents] = useState<MonitoringEvent[]>([]);
   const [acting, setActing] = useState<{ alert: MonitoringAlert; action: AlertAction } | null>(null);
 
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reloadActivity = useCallback(() => {
     if (pending.current) return;
-    pending.current = setTimeout(() => { pending.current = null; void activity.reload(); void garment.reload(); }, 1500);
-  }, [activity, garment]);
+    pending.current = setTimeout(() => { pending.current = null; void activity.reload(); void garment.reload(); void identity.reload(); }, 1500);
+  }, [activity, garment, identity]);
   useEffect(() => () => { if (pending.current) clearTimeout(pending.current); }, []);
   // Latest predicted activity per temporary track, from the activity summary and then from live events.
   const [liveActivity, setLiveActivity] = useState<Map<string, { activity: string; confidence?: number | null }>>(new Map());
@@ -76,8 +80,9 @@ function Expanded() {
         const a = typeof e.payload?.activity === "string" ? e.payload.activity : null;
         if (a && !isGarmentEvent(e.eventType)) setLiveActivity((cur) => new Map(cur).set(e.trackId!, { activity: a, confidence: e.confidence }));
         reloadActivity();
-      } else if (e.eventType === "PERSON_LOST") reloadActivity();
+      } else if (e.eventType === "PERSON_LOST" || e.eventType === "ZONE_ENTERED" || e.eventType === "PERSON_DETECTED") reloadActivity();
     },
+    onIdentity: (_, a) => { if (a.camera.id === id) reloadActivity(); },
     onCameraStatus: (m) => { if (m.id === id) void detail.reload(); },
     onAlert: (_, a) => { if (a.camera?.id === id) void detail.reload(); },
     onResync: () => void detail.reload()
@@ -110,6 +115,18 @@ function Expanded() {
           <Panel title="View" subtitle={FEED_KIND_LABEL[c.feed.kind]} icon={<Cctv size={15} />} testId="camera-viewer">
             <div className="p-4"><Viewer c={c} /></div>
           </Panel>
+          {canSeeActivity && (
+            <Panel title="Track identity" subtitle="Verified only from RFID card + reader location + assignment + camera zone · never from appearance"
+              icon={<Fingerprint size={15} />} testId="camera-identity">
+              <div className="p-4">
+                {identity.error && !identity.data ? <p className="text-caption text-fg-tertiary">Identity could not be loaded: {identity.error.message}</p>
+                  : !identity.data ? <SkeletonRows rows={1} />
+                  : identity.data.length === 0 ? <p className="text-caption text-fg-tertiary">No track in view right now.</p>
+                  : <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{identity.data.map((t) => <TrackIdentityCard key={t.trackId} t={t} onOpen={setIdentityCase} />)}</div>}
+                <p className="mt-2 text-caption"><Link className="text-[var(--accent)]" href={`${MON}/identity?factory=${c.factoryId}`}>Identity overview and review queue</Link></p>
+              </div>
+            </Panel>
+          )}
           {canSeeActivity && (
             <Panel title="Tracks and predicted activity" subtitle="Temporary track ids on this camera · last 5 minutes" icon={<PersonStanding size={15} />} flush testId="camera-activity">
               <div className="p-4 border-b border-border-subtle space-y-3">
@@ -197,6 +214,7 @@ function Expanded() {
         </div>
       </div>
 
+      <IdentityCaseDrawer id={identityCase} onClose={() => setIdentityCase(null)} onChanged={() => void identity.reload()} />
       <AlertActionDialog alert={acting?.alert ?? null} action={acting?.action ?? null} onClose={() => setActing(null)}
         onDone={() => { setActing(null); void detail.reload(); }} />
     </div>

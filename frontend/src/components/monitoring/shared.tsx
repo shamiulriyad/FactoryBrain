@@ -32,6 +32,7 @@ const SECTIONS: { href: string; label: string; perms: string[]; exact?: boolean 
   { href: MON, label: "Monitoring room", perms: [P.MonitoringView, P.DevicesView], exact: true },
   { href: `${MON}/cameras`, label: "Cameras", perms: [P.MonitoringView, P.CamerasView] },
   { href: `${MON}/activity`, label: "Activity", perms: [P.MonitoringView] },
+  { href: `${MON}/identity`, label: "Identity", perms: [P.MonitoringView] },
   { href: `${MON}/events`, label: "Event timeline", perms: [P.MonitoringView, P.DevicesView] },
   { href: `${MON}/alerts`, label: "Alerts", perms: [P.MonitoringView, P.DevicesView] },
   { href: `${MON}/devices`, label: "Device health", perms: [P.DevicesView] },

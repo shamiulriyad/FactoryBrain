@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from "react";
 import { HubConnectionBuilder, HubConnectionState, LogLevel, type HubConnection } from "@microsoft/signalr";
 import { getAccessToken } from "@/lib/auth";
 import type { MonitoringAlert, MonitoringEvent } from "@/lib/monitoring";
+import type { IdentityAssociation } from "@/lib/identity";
 
 export type LiveState = "connecting" | "live" | "reconnecting" | "offline" | "denied" | "off";
 
@@ -27,6 +28,8 @@ export type HubHandlers = {
   onAlert?: (change: string, alert: MonitoringAlert) => void;
   onCameraStatus?: (m: StatusMessage) => void;
   onDeviceStatus?: (m: StatusMessage) => void;
+  /** A worker-identity association changed (created, refreshed, suspended, expired, reviewed). */
+  onIdentity?: (change: string, association: IdentityAssociation) => void;
   /** After (re)connecting: refetch to fill any gap. */
   onResync?: () => void;
 };
@@ -73,6 +76,7 @@ export function useMonitoringHub(factoryId: string | null | undefined, handlers:
       c.on("monitoringAlert", (m: { change: string; alert: MonitoringAlert }) => { touch(); handlersRef.current.onAlert?.(m.change, m.alert); });
       c.on("cameraStatus", (m: StatusMessage) => { touch(); handlersRef.current.onCameraStatus?.(m); });
       c.on("deviceStatus", (m: StatusMessage) => { touch(); handlersRef.current.onDeviceStatus?.(m); });
+      c.on("identityAssociation", (m: { change: string; association: IdentityAssociation }) => { touch(); handlersRef.current.onIdentity?.(m.change, m.association); });
       c.onreconnecting(() => { if (!disposed) setState("reconnecting"); });
       c.onreconnected(async () => {
         if (disposed) return;

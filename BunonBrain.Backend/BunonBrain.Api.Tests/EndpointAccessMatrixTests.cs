@@ -267,6 +267,17 @@ public static class EndpointMatrix
         ("GET",   "/api/identity/associations/{id}",          G(P.MonitoringView)),
         ("POST",  "/api/identity/associations/{id}/review",   G(P.MonitoringEventsReview)),
         ("POST",  "/api/identity/simulator",                  G(P.DevicesSimulate)),
+        // Factory analytics and reports (each section also checks its data's permission).
+        ("GET",   "/api/analytics/metrics",                  G(P.ProductionView, P.MonitoringView, P.DevicesView, P.AttendanceView, P.OvertimeView, P.WorkersView, P.ReportsView)),
+        ("GET",   "/api/analytics/overview",                 G(P.ProductionView, P.MonitoringView, P.DevicesView, P.AttendanceView, P.OvertimeView, P.WorkersView, P.ReportsView)),
+        ("GET",   "/api/analytics/production",               G(P.ProductionView, P.MonitoringView)),
+        ("GET",   "/api/analytics/machines",                 G(P.MonitoringView, P.DevicesView, P.ProductionView)),
+        ("GET",   "/api/analytics/workforce",                G(P.AttendanceView, P.OvertimeView, P.WorkersView)),
+        ("GET",   "/api/analytics/activity",                 G(P.MonitoringView)),
+        ("GET",   "/api/analytics/insights",                 G(P.ProductionView, P.MonitoringView, P.DevicesView, P.AttendanceView, P.OvertimeView, P.WorkersView, P.ReportsView)),
+        ("GET",   "/api/analytics/reports",                  G(P.ProductionView, P.MonitoringView, P.DevicesView, P.AttendanceView, P.OvertimeView, P.WorkersView, P.ReportsView)),
+        ("GET",   "/api/analytics/reports/{type}",           G(P.ProductionView, P.MonitoringView, P.DevicesView, P.AttendanceView, P.OvertimeView, P.WorkersView, P.ReportsView)),
+        ("GET",   "/api/analytics/reports/{type}/export",    G(P.ProductionView, P.MonitoringView, P.DevicesView, P.AttendanceView, P.OvertimeView, P.WorkersView, P.ReportsView)),
         // Machine monitoring, production counters and IoT.
         ("POST",  "/api/iot/ingest/{channel}",               G(P.DevicesManage)),
         ("GET",   "/api/iot/overview",                       G(P.MonitoringView, P.DevicesView, P.ProductionView)),

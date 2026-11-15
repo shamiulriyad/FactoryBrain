@@ -26,6 +26,10 @@ public static class MonitoringEventTypes
     public const string CameraStatusChanged = "CAMERA_STATUS_CHANGED";
     public const string DeviceStatusChanged = "DEVICE_STATUS_CHANGED";
     public const string ModelStatusChanged = "MODEL_STATUS_CHANGED";
+    /// <summary>A machine's derived state changed (IoT pipeline only).</summary>
+    public const string MachineStateChanged = "MACHINE_STATE_CHANGED";
+    /// <summary>A machine alert condition was raised or cleared (IoT pipeline only).</summary>
+    public const string MachineCondition = "MACHINE_CONDITION";
 
     /// <summary>People, tracks, zones and activity: what a camera AI service would report.</summary>
     public static readonly string[] Vision =
@@ -38,8 +42,11 @@ public static class MonitoringEventTypes
     /// <summary>Garment-specific activity predicted by a trained model (a separate family from the generic posture activity).</summary>
     public static readonly string[] GarmentActivity = { GarmentActivityClassified, GarmentActivityChanged, GarmentActivityUncertain };
 
-    /// <summary>Camera, device and model status.</summary>
-    public static readonly string[] System = { CameraStatusChanged, DeviceStatusChanged, ModelStatusChanged };
+    /// <summary>Machine monitoring: derived by the IoT pipeline from sensor data, never sent by a producer directly.</summary>
+    public static readonly string[] Machine = { MachineStateChanged, MachineCondition };
+
+    /// <summary>Camera, device, model and machine status.</summary>
+    public static readonly string[] System = { CameraStatusChanged, DeviceStatusChanged, ModelStatusChanged, MachineStateChanged, MachineCondition };
 
     public static readonly string[] All = Vision.Concat(System).ToArray();
 
@@ -69,6 +76,8 @@ public static class MonitoringEventTypes
         CameraStatusChanged => "Camera status changed",
         DeviceStatusChanged => "Device status changed",
         ModelStatusChanged => "Model status changed",
+        MachineStateChanged => "Machine state changed",
+        MachineCondition => "Machine condition",
         _ => type,
     };
 }
@@ -202,7 +211,9 @@ public static class MonitoringProducers
     public const string CameraService = "CAMERA_SERVICE";
     /// <summary>The computer-vision service (service key). REAL only; vision, camera and model events; never a worker identity.</summary>
     public const string CvService = "CV_SERVICE";
-    public static readonly string[] All = { Api, Simulator, DevicePipeline, CameraService, CvService };
+    /// <summary>Machine state and condition changes derived from machine sensors (real or simulated devices).</summary>
+    public const string IotPipeline = "IOT_PIPELINE";
+    public static readonly string[] All = { Api, Simulator, DevicePipeline, CameraService, CvService, IotPipeline };
 
     /// <summary>Producers that send events through the HTTP ingestion API: REAL only, idempotency key required.</summary>
     public static bool IsExternal(string producer) => producer is Api or CvService;
@@ -277,7 +288,21 @@ public static class AlertTypes
     public const string ModelUnavailable = "MODEL_UNAVAILABLE";
     public const string UncertainDetection = "UNCERTAIN_DETECTION_REVIEW";
     public const string RestrictedZoneEntry = "RESTRICTED_ZONE_ENTRY";
-    public static readonly string[] All = { CameraOffline, DeviceOffline, DeviceError, ModelUnavailable, UncertainDetection, RestrictedZoneEntry };
+    public const string MachineOffline = "MACHINE_OFFLINE";
+    public const string MachineError = "MACHINE_ERROR";
+    public const string MachineUnexpectedStop = "MACHINE_UNEXPECTED_STOP";
+    public const string MachineLongIdle = "MACHINE_LONG_IDLE";
+    public const string MachineTemperature = "MACHINE_ABNORMAL_TEMPERATURE";
+    public const string MachineVibration = "MACHINE_HIGH_VIBRATION";
+    public const string CounterDisconnected = "PRODUCTION_COUNTER_DISCONNECTED";
+    public const string MachineUnusualTransition = "MACHINE_UNUSUAL_TRANSITION";
+
+    /// <summary>Alerts about machines (machine monitoring).</summary>
+    public static readonly string[] Machine =
+        { MachineOffline, MachineError, MachineUnexpectedStop, MachineLongIdle, MachineTemperature, MachineVibration, CounterDisconnected, MachineUnusualTransition };
+
+    public static readonly string[] All =
+        new[] { CameraOffline, DeviceOffline, DeviceError, ModelUnavailable, UncertainDetection, RestrictedZoneEntry }.Concat(Machine).ToArray();
 
     public static string CategoryOf(string type) =>
         type is UncertainDetection or RestrictedZoneEntry ? MonitoringCategories.Vision : MonitoringCategories.System;
@@ -336,12 +361,17 @@ public static class StatusValues
     public static readonly string[] Camera = { "ONLINE", "OFFLINE", "ACTIVE", "INACTIVE", "MAINTENANCE" };
     public static readonly string[] Device = { "ONLINE", "OFFLINE", "ERROR", "ACTIVE", "MAINTENANCE", "DISABLED" };
     public static readonly string[] Model = { "LOADING", "READY", "DEGRADED", "ERROR", "OFFLINE" };
+    public static readonly string[] Machine = { "RUNNING", "STOPPED", "IDLE", "MAINTENANCE", "ERROR", "OFFLINE", "UNKNOWN" };
+    /// <summary>MACHINE_CONDITION: the condition was raised or has cleared.</summary>
+    public static readonly string[] Condition = { "ACTIVE", "CLEARED" };
 
     public static string[] For(string type) => type switch
     {
         MonitoringEventTypes.CameraStatusChanged => Camera,
         MonitoringEventTypes.DeviceStatusChanged => Device,
         MonitoringEventTypes.ModelStatusChanged => Model,
+        MonitoringEventTypes.MachineStateChanged => Machine,
+        MonitoringEventTypes.MachineCondition => Condition,
         _ => Array.Empty<string>(),
     };
 }
@@ -354,14 +384,16 @@ public sealed record AlertTransition(bool Allowed, string? ToStatus, string? Cod
 }
 
 /// <summary>What an event needs, for one event type.</summary>
-public sealed record EventRequirements(bool Camera, bool Device, bool Zone, bool Track, bool Confidence, bool ToStatus, bool Model, bool Activity, bool WorkerAllowed);
+public sealed record EventRequirements(bool Camera, bool Device, bool Zone, bool Track, bool Confidence, bool ToStatus, bool Model, bool Activity, bool WorkerAllowed,
+    bool Machine = false);
 
 /// <summary>Facts about an event an alert rule looks at.</summary>
 public sealed record AlertContext(
     string EventType, bool Simulated, string? ToStatus, string? FromStatus,
     Guid? CameraId, string? CameraCode, Guid? DeviceId, string? DeviceCode,
     Guid? ZoneId, string? ZoneName, string? ZoneType, string? TrackId, double? Confidence,
-    string? ModelName, string? Detail);
+    string? ModelName, string? Detail,
+    Guid? MachineId = null, string? MachineCode = null, string? Condition = null);
 
 /// <summary>An alert to raise (or to update, when one with the same dedup key is still open).</summary>
 public sealed record AlertSpec(string AlertType, string Severity, string Title, string Description, string DedupKey);
@@ -408,6 +440,9 @@ public static class MonitoringRules
         MonitoringEventTypes.CameraStatusChanged => new(true, false, false, false, false, true, false, false, false),
         MonitoringEventTypes.DeviceStatusChanged => new(false, true, false, false, false, true, false, false, false),
         MonitoringEventTypes.ModelStatusChanged => new(false, false, false, false, false, true, true, false, false),
+        // Machine events are about equipment: never a worker, never a camera track.
+        MonitoringEventTypes.MachineStateChanged => new(false, false, false, false, false, true, false, false, false, Machine: true),
+        MonitoringEventTypes.MachineCondition => new(false, false, false, false, false, true, false, false, false, Machine: true),
         _ => new(false, false, false, false, false, false, false, false, false),
     };
 
@@ -492,13 +527,15 @@ public static class MonitoringRules
         MonitoringEventTypes.UncertainDetection => MonitoringEventSeverities.Warning,
         MonitoringEventTypes.ZoneEntered when zoneType == "Restricted" => MonitoringEventSeverities.Critical,
         MonitoringEventTypes.CameraStatusChanged or MonitoringEventTypes.DeviceStatusChanged or MonitoringEventTypes.ModelStatusChanged
+            or MonitoringEventTypes.MachineStateChanged
             when toStatus is "OFFLINE" or "ERROR" or "DEGRADED" => MonitoringEventSeverities.Warning,
+        MonitoringEventTypes.MachineCondition when toStatus == "ACTIVE" => MonitoringEventSeverities.Warning,
         _ => MonitoringEventSeverities.Info,
     };
 
     public static string Summary(string type, bool simulated, string? cameraCode, string? deviceCode, string? zoneName, string? trackId,
         double? confidence, string? toStatus, string? activity, string? modelName, bool hasVerifiedWorker, string? previousActivity = null,
-        string? reason = null)
+        string? reason = null, string? machineCode = null, string? condition = null, string? fromStatus = null)
     {
         var where = cameraCode is null ? "" : $" on {cameraCode}";
         var track = trackId is null ? "" : $" (track {trackId})";
@@ -524,12 +561,45 @@ public static class MonitoringRules
             MonitoringEventTypes.CameraStatusChanged => $"Camera {cameraCode} is now {toStatus}",
             MonitoringEventTypes.DeviceStatusChanged => $"Device {deviceCode} is now {toStatus}",
             MonitoringEventTypes.ModelStatusChanged => $"Model {modelName} is now {toStatus}",
+            MonitoringEventTypes.MachineStateChanged => $"Machine {machineCode} is now {toStatus}{(fromStatus is null ? "" : $" (was {fromStatus})")}",
+            MonitoringEventTypes.MachineCondition =>
+                $"Machine {machineCode}: {ConditionLabel(condition)}{(toStatus == "CLEARED" ? " cleared" : "")}{(reason is null ? "" : $" — {reason}")}",
             _ => type,
         };
         if (hasVerifiedWorker) text += " · worker verified by RFID card";
         if (simulated) text = "SIMULATED · " + text;
         return text.Length > SummaryMax ? text[..SummaryMax] : text;
     }
+
+    private static string ConditionLabel(string? c) => c switch
+    {
+        "UNEXPECTED_STOP" => "unexpected stoppage",
+        "LONG_IDLE" => "long idle",
+        "ABNORMAL_TEMPERATURE" => "abnormal temperature",
+        "HIGH_VIBRATION" => "high vibration",
+        "COUNTER_DISCONNECTED" => "production counter disconnected",
+        "UNUSUAL_TRANSITION" => "unusual state transitions",
+        _ => (c ?? "condition").ToLowerInvariant().Replace('_', ' '),
+    };
+
+    /// <summary>The alert type a machine condition raises.</summary>
+    public static string? MachineConditionAlert(string? condition) => condition switch
+    {
+        "UNEXPECTED_STOP" => AlertTypes.MachineUnexpectedStop,
+        "LONG_IDLE" => AlertTypes.MachineLongIdle,
+        "ABNORMAL_TEMPERATURE" => AlertTypes.MachineTemperature,
+        "HIGH_VIBRATION" => AlertTypes.MachineVibration,
+        "COUNTER_DISCONNECTED" => AlertTypes.CounterDisconnected,
+        "UNUSUAL_TRANSITION" => AlertTypes.MachineUnusualTransition,
+        _ => null,
+    };
+
+    private static string MachineConditionSeverity(string? condition) => condition switch
+    {
+        "ABNORMAL_TEMPERATURE" => AlertSeverities.High,
+        "HIGH_VIBRATION" or "UNEXPECTED_STOP" or "COUNTER_DISCONNECTED" => AlertSeverities.Medium,
+        _ => AlertSeverities.Low,
+    };
 
     // ─── Alert rules ───────────────────────────────────────────────────────
 
@@ -566,6 +636,20 @@ public static class MonitoringRules
                     $"A detection on {c.CameraCode}{(c.Confidence is null ? "" : $" with confidence {c.Confidence:0.00}")} could not be confirmed automatically. " +
                     $"Review it before anyone acts on it; it does not identify anyone.{simNote}",
                     $"{AlertTypes.UncertainDetection}:{c.CameraId}");
+            case MonitoringEventTypes.MachineStateChanged when c.ToStatus == "OFFLINE":
+                return new AlertSpec(AlertTypes.MachineOffline, AlertSeverities.Medium, $"{sim}Machine {c.MachineCode} is offline",
+                    $"No sensor of machine {c.MachineCode} can be reached{(c.Detail is null ? "" : $": {c.Detail}")}. The machine's state is unknown; " +
+                    $"this does not mean it stopped. Check the sensor's power and network.{simNote}",
+                    $"{AlertTypes.MachineOffline}:{c.MachineId}");
+            case MonitoringEventTypes.MachineStateChanged when c.ToStatus == "ERROR":
+                return new AlertSpec(AlertTypes.MachineError, AlertSeverities.High, $"{sim}Machine {c.MachineCode} reported an error",
+                    $"{c.Detail ?? "The machine sensor reported an error."} Check the machine.{simNote}",
+                    $"{AlertTypes.MachineError}:{c.MachineId}");
+            case MonitoringEventTypes.MachineCondition when c.ToStatus == "ACTIVE" && MachineConditionAlert(c.Condition) is { } conditionAlert:
+                return new AlertSpec(conditionAlert, MachineConditionSeverity(c.Condition),
+                    $"{sim}Machine {c.MachineCode}: {ConditionLabel(c.Condition)}",
+                    $"{c.Detail ?? ConditionLabel(c.Condition)}. Machine data only: it says nothing about the operator.{simNote}",
+                    $"{conditionAlert}:{c.MachineId}");
             case MonitoringEventTypes.ZoneEntered when c.ZoneType == "Restricted":
                 return new AlertSpec(AlertTypes.RestrictedZoneEntry, AlertSeverities.High, $"{sim}Restricted zone {c.ZoneName} entered",
                     $"Track {c.TrackId} entered restricted zone {c.ZoneName} on {c.CameraCode}. A track is a temporary camera number, not a worker identity; " +
@@ -582,6 +666,9 @@ public static class MonitoringRules
         MonitoringEventTypes.CameraStatusChanged when c.ToStatus == "ONLINE" => $"{AlertTypes.CameraOffline}:{c.CameraId}",
         MonitoringEventTypes.DeviceStatusChanged when c.ToStatus == "ONLINE" => $"{AlertTypes.DeviceOffline}:{c.DeviceId}",
         MonitoringEventTypes.ModelStatusChanged when c.ToStatus == "READY" => $"{AlertTypes.ModelUnavailable}:{c.ModelName}",
+        MonitoringEventTypes.MachineStateChanged when c.FromStatus == "OFFLINE" && c.ToStatus != "OFFLINE" => $"{AlertTypes.MachineOffline}:{c.MachineId}",
+        MonitoringEventTypes.MachineStateChanged when c.FromStatus == "ERROR" && c.ToStatus != "ERROR" => $"{AlertTypes.MachineError}:{c.MachineId}",
+        MonitoringEventTypes.MachineCondition when c.ToStatus == "CLEARED" && MachineConditionAlert(c.Condition) is { } cleared => $"{cleared}:{c.MachineId}",
         _ => null,
     };
 

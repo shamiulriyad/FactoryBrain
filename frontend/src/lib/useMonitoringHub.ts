@@ -18,6 +18,7 @@ import { HubConnectionBuilder, HubConnectionState, LogLevel, type HubConnection 
 import { getAccessToken } from "@/lib/auth";
 import type { MonitoringAlert, MonitoringEvent } from "@/lib/monitoring";
 import type { IdentityAssociation } from "@/lib/identity";
+import type { Machine } from "@/lib/iot";
 
 export type LiveState = "connecting" | "live" | "reconnecting" | "offline" | "denied" | "off";
 
@@ -30,9 +31,15 @@ export type HubHandlers = {
   onDeviceStatus?: (m: StatusMessage) => void;
   /** A worker-identity association changed (created, refreshed, suspended, expired, reviewed). */
   onIdentity?: (change: string, association: IdentityAssociation) => void;
+  /** A machine's derived state or alert conditions changed. */
+  onMachine?: (change: string, machine: Machine) => void;
+  /** Production counts changed (a ping without numbers: reload through the API). */
+  onProduction?: (m: ProductionPing) => void;
   /** After (re)connecting: refetch to fill any gap. */
   onResync?: () => void;
 };
+
+export type ProductionPing = { factoryId: string; lineId?: string | null; machineId?: string | null; sourceType: string; at: string };
 
 export type Subscription = { allFactories: boolean; factories: string[]; lines: string[]; categories: string[]; subscribedAt: string };
 
@@ -77,6 +84,8 @@ export function useMonitoringHub(factoryId: string | null | undefined, handlers:
       c.on("cameraStatus", (m: StatusMessage) => { touch(); handlersRef.current.onCameraStatus?.(m); });
       c.on("deviceStatus", (m: StatusMessage) => { touch(); handlersRef.current.onDeviceStatus?.(m); });
       c.on("identityAssociation", (m: { change: string; association: IdentityAssociation }) => { touch(); handlersRef.current.onIdentity?.(m.change, m.association); });
+      c.on("machineState", (m: { change: string; machine: Machine }) => { touch(); handlersRef.current.onMachine?.(m.change, m.machine); });
+      c.on("productionChanged", (m: ProductionPing) => { touch(); handlersRef.current.onProduction?.(m); });
       c.onreconnecting(() => { if (!disposed) setState("reconnecting"); });
       c.onreconnected(async () => {
         if (disposed) return;

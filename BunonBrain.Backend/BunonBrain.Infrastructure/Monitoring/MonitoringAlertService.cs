@@ -56,6 +56,7 @@ public sealed class MonitoringAlertService : IMonitoringAlertService
         if (!string.IsNullOrWhiteSpace(q.LineId)) { var line = q.LineId.Trim(); alerts = alerts.Where(a => a.LineId == line); }
         if (q.CameraId is { } c) alerts = alerts.Where(a => a.CameraId == c);
         if (q.DeviceId is { } dv) alerts = alerts.Where(a => a.DeviceId == dv);
+        if (q.MachineId is { } mc) alerts = alerts.Where(a => a.MachineId == mc);
         if (string.Equals(q.Status?.Trim(), "ACTIVE", StringComparison.OrdinalIgnoreCase))
             alerts = alerts.Where(a => AlertStatuses.Active.Contains(a.Status));
         else if (AlertStatuses.Parse(q.Status) is { } s) alerts = alerts.Where(a => a.Status == s);

@@ -1,0 +1,23 @@
+# Mosquitto ACL for BunonBrain. The backend reads every factory's device and
+# machine topics and owns its status topic; a device may only write its own
+# topics. %u is the MQTT username = the device code registered in BunonBrain
+# (Cameras & devices). Adjust the factory level (MAIN) per factory.
+
+user bunonbrain-backend
+topic read factory/+/device/+/telemetry
+topic read factory/+/device/+/status
+topic read factory/+/device/+/heartbeat
+topic read factory/+/machine/+/production
+topic readwrite bunonbrain/backend/status
+
+# Every device: only its own device topics.
+pattern write factory/MAIN/device/%u/telemetry
+pattern write factory/MAIN/device/%u/status
+pattern write factory/MAIN/device/%u/heartbeat
+pattern read bunonbrain/backend/status
+
+# Piece counters publish production on their machine's topic. The backend
+# still checks that the device in the payload is bound to that machine;
+# narrow this per counter (e.g. "user PC-L1-T025" + "topic write factory/MAIN/machine/M-0101/production")
+# when you can.
+pattern write factory/MAIN/machine/+/production

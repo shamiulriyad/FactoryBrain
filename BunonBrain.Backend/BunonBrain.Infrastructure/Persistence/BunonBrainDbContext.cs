@@ -89,6 +89,14 @@ public class BunonBrainDbContext : DbContext
     public DbSet<WorkerTrackAssociation> WorkerTrackAssociations => Set<WorkerTrackAssociation>();
     public DbSet<IdentityAssociationEvidence> IdentityAssociationEvidence => Set<IdentityAssociationEvidence>();
     public DbSet<IdentityAssociationHistory> IdentityAssociationHistory => Set<IdentityAssociationHistory>();
+    public DbSet<DeviceIotConfiguration> DeviceIotConfigurations => Set<DeviceIotConfiguration>();
+    public DbSet<MachineMonitoringProfile> MachineMonitoringProfiles => Set<MachineMonitoringProfile>();
+    public DbSet<MachineState> MachineStates => Set<MachineState>();
+    public DbSet<MachineStateTransition> MachineStateTransitions => Set<MachineStateTransition>();
+    public DbSet<MachineTelemetry> MachineTelemetry => Set<MachineTelemetry>();
+    public DbSet<ProductionCounterEvent> ProductionCounterEvents => Set<ProductionCounterEvent>();
+    public DbSet<ProductionCounterSnapshot> ProductionCounterSnapshots => Set<ProductionCounterSnapshot>();
+    public DbSet<ProductionCorrection> ProductionCorrections => Set<ProductionCorrection>();
     public DbSet<QcInspection>        QcInspections        => Set<QcInspection>();
     public DbSet<QcInspectionFinding> QcInspectionFindings => Set<QcInspectionFinding>();
     public DbSet<QcDefectCategory>    QcDefectCategories   => Set<QcDefectCategory>();

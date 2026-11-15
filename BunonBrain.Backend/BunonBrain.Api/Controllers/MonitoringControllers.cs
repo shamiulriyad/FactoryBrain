@@ -72,16 +72,16 @@ public class MonitoringController : ControllerBase
 
     // ─── Events ────────────────────────────────────────────────────────────
 
-    /// <summary>GET /api/monitoring/events?factoryId&amp;departmentId&amp;floorId&amp;lineId&amp;cameraId&amp;deviceId&amp;workstationId&amp;eventType&amp;category&amp;sourceType&amp;trackId&amp;verifiedWorker&amp;from&amp;to&amp;search&amp;simulationRunId&amp;page&amp;pageSize</summary>
+    /// <summary>GET /api/monitoring/events?factoryId&amp;departmentId&amp;floorId&amp;lineId&amp;cameraId&amp;deviceId&amp;workstationId&amp;eventType&amp;category&amp;sourceType&amp;trackId&amp;verifiedWorker&amp;from&amp;to&amp;search&amp;simulationRunId&amp;machineId&amp;page&amp;pageSize</summary>
     [HttpGet("events")]
     [RequirePermission(Permissions.MonitoringView, Permissions.DevicesView)]
     public async Task<IActionResult> Events([FromQuery] Guid? factoryId, [FromQuery] Guid? departmentId, [FromQuery] Guid? floorId, [FromQuery] string? lineId,
         [FromQuery] Guid? cameraId, [FromQuery] Guid? deviceId, [FromQuery] Guid? workstationId, [FromQuery] string? eventType, [FromQuery] string? category,
         [FromQuery] string? sourceType, [FromQuery] string? trackId, [FromQuery] bool? verifiedWorker, [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to,
         [FromQuery] string? search, [FromQuery] Guid? simulationRunId, [FromQuery] int? page, [FromQuery] int? pageSize, [FromQuery] string? activity,
-        CancellationToken ct)
+        [FromQuery] Guid? machineId, CancellationToken ct)
         => Ok(await _events.ListAsync(this.Caller(), new MonitoringEventQuery(factoryId, departmentId, floorId, lineId, cameraId, deviceId, workstationId,
-            eventType, category, sourceType, trackId, verifiedWorker, from, to, search, simulationRunId, page ?? 1, pageSize ?? 50, activity), ct));
+            eventType, category, sourceType, trackId, verifiedWorker, from, to, search, simulationRunId, page ?? 1, pageSize ?? 50, activity, machineId), ct));
 
     /// <summary>
     /// POST /api/monitoring/events — a REAL event from a producer (gateway, later the Python AI service).
@@ -113,15 +113,15 @@ public class MonitoringController : ControllerBase
 
     // ─── Alerts ────────────────────────────────────────────────────────────
 
-    /// <summary>GET /api/monitoring/alerts?factoryId&amp;departmentId&amp;floorId&amp;lineId&amp;cameraId&amp;deviceId&amp;status (or ACTIVE)&amp;severity&amp;alertType&amp;sourceType&amp;category&amp;from&amp;to&amp;search&amp;sort&amp;page&amp;pageSize</summary>
+    /// <summary>GET /api/monitoring/alerts?factoryId&amp;departmentId&amp;floorId&amp;lineId&amp;cameraId&amp;deviceId&amp;status (or ACTIVE)&amp;severity&amp;alertType&amp;sourceType&amp;category&amp;from&amp;to&amp;search&amp;sort&amp;machineId&amp;page&amp;pageSize</summary>
     [HttpGet("alerts")]
     [RequirePermission(Permissions.MonitoringView, Permissions.DevicesView)]
     public async Task<IActionResult> Alerts([FromQuery] Guid? factoryId, [FromQuery] Guid? departmentId, [FromQuery] Guid? floorId, [FromQuery] string? lineId,
         [FromQuery] Guid? cameraId, [FromQuery] Guid? deviceId, [FromQuery] string? status, [FromQuery] string? severity, [FromQuery] string? alertType,
         [FromQuery] string? sourceType, [FromQuery] string? category, [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, [FromQuery] string? search,
-        [FromQuery] string? sort, [FromQuery] int? page, [FromQuery] int? pageSize, CancellationToken ct)
+        [FromQuery] string? sort, [FromQuery] int? page, [FromQuery] int? pageSize, [FromQuery] Guid? machineId, CancellationToken ct)
         => Ok(await _alerts.ListAsync(this.Caller(), new MonitoringAlertQuery(factoryId, departmentId, floorId, lineId, cameraId, deviceId, status, severity,
-            alertType, sourceType, category, from, to, search, sort, page ?? 1, pageSize ?? 25), ct));
+            alertType, sourceType, category, from, to, search, sort, page ?? 1, pageSize ?? 25, machineId), ct));
 
     [HttpGet("alerts/{id}")]
     [RequirePermission(Permissions.MonitoringView, Permissions.DevicesView)]

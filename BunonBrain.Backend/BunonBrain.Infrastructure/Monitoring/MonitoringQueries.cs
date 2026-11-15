@@ -128,6 +128,15 @@ public static class MonitoringQueries
         return n;
     }
 
+    /// <summary>Machine codes for the rows that name a machine.</summary>
+    private static async Task<Dictionary<Guid, (string Code, string Name)>> MachinesAsync(BunonBrainDbContext db, IEnumerable<Guid?> ids, CancellationToken ct)
+    {
+        var list = ids.Where(i => i is not null).Select(i => i!.Value).Distinct().ToList();
+        if (list.Count == 0) return new Dictionary<Guid, (string Code, string Name)>();
+        return (await db.Machines.AsNoTracking().Where(m => list.Contains(m.Id)).Select(m => new { m.Id, m.Code, m.MachineType }).ToListAsync(ct))
+            .ToDictionary(m => m.Id, m => (m.Code, m.MachineType ?? ""));
+    }
+
     private static MonLine? Line(Names n, string? id) => id is null ? null : new MonLine(id, n.Lines.GetValueOrDefault(id, id));
     private static MonRef? Ref(Dictionary<Guid, (string Code, string Name)> d, Guid? id) =>
         id is { } g && d.TryGetValue(g, out var v) ? new MonRef(g, v.Code, v.Name) : null;
@@ -140,6 +149,7 @@ public static class MonitoringQueries
         var n = await LoadAsync(db, rows.Select(r => r.FactoryId), rows.Select(r => r.DepartmentId), rows.Select(r => r.FloorId), rows.Select(r => r.LineId),
             rows.Select(r => r.WorkstationId), rows.Select(r => r.CameraId), rows.Select(r => r.DeviceId), rows.Select(r => r.ZoneId),
             rows.Select(r => r.WorkerId), ct);
+        var machines = await MachinesAsync(db, rows.Select(r => r.MachineId), ct);
         var ids = rows.Select(r => r.Id).ToList();
         var reviews = await db.MonitoringEventReviews.AsNoTracking().Where(r => ids.Contains(r.EventId))
             .GroupBy(r => r.EventId)
@@ -161,7 +171,7 @@ public static class MonitoringQueries
                 // Only verified identities are ever stored, so a stored worker is a verified one.
                 e.WorkerId is not null && e.IdentityMethod is not null ? Ref(n.Workers, e.WorkerId) : null,
                 e.IdentityMethod, e.Confidence, Json(e.Payload), e.ModelName, e.ModelVersion, e.SimulationRunId,
-                e.OccurredAt, e.ReceivedAt, e.RecordedByEmail, rv?.Count ?? 0, rv?.Latest);
+                e.OccurredAt, e.ReceivedAt, e.RecordedByEmail, rv?.Count ?? 0, rv?.Latest, Ref(machines, e.MachineId));
         }).ToList();
     }
 
@@ -184,6 +194,7 @@ public static class MonitoringQueries
         var n = await LoadAsync(db, rows.Select(r => r.FactoryId), rows.Select(r => r.DepartmentId), rows.Select(r => r.FloorId), rows.Select(r => r.LineId),
             rows.Select(r => r.WorkstationId), rows.Select(r => r.CameraId), rows.Select(r => r.DeviceId), rows.Select(r => r.ZoneId),
             Array.Empty<Guid?>(), ct);
+        var machines = await MachinesAsync(db, rows.Select(r => r.MachineId), ct);
         return rows.Select(a => new MonitoringAlertDto(
             a.Id, AlertCode(a.Number), a.AlertType, a.Category, a.Severity, a.Title, a.Description, a.Status, a.SourceType,
             a.SourceType == MonitoringSourceTypes.Simulated, a.FactoryId, n.Factories.GetValueOrDefault(a.FactoryId, "?"),
@@ -196,7 +207,7 @@ public static class MonitoringQueries
             a.EventId, a.LastEventId, a.OccurrenceCount, a.FirstOccurredAt, a.LastOccurredAt, a.EscalationLevel, a.EscalatedToRole,
             a.AcknowledgedAt, a.AcknowledgedByEmail, a.EscalatedAt, a.EscalatedByEmail, a.ResolvedAt, a.ResolvedByEmail, a.ResolutionCode,
             a.ResolutionNote, a.DismissedAt, a.DismissedByEmail, a.DismissReason, Json(a.Evidence), a.CreatedAt, a.UpdatedAt, a.Version,
-            Can(caller, a))).ToList();
+            Can(caller, a), Ref(machines, a.MachineId))).ToList();
     }
 
     public static AlertActionDto ActionDto(MonitoringAlertAction x) =>

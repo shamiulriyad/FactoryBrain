@@ -455,6 +455,10 @@ builder.Services.AddRateLimiter(o =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => FixedWindow(RateLimitPolicies.InquiryPerMinute)));
+    o.AddPolicy(RateLimitPolicies.IotDevice, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: $"{httpContext.Request.Headers["X-Device-Id"]}|{httpContext.Connection.RemoteIpAddress}",
+            factory: _ => FixedWindow(RateLimitPolicies.IotDevicePerMinute)));
     o.AddPolicy(RateLimitPolicies.QcUpload, httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: RateLimitPolicies.UserPartition(httpContext),
@@ -608,6 +612,35 @@ builder.Services.AddScoped<IAssociationReviewService, BunonBrain.Infrastructure.
 builder.Services.AddScoped<IRfidSimulatorService, BunonBrain.Infrastructure.Identity.RfidSimulatorService>();
 if (!builder.Environment.IsEnvironment("Testing"))
     builder.Services.AddHostedService<BunonBrain.Infrastructure.Identity.IdentityAssociationWorker>();
+// Machine monitoring, production counters and IoT integration. One pipeline
+// for MQTT (the bridge subscribes to the broker in Iot:Mqtt), HTTP device
+// ingestion (integration accounts or per-device keys) and the IoT simulator.
+// Broker credentials come from configuration only (Iot__Mqtt__Username /
+// Iot__Mqtt__Password); the machine monitor re-derives states and runs the
+// timed alert rules every Iot:MonitorIntervalSeconds.
+builder.Services.Configure<BunonBrain.Application.Iot.IotOptions>(builder.Configuration.GetSection("Iot"));
+builder.Services.AddSingleton(sp =>
+{
+    var o = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<BunonBrain.Application.Iot.IotOptions>>().Value;
+    return new BunonBrain.Application.Iot.DeviceRateLimiter(o.MessagesPerSecondPerDevice, o.MessagesPerMinutePerDevice);
+});
+builder.Services.AddSingleton<BunonBrain.Infrastructure.Iot.MqttBridgeState>();
+builder.Services.AddSingleton<IMqttBridgeState>(sp => sp.GetRequiredService<BunonBrain.Infrastructure.Iot.MqttBridgeState>());
+builder.Services.AddSingleton<BunonBrain.Infrastructure.Iot.IotSimulationRunner>();
+builder.Services.AddScoped<IIotPublisher, BunonBrain.Api.Realtime.SignalRIotPublisher>();
+builder.Services.AddScoped<BunonBrain.Infrastructure.Iot.MachineStateProcessor>();
+builder.Services.AddScoped<BunonBrain.Infrastructure.Iot.ProductionCounterProcessor>();
+builder.Services.AddScoped<IIotIngestionService, BunonBrain.Infrastructure.Iot.IotIngestionService>();
+builder.Services.AddScoped<IMachineMonitorService, BunonBrain.Infrastructure.Iot.MachineMonitorService>();
+builder.Services.AddScoped<IIotQueryService, BunonBrain.Infrastructure.Iot.IotQueryService>();
+builder.Services.AddScoped<IIotConfigService, BunonBrain.Infrastructure.Iot.IotConfigService>();
+builder.Services.AddScoped<IProductionCorrectionService, BunonBrain.Infrastructure.Iot.ProductionCorrectionService>();
+builder.Services.AddScoped<IIotSimulatorService, BunonBrain.Infrastructure.Iot.IotSimulatorService>();
+if (!builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddHostedService<BunonBrain.Infrastructure.Iot.MachineMonitorWorker>();
+    builder.Services.AddHostedService<BunonBrain.Infrastructure.Iot.MqttBridgeService>();
+}
 builder.Services.AddScoped<IAuditQueryService, BunonBrain.Infrastructure.Access.AuditQueryService>();
 
 // ─── RAG tuning config (Rag: section in appsettings.json, env Rag__*) ──────

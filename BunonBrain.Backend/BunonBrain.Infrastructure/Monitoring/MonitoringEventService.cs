@@ -62,6 +62,9 @@ public sealed class MonitoringEventService : IMonitoringEventService
                 "The computer-vision service never names a worker: a track id is a temporary camera number, and appearance is not an identity.");
         if (producer == MonitoringProducers.Simulator && source != MonitoringSourceTypes.Simulated)
             return Invalid("source_type_not_allowed", "The simulator only produces SIMULATED events.");
+        if (MonitoringEventTypes.Machine.Contains(type) != (producer == MonitoringProducers.IotPipeline))
+            return Invalid("machine_events_are_derived",
+                "Machine state and condition events are derived by the IoT pipeline from machine sensor data; send the telemetry instead (see /api/iot).");
 
         if (caller is not null && (caller.Scope < RoleScope.Factory || !caller.CanAccessFactory(input.FactoryId)))
             return AccessResult<MonitoringIngestResult>.Forbidden("factory_out_of_scope", "You can only send events for a factory you administer or operate.");
@@ -118,7 +121,14 @@ public sealed class MonitoringEventService : IMonitoringEventService
             if (!zone.IsActive) return Invalid("zone_inactive", "The zone is deactivated.");
             cam ??= await _db.Cameras.AsNoTracking().FirstAsync(c => c.Id == zone.CameraId, ct);
         }
-        var wsId = input.WorkstationId ?? zone?.WorkstationId ?? dev?.WorkstationId;
+        Machine? machine = null;
+        if (input.MachineId is { } mid)
+        {
+            machine = await _db.Machines.AsNoTracking().FirstOrDefaultAsync(m => m.Id == mid && m.FactoryId == fid, ct);
+            if (machine is null) return Invalid("machine_not_in_factory", "The machine is not registered in this factory.");
+            if (dev?.MachineId is { } devMachine && devMachine != machine.Id) return Invalid("device_not_on_machine", "The device belongs to another machine.");
+        }
+        var wsId = input.WorkstationId ?? machine?.WorkstationId ?? zone?.WorkstationId ?? dev?.WorkstationId;
         Workstation? ws = null;
         if (wsId is { } w)
         {
@@ -149,6 +159,10 @@ public sealed class MonitoringEventService : IMonitoringEventService
         var req = MonitoringRules.Requirements(type);
         if (req.Camera && cam is null) return Invalid("camera_required", $"{type} needs cameraId.");
         if (req.Device && dev is null) return Invalid("device_required", $"{type} needs deviceId.");
+        if (req.Machine && machine is null) return Invalid("machine_required", $"{type} needs machineId.");
+        var condition = MonitoringRules.PayloadString(input.Payload, "condition")?.ToUpperInvariant();
+        if (type == MonitoringEventTypes.MachineCondition && MonitoringRules.MachineConditionAlert(condition) is null)
+            return Invalid("condition_invalid", "MACHINE_CONDITION needs payload.condition (UNEXPECTED_STOP, LONG_IDLE, ABNORMAL_TEMPERATURE, HIGH_VIBRATION, COUNTER_DISCONNECTED, UNUSUAL_TRANSITION).");
         if (req.Zone && zone is null) return Invalid("zone_required", $"{type} needs zoneId (a zone of the camera).");
         var trackId = string.IsNullOrWhiteSpace(input.TrackId) ? null : input.TrackId.Trim();
         if (req.Track && trackId is null) return Invalid("track_id_required", $"{type} needs trackId (the camera-local track number).");
@@ -228,11 +242,13 @@ public sealed class MonitoringEventService : IMonitoringEventService
         var simulated = source == MonitoringSourceTypes.Simulated;
         var detail = MonitoringRules.PayloadString(input.Payload, "reason") ?? MonitoringRules.PayloadString(input.Payload, "message");
         var ctx = new AlertContext(type, simulated, toStatus, fromStatus, cam?.Id, cam?.Code, dev?.Id, dev?.Code, zone?.Id, zone?.Name, zone?.ZoneType,
-            trackId, input.Confidence, modelName, detail);
+            trackId, input.Confidence, modelName, detail, machine?.Id, machine?.Code, condition);
         var spec = MonitoringRules.AlertFor(ctx);
         var recovery = spec is null ? MonitoringRules.RecoveryDedupKey(ctx) : null;
         var summary = MonitoringRules.Summary(type, simulated, cam?.Code, dev?.Code, zone?.Name, trackId, input.Confidence, toStatus, activity, modelName,
-            workerId is not null, previousActivity, type is MonitoringEventTypes.ActivityUncertain or MonitoringEventTypes.GarmentActivityUncertain ? detail : null);
+            workerId is not null, previousActivity,
+            type is MonitoringEventTypes.ActivityUncertain or MonitoringEventTypes.GarmentActivityUncertain or MonitoringEventTypes.MachineCondition ? detail : null,
+            machine?.Code, condition, fromStatus);
         var severity = MonitoringRules.EventSeverity(type, toStatus, zone?.ZoneType);
         var actorEmail = caller?.Email ?? SystemEmail(producer);
         var actorRole = caller?.PrimaryRole;
@@ -250,7 +266,7 @@ public sealed class MonitoringEventService : IMonitoringEventService
                     {
                         FactoryId = fid, EventType = type, Category = MonitoringEventTypes.CategoryOf(type), SourceType = source, Producer = producer,
                         IdempotencyKey = storedKey, DepartmentId = departmentId, FloorId = floorId, LineId = lineId, WorkstationId = ws?.Id,
-                        CameraId = cam?.Id, DeviceId = dev?.Id, ZoneId = zone?.Id, TrackId = trackId, WorkerId = workerId, IdentityMethod = identityMethod,
+                        CameraId = cam?.Id, DeviceId = dev?.Id, MachineId = machine?.Id, ZoneId = zone?.Id, TrackId = trackId, WorkerId = workerId, IdentityMethod = identityMethod,
                         WorkerCardId = cardId, Confidence = input.Confidence is { } c ? Math.Round(c, 4) : null, Severity = severity, Summary = summary,
                         Payload = payloadJson, ModelName = string.IsNullOrEmpty(modelName) ? null : modelName, ModelVersion = string.IsNullOrEmpty(modelVersion) ? null : modelVersion,
                         SimulationRunId = input.SimulationRunId, OccurredAt = occurredAt, ReceivedAt = now, RecordedByUserId = caller?.UserId,
@@ -269,7 +285,7 @@ public sealed class MonitoringEventService : IMonitoringEventService
                         {
                             FactoryId = fid, AlertType = spec.AlertType, Category = AlertTypes.CategoryOf(spec.AlertType), Severity = spec.Severity,
                             Title = spec.Title, Description = spec.Description, DepartmentId = departmentId, FloorId = floorId, LineId = lineId,
-                            WorkstationId = ws?.Id, CameraId = cam?.Id, DeviceId = dev?.Id, ZoneId = zone?.Id, EventId = ev.Id, LastEventId = ev.Id,
+                            WorkstationId = ws?.Id, CameraId = cam?.Id, DeviceId = dev?.Id, MachineId = machine?.Id, ZoneId = zone?.Id, EventId = ev.Id, LastEventId = ev.Id,
                             SourceType = source, DedupKey = spec.DedupKey, FirstOccurredAt = occurredAt, LastOccurredAt = occurredAt,
                             Status = AlertStatuses.Open, Evidence = Evidence(ev, zone, 1), CreatedAt = now, UpdatedAt = now,
                         };
@@ -388,6 +404,7 @@ public sealed class MonitoringEventService : IMonitoringEventService
         if (!string.IsNullOrWhiteSpace(q.LineId)) { var line = q.LineId.Trim(); events = events.Where(e => e.LineId == line); }
         if (q.CameraId is { } c) events = events.Where(e => e.CameraId == c);
         if (q.DeviceId is { } dv) events = events.Where(e => e.DeviceId == dv);
+        if (q.MachineId is { } mc) events = events.Where(e => e.MachineId == mc);
         if (q.WorkstationId is { } w) events = events.Where(e => e.WorkstationId == w);
         if (MonitoringEventTypes.Parse(q.EventType) is { } t) events = events.Where(e => e.EventType == t);
         if (MonitoringCategories.Parse(q.Category) is { } cat) events = events.Where(e => e.Category == cat);

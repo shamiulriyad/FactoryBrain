@@ -25,11 +25,12 @@ public sealed class MonitoringEventService : IMonitoringEventService
 {
     private readonly BunonBrainDbContext _db;
     private readonly IMonitoringPublisher _publisher;
+    private readonly ITrackObservationProcessor _tracks;
     private readonly ILogger<MonitoringEventService> _log;
 
-    public MonitoringEventService(BunonBrainDbContext db, IMonitoringPublisher publisher, ILogger<MonitoringEventService> log)
+    public MonitoringEventService(BunonBrainDbContext db, IMonitoringPublisher publisher, ITrackObservationProcessor tracks, ILogger<MonitoringEventService> log)
     {
-        _db = db; _publisher = publisher; _log = log;
+        _db = db; _publisher = publisher; _tracks = tracks; _log = log;
     }
 
     private static AccessResult<MonitoringIngestResult> Invalid(string code, string message) => AccessResult<MonitoringIngestResult>.Invalid(code, message);
@@ -323,6 +324,9 @@ public sealed class MonitoringEventService : IMonitoringEventService
                 }
                 await _publisher.EventAsync(eventDto, ct);
                 if (broadcast is not null) await _publisher.AlertAsync(broadcast, saved.Change!, ct);
+                // Track observations feed the identity association engine (zone entries, lost tracks). It never changes the event.
+                if (type is MonitoringEventTypes.ZoneEntered or MonitoringEventTypes.PersonLost)
+                    await _tracks.OnVisionEventAsync(eventDto, ct);
                 return AccessResult<MonitoringIngestResult>.Ok(new MonitoringIngestResult("Accepted", eventDto, alertDto));
             }
             catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: "23505" } pg)

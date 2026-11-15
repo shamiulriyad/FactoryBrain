@@ -593,6 +593,21 @@ builder.Services.AddSingleton<BunonBrain.Infrastructure.Monitoring.MonitoringSim
 builder.Services.AddSingleton<BunonBrain.Api.Hubs.MonitoringConnections>();
 if (!builder.Environment.IsEnvironment("Testing"))
     builder.Services.AddHostedService<BunonBrain.Infrastructure.Monitoring.MonitoringSimulatorWorker>();
+// Verified worker identity association: RFID reads (readers, integrations,
+// the simulator) + reader mappings + workstation assignments + camera zone
+// track observations → VERIFIED / AMBIGUOUS / UNVERIFIED, with manual review.
+// The worker closes pending reads and expires associations every 30 s.
+builder.Services.Configure<BunonBrain.Application.Identity.IdentityOptions>(builder.Configuration.GetSection("Identity"));
+builder.Services.AddScoped<BunonBrain.Infrastructure.Identity.IdentityEvidenceEvaluator>();
+builder.Services.AddScoped<IIdentityPublisher, BunonBrain.Api.Realtime.SignalRIdentityPublisher>();
+builder.Services.AddScoped<IRfidReaderService, BunonBrain.Infrastructure.Identity.RfidReaderService>();
+builder.Services.AddScoped<IIdentityAssociationService, BunonBrain.Infrastructure.Identity.IdentityAssociationService>();
+builder.Services.AddScoped<IRfidEventProcessor, BunonBrain.Infrastructure.Identity.RfidEventProcessor>();
+builder.Services.AddScoped<ITrackObservationProcessor, BunonBrain.Infrastructure.Identity.TrackObservationProcessor>();
+builder.Services.AddScoped<IAssociationReviewService, BunonBrain.Infrastructure.Identity.AssociationReviewService>();
+builder.Services.AddScoped<IRfidSimulatorService, BunonBrain.Infrastructure.Identity.RfidSimulatorService>();
+if (!builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddHostedService<BunonBrain.Infrastructure.Identity.IdentityAssociationWorker>();
 builder.Services.AddScoped<IAuditQueryService, BunonBrain.Infrastructure.Access.AuditQueryService>();
 
 // ─── RAG tuning config (Rag: section in appsettings.json, env Rag__*) ──────

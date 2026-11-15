@@ -62,7 +62,8 @@ public sealed record MonitoringEventInput(
     JsonElement? Payload = null,
     string? ModelName = null,
     string? ModelVersion = null,
-    Guid? SimulationRunId = null)
+    Guid? SimulationRunId = null,
+    Guid? MachineId = null)
 {
     public static MonitoringEventInput From(IngestMonitoringEventRequest r) => new(
         r.EventType, r.FactoryId, r.IdempotencyKey, r.OccurredAt, r.SourceType ?? MonitoringSourceTypes.Real, r.CameraId, r.DeviceId, r.LineId,
@@ -78,7 +79,7 @@ public sealed record MonitoringEventQuery(
     Guid? FactoryId = null, Guid? DepartmentId = null, Guid? FloorId = null, string? LineId = null, Guid? CameraId = null,
     Guid? DeviceId = null, Guid? WorkstationId = null, string? EventType = null, string? Category = null, string? SourceType = null,
     string? TrackId = null, bool? VerifiedWorker = null, DateTimeOffset? From = null, DateTimeOffset? To = null, string? Search = null,
-    Guid? SimulationRunId = null, int Page = 1, int PageSize = 50, string? Activity = null);
+    Guid? SimulationRunId = null, int Page = 1, int PageSize = 50, string? Activity = null, Guid? MachineId = null);
 
 public sealed record MonitoringEventDto(
     Guid Id,
@@ -111,7 +112,8 @@ public sealed record MonitoringEventDto(
     DateTimeOffset ReceivedAt,
     string RecordedByEmail,
     int ReviewCount,
-    string? LatestReview);
+    string? LatestReview,
+    MonRef? Machine = null);
 
 public sealed record EventReviewDto(long Id, string Decision, string? Note, string ReviewedByEmail, string? ReviewedByRole, DateTimeOffset ReviewedAt);
 
@@ -128,7 +130,8 @@ public sealed record ReviewMonitoringEventRequest(string Decision, string? Note)
 public sealed record MonitoringAlertQuery(
     Guid? FactoryId = null, Guid? DepartmentId = null, Guid? FloorId = null, string? LineId = null, Guid? CameraId = null, Guid? DeviceId = null,
     string? Status = null, string? Severity = null, string? AlertType = null, string? SourceType = null, string? Category = null,
-    DateTimeOffset? From = null, DateTimeOffset? To = null, string? Search = null, string? Sort = null, int Page = 1, int PageSize = 25);
+    DateTimeOffset? From = null, DateTimeOffset? To = null, string? Search = null, string? Sort = null, int Page = 1, int PageSize = 25,
+    Guid? MachineId = null);
 
 public sealed record AlertCan(bool Acknowledge, bool Escalate, bool Resolve, bool Dismiss);
 
@@ -174,7 +177,8 @@ public sealed record MonitoringAlertDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     int Version,
-    AlertCan Can);
+    AlertCan Can,
+    MonRef? Machine = null);
 
 public sealed record AlertActionDto(
     long Id, string Action, string? FromStatus, string ToStatus, string? Note, string? EscalatedToRole, string? ResolutionCode,

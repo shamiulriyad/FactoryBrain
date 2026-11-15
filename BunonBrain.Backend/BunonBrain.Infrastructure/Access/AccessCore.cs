@@ -136,6 +136,10 @@ internal static class AccessAudit
     public const string EntityMonitoringSimulation = "monitoring_simulation";
     public const string EntityReaderMapping = "rfid_reader_mapping";
     public const string EntityIdentityAssociation = "worker_track_association";
+    public const string EntityDeviceIot = "device_iot_configuration";
+    public const string EntityMachineProfile = "machine_monitoring_profile";
+    public const string EntityProductionCounter = "production_counter";
+    public const string EntityProductionCorrection = "production_correction";
 
     public static AuditLogEntry Entry(AuditActor actor, string action, string entityType, string entityId,
         string? from, string? to, string reason, string? traceId, Guid? factoryId) => new()

@@ -23,10 +23,10 @@ public class MonitoringEventConfiguration : IEntityTypeConfiguration<MonitoringE
         b.ToTable("monitoring_events", t =>
         {
             t.HasCheckConstraint("CK_monitoring_events_type",
-                "\"EventType\" IN ('PERSON_DETECTED','TRACK_UPDATED','PERSON_LOST','ZONE_ENTERED','ZONE_EXITED','ACTIVITY_CLASSIFIED','ACTIVITY_STATE_CHANGED','ACTIVITY_UNCERTAIN','GARMENT_ACTIVITY_CLASSIFIED','GARMENT_ACTIVITY_CHANGED','GARMENT_ACTIVITY_UNCERTAIN','UNCERTAIN_DETECTION','CAMERA_STATUS_CHANGED','DEVICE_STATUS_CHANGED','MODEL_STATUS_CHANGED')");
+                "\"EventType\" IN ('PERSON_DETECTED','TRACK_UPDATED','PERSON_LOST','ZONE_ENTERED','ZONE_EXITED','ACTIVITY_CLASSIFIED','ACTIVITY_STATE_CHANGED','ACTIVITY_UNCERTAIN','GARMENT_ACTIVITY_CLASSIFIED','GARMENT_ACTIVITY_CHANGED','GARMENT_ACTIVITY_UNCERTAIN','UNCERTAIN_DETECTION','CAMERA_STATUS_CHANGED','DEVICE_STATUS_CHANGED','MODEL_STATUS_CHANGED','MACHINE_STATE_CHANGED','MACHINE_CONDITION')");
             t.HasCheckConstraint("CK_monitoring_events_category", "\"Category\" IN ('VISION','SYSTEM')");
             t.HasCheckConstraint("CK_monitoring_events_source", "\"SourceType\" IN ('SIMULATED','REAL')");
-            t.HasCheckConstraint("CK_monitoring_events_producer", "\"Producer\" IN ('API','SIMULATOR','DEVICE_PIPELINE','CAMERA_SERVICE','CV_SERVICE')");
+            t.HasCheckConstraint("CK_monitoring_events_producer", "\"Producer\" IN ('API','SIMULATOR','DEVICE_PIPELINE','CAMERA_SERVICE','CV_SERVICE','IOT_PIPELINE')");
             t.HasCheckConstraint("CK_monitoring_events_producer_source",
                 "(\"Producer\" <> 'SIMULATOR' OR \"SourceType\" = 'SIMULATED') AND (\"Producer\" NOT IN ('API','CV_SERVICE') OR \"SourceType\" = 'REAL')");
             // The computer-vision service never names a worker.
@@ -61,6 +61,7 @@ public class MonitoringEventConfiguration : IEntityTypeConfiguration<MonitoringE
         b.HasIndex(x => new { x.LineId, x.OccurredAt });
         b.HasIndex(x => new { x.CameraId, x.OccurredAt });
         b.HasIndex(x => new { x.DeviceId, x.OccurredAt });
+        b.HasIndex(x => new { x.MachineId, x.OccurredAt });
         b.HasIndex(x => x.WorkstationId);
         b.HasIndex(x => x.ZoneId);
         b.HasIndex(x => x.WorkerId);
@@ -73,6 +74,7 @@ public class MonitoringEventConfiguration : IEntityTypeConfiguration<MonitoringE
         b.HasOne<Workstation>().WithMany().HasForeignKey(x => x.WorkstationId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Camera>().WithMany().HasForeignKey(x => x.CameraId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Machine>().WithMany().HasForeignKey(x => x.MachineId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<CameraZone>().WithMany().HasForeignKey(x => x.ZoneId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<WorkerProfile>().WithMany().HasForeignKey(x => x.WorkerId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<WorkerCard>().WithMany().HasForeignKey(x => x.WorkerCardId).OnDelete(DeleteBehavior.Restrict);
@@ -150,6 +152,7 @@ public class MonitoringAlertConfiguration : IEntityTypeConfiguration<MonitoringA
         b.HasIndex(x => new { x.FactoryId, x.Status, x.Severity });
         b.HasIndex(x => new { x.FactoryId, x.CreatedAt });
         b.HasIndex(x => new { x.LineId, x.Status });
+        b.HasIndex(x => new { x.MachineId, x.Status });
         b.HasIndex(x => x.CameraId);
         b.HasIndex(x => x.DeviceId);
         b.HasIndex(x => x.EventId);
@@ -160,6 +163,7 @@ public class MonitoringAlertConfiguration : IEntityTypeConfiguration<MonitoringA
         b.HasOne<Workstation>().WithMany().HasForeignKey(x => x.WorkstationId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Camera>().WithMany().HasForeignKey(x => x.CameraId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Machine>().WithMany().HasForeignKey(x => x.MachineId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<CameraZone>().WithMany().HasForeignKey(x => x.ZoneId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<MonitoringEvent>().WithMany().HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<MonitoringEvent>().WithMany().HasForeignKey(x => x.LastEventId).OnDelete(DeleteBehavior.Restrict);

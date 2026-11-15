@@ -39,6 +39,8 @@ public class MonitoringEvent
     public Guid? WorkstationId { get; set; }
     public Guid? CameraId { get; set; }
     public Guid? DeviceId { get; set; }
+    /// <summary>The machine a machine-monitoring event or alert is about.</summary>
+    public Guid? MachineId { get; set; }
     public Guid? ZoneId { get; set; }
 
     /// <summary>Camera-local temporary track id. Not a worker id.</summary>
@@ -109,6 +111,8 @@ public class MonitoringAlert
     public Guid? WorkstationId { get; set; }
     public Guid? CameraId { get; set; }
     public Guid? DeviceId { get; set; }
+    /// <summary>The machine a machine-monitoring event or alert is about.</summary>
+    public Guid? MachineId { get; set; }
     public Guid? ZoneId { get; set; }
 
     /// <summary>The event that raised the alert.</summary>

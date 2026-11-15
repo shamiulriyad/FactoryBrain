@@ -78,7 +78,7 @@ public sealed record MonitoringEventQuery(
     Guid? FactoryId = null, Guid? DepartmentId = null, Guid? FloorId = null, string? LineId = null, Guid? CameraId = null,
     Guid? DeviceId = null, Guid? WorkstationId = null, string? EventType = null, string? Category = null, string? SourceType = null,
     string? TrackId = null, bool? VerifiedWorker = null, DateTimeOffset? From = null, DateTimeOffset? To = null, string? Search = null,
-    Guid? SimulationRunId = null, int Page = 1, int PageSize = 50);
+    Guid? SimulationRunId = null, int Page = 1, int PageSize = 50, string? Activity = null);
 
 public sealed record MonitoringEventDto(
     Guid Id,
@@ -218,6 +218,47 @@ public sealed record MonitoringOverviewDto(
     IReadOnlyList<LineStatusDto> Lines,
     IReadOnlyList<FactoryStatusDto> Factories,
     string AiStatus);
+
+// ─── Activity (predicted posture / movement of temporary tracks) ─────────
+
+/// <summary>
+/// GET /api/monitoring/activity. <c>From</c>/<c>To</c> default to the last
+/// hour; a track is "current" when its latest activity event is no older than
+/// <c>ActiveSeconds</c> (default 300) before <c>To</c> and it hasn't been lost.
+/// </summary>
+public sealed record MonitoringActivityQuery(
+    Guid? FactoryId = null, string? LineId = null, Guid? CameraId = null, string? Activity = null, string? SourceType = null,
+    bool? UncertainOnly = null, DateTimeOffset? From = null, DateTimeOffset? To = null, int? ActiveSeconds = null, string? Kind = null);
+
+/// <summary>A model whose predictions are in the activity picture, with how it was validated (garment models: EVALUATED or PENDING).</summary>
+public sealed record ActivityModelDto(string Name, string? Version, int Events, string? EvaluationStatus, DateTimeOffset LastAt);
+
+/// <summary>
+/// One temporary track's predicted activity. <c>TrackId</c> is a camera-local
+/// number, never a worker; <c>VerifiedWorker</c> is only set when an RFID card
+/// verified the identity on the event (never by the computer-vision service).
+/// </summary>
+public sealed record ActivityTrackDto(
+    Guid CameraId, string CameraCode, MonLine? Line, string TrackId, string Activity, double? Confidence, bool Uncertain, string? Reason,
+    string? Candidate, DateTimeOffset Since, DateTimeOffset LastPredictionAt, bool Current, bool Ended, int Changes, string? ModelName,
+    string? ModelVersion, string SourceType, MonRef? VerifiedWorker, Guid LastEventId);
+
+/// <summary>Observed seconds and prediction count of one activity (time between a track's consecutive activity events, capped).</summary>
+public sealed record ActivityShareDto(string Activity, double Seconds, int Predictions);
+
+public sealed record ActivityDistributionDto(string Key, string Name, IReadOnlyList<ActivityShareDto> Activities, double ObservedSeconds,
+    int Tracks, int UncertainPredictions, int Predictions);
+
+public sealed record ActivityCountDto(string Activity, int Tracks);
+
+public sealed record ActivityCountsDto(int CurrentTracks, IReadOnlyList<ActivityCountDto> Current, int Classified, int StateChanges,
+    int Uncertain, double? UncertainRate);
+
+public sealed record MonitoringActivityDto(
+    DateTimeOffset AsOf, DateTimeOffset From, DateTimeOffset To, int ActiveSeconds, ActivityCountsDto Counts,
+    IReadOnlyList<ActivityTrackDto> Tracks, IReadOnlyList<ActivityDistributionDto> ByCamera, IReadOnlyList<ActivityDistributionDto> ByLine,
+    IReadOnlyList<MonitoringEventDto> Transitions, IReadOnlyList<string> Activities, bool Truncated, string Note,
+    string Kind = "generic", IReadOnlyList<ActivityModelDto>? Models = null);
 
 // ─── Camera monitoring ─────────────────────────────────────────────────────
 

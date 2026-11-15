@@ -23,7 +23,7 @@ public class MonitoringEventConfiguration : IEntityTypeConfiguration<MonitoringE
         b.ToTable("monitoring_events", t =>
         {
             t.HasCheckConstraint("CK_monitoring_events_type",
-                "\"EventType\" IN ('PERSON_DETECTED','TRACK_UPDATED','PERSON_LOST','ZONE_ENTERED','ZONE_EXITED','ACTIVITY_CLASSIFIED','UNCERTAIN_DETECTION','CAMERA_STATUS_CHANGED','DEVICE_STATUS_CHANGED','MODEL_STATUS_CHANGED')");
+                "\"EventType\" IN ('PERSON_DETECTED','TRACK_UPDATED','PERSON_LOST','ZONE_ENTERED','ZONE_EXITED','ACTIVITY_CLASSIFIED','ACTIVITY_STATE_CHANGED','ACTIVITY_UNCERTAIN','GARMENT_ACTIVITY_CLASSIFIED','GARMENT_ACTIVITY_CHANGED','GARMENT_ACTIVITY_UNCERTAIN','UNCERTAIN_DETECTION','CAMERA_STATUS_CHANGED','DEVICE_STATUS_CHANGED','MODEL_STATUS_CHANGED')");
             t.HasCheckConstraint("CK_monitoring_events_category", "\"Category\" IN ('VISION','SYSTEM')");
             t.HasCheckConstraint("CK_monitoring_events_source", "\"SourceType\" IN ('SIMULATED','REAL')");
             t.HasCheckConstraint("CK_monitoring_events_producer", "\"Producer\" IN ('API','SIMULATOR','DEVICE_PIPELINE','CAMERA_SERVICE','CV_SERVICE')");
@@ -35,7 +35,7 @@ public class MonitoringEventConfiguration : IEntityTypeConfiguration<MonitoringE
             t.HasCheckConstraint("CK_monitoring_events_confidence", "\"Confidence\" IS NULL OR (\"Confidence\" >= 0 AND \"Confidence\" <= 1)");
             t.HasCheckConstraint("CK_monitoring_events_worker_verified",
                 "(\"WorkerId\" IS NULL) = (\"IdentityMethod\" IS NULL) AND (\"IdentityMethod\" IS NULL OR \"IdentityMethod\" = 'RFID_BADGE')");
-            t.HasCheckConstraint("CK_monitoring_events_uncertain_anonymous", "\"EventType\" <> 'UNCERTAIN_DETECTION' OR \"WorkerId\" IS NULL");
+            t.HasCheckConstraint("CK_monitoring_events_uncertain_anonymous", "\"EventType\" NOT IN ('UNCERTAIN_DETECTION','ACTIVITY_UNCERTAIN','GARMENT_ACTIVITY_UNCERTAIN') OR \"WorkerId\" IS NULL");
             t.HasCheckConstraint("CK_monitoring_events_simulated_anonymous", "\"SourceType\" <> 'SIMULATED' OR \"WorkerId\" IS NULL");
         });
         b.HasKey(x => x.Id);

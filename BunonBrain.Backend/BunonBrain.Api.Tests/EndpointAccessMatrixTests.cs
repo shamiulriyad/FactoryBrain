@@ -252,6 +252,7 @@ public static class EndpointMatrix
         // Central monitoring.
         ("GET",   "/api/monitoring/overview",                 G(P.MonitoringView, P.DevicesView)),
         ("GET",   "/api/monitoring/contract",                 G(P.MonitoringView, P.DevicesView, P.MonitoringEventsIngest)),
+        ("GET",   "/api/monitoring/activity",                 G(P.MonitoringView)),
         ("GET",   "/api/monitoring/cameras",                  G(P.MonitoringView, P.CamerasView)),
         ("GET",   "/api/monitoring/cameras/{id}",             G(P.MonitoringView, P.CamerasView)),
         ("GET",   "/api/monitoring/events",                   G(P.MonitoringView, P.DevicesView)),

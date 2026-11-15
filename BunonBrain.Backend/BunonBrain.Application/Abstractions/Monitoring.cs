@@ -48,6 +48,9 @@ public interface IMonitoringRoomService
     Task<MonitoringOverviewDto> OverviewAsync(AccessContext caller, MonitoringOverviewQuery query, CancellationToken ct);
     Task<IReadOnlyList<MonitoringCameraDto>> CamerasAsync(AccessContext caller, MonitoringCameraQuery query, CancellationToken ct);
     Task<AccessResult<MonitoringCameraDetailDto>> CameraAsync(AccessContext caller, Guid id, CancellationToken ct);
+
+    /// <summary>Predicted physical activity of temporary tracks (current tracks, distributions, transitions). Needs <c>monitoring.view</c>.</summary>
+    Task<MonitoringActivityDto> ActivityAsync(AccessContext caller, MonitoringActivityQuery query, CancellationToken ct);
 }
 
 /// <summary>

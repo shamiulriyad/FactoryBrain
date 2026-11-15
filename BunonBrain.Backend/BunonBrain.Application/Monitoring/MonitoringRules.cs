@@ -17,6 +17,11 @@ public static class MonitoringEventTypes
     public const string ZoneEntered = "ZONE_ENTERED";
     public const string ZoneExited = "ZONE_EXITED";
     public const string ActivityClassified = "ACTIVITY_CLASSIFIED";
+    public const string ActivityStateChanged = "ACTIVITY_STATE_CHANGED";
+    public const string ActivityUncertain = "ACTIVITY_UNCERTAIN";
+    public const string GarmentActivityClassified = "GARMENT_ACTIVITY_CLASSIFIED";
+    public const string GarmentActivityChanged = "GARMENT_ACTIVITY_CHANGED";
+    public const string GarmentActivityUncertain = "GARMENT_ACTIVITY_UNCERTAIN";
     public const string UncertainDetection = "UNCERTAIN_DETECTION";
     public const string CameraStatusChanged = "CAMERA_STATUS_CHANGED";
     public const string DeviceStatusChanged = "DEVICE_STATUS_CHANGED";
@@ -24,7 +29,14 @@ public static class MonitoringEventTypes
 
     /// <summary>People, tracks, zones and activity: what a camera AI service would report.</summary>
     public static readonly string[] Vision =
-        { PersonDetected, TrackUpdated, PersonLost, ZoneEntered, ZoneExited, ActivityClassified, UncertainDetection };
+        { PersonDetected, TrackUpdated, PersonLost, ZoneEntered, ZoneExited, ActivityClassified, ActivityStateChanged, ActivityUncertain,
+          GarmentActivityClassified, GarmentActivityChanged, GarmentActivityUncertain, UncertainDetection };
+
+    /// <summary>Predicted physical activity of a temporary track: a periodic confirmation, an accepted change, or "can't tell".</summary>
+    public static readonly string[] Activity = { ActivityClassified, ActivityStateChanged, ActivityUncertain };
+
+    /// <summary>Garment-specific activity predicted by a trained model (a separate family from the generic posture activity).</summary>
+    public static readonly string[] GarmentActivity = { GarmentActivityClassified, GarmentActivityChanged, GarmentActivityUncertain };
 
     /// <summary>Camera, device and model status.</summary>
     public static readonly string[] System = { CameraStatusChanged, DeviceStatusChanged, ModelStatusChanged };
@@ -48,12 +60,115 @@ public static class MonitoringEventTypes
         ZoneEntered => "Zone entered",
         ZoneExited => "Zone exited",
         ActivityClassified => "Activity classified",
+        ActivityStateChanged => "Activity changed",
+        ActivityUncertain => "Activity uncertain",
+        GarmentActivityClassified => "Garment activity classified",
+        GarmentActivityChanged => "Garment activity changed",
+        GarmentActivityUncertain => "Garment activity uncertain",
         UncertainDetection => "Uncertain detection",
         CameraStatusChanged => "Camera status changed",
         DeviceStatusChanged => "Device status changed",
         ModelStatusChanged => "Model status changed",
         _ => type,
     };
+}
+
+/// <summary>
+/// The activity labels an activity event may carry (<c>payload.activity</c>).
+/// <c>Observable</c> are basic postures and movements a pose-based model can
+/// predict; <c>Reserved</c> are garment-work activities kept for future
+/// trained and validated models: the computer-vision service may not report
+/// them. A label is a prediction about a temporary track, never a verified
+/// work activity or a measure of performance.
+/// </summary>
+public static class ActivityLabels
+{
+    public const string Standing = "STANDING";
+    public const string Sitting = "SITTING";
+    public const string Walking = "WALKING";
+    public const string Bending = "BENDING";
+    public const string Reaching = "REACHING";
+    public const string Unknown = "UNKNOWN";
+    public static readonly string[] Observable = { Standing, Sitting, Walking, Bending, Reaching, Unknown };
+    public static readonly string[] Reserved = { "SEWING_LIKE_MOTION", "HANDLING_MATERIAL", "OPERATING_MACHINE", "PICKING_ITEM" };
+    public static readonly string[] All = Observable.Concat(Reserved).ToArray();
+
+    public static string? Parse(string? v)
+    {
+        if (string.IsNullOrWhiteSpace(v)) return null;
+        var key = v.Trim().Replace('-', '_').Replace(' ', '_').ToUpperInvariant();
+        return All.FirstOrDefault(a => a == key);
+    }
+
+    /// <summary>Why an activity event is outside the contract, or null when it is fine.</summary>
+    public static (string Code, string Message)? Check(string type, string? activity, string? previous, string producer)
+    {
+        var a = Parse(activity);
+        if (a is null)
+            return ("activity_invalid", $"payload.activity: one of {string.Join(", ", All)}.");
+        if (producer == MonitoringProducers.CvService && !Observable.Contains(a))
+            return ("activity_not_supported_by_service",
+                $"The computer-vision service predicts basic posture and movement only ({string.Join(", ", Observable)}); {a} needs a trained, validated model.");
+        if (type == MonitoringEventTypes.ActivityUncertain && a != Unknown)
+            return ("activity_must_be_unknown", "ACTIVITY_UNCERTAIN carries payload.activity UNKNOWN (the best guess goes in payload.candidate).");
+        if (type == MonitoringEventTypes.ActivityStateChanged && a == Unknown)
+            return ("activity_state_unknown", "A change to UNKNOWN is reported as ACTIVITY_UNCERTAIN.");
+        if (previous is not null && Parse(previous) is null)
+            return ("previous_activity_invalid", $"payload.previousActivity: one of {string.Join(", ", All)}.");
+        return null;
+    }
+}
+
+/// <summary>
+/// Garment activity labels (<c>payload.activity</c> of GARMENT_ACTIVITY_*).
+/// The classes live in the computer-vision service's configurable registry,
+/// so a factory can add its own: any upper-snake-case label of 2–40
+/// characters is accepted; <c>Default</c> is the initial set, shown first.
+/// A garment event must name the trained model that predicted it.
+/// </summary>
+public static class GarmentActivityLabels
+{
+    public const string Unknown = "UNKNOWN";
+    public static readonly string[] Default =
+    {
+        "SEWING", "FABRIC_HANDLING", "CUTTING", "IRONING", "MATERIAL_PICKING", "MACHINE_OPERATION", "QUALITY_INSPECTION", "PACKING",
+        "WALKING", "STANDING", "SITTING", Unknown,
+    };
+    private static readonly Regex Pattern = new("^[A-Z][A-Z0-9_]{1,39}$", RegexOptions.Compiled);
+
+    public static string? Parse(string? v)
+    {
+        if (string.IsNullOrWhiteSpace(v)) return null;
+        var key = v.Trim().Replace('-', '_').Replace(' ', '_').ToUpperInvariant();
+        return Pattern.IsMatch(key) ? key : null;
+    }
+
+    public static (string Code, string Message)? Check(string type, string? activity, string? previous, string? modelVersion)
+    {
+        var a = Parse(activity);
+        if (a is null) return ("activity_invalid", "payload.activity: a garment activity label (2–40 characters: letters, digits, '_').");
+        if (type == MonitoringEventTypes.GarmentActivityUncertain && a != Unknown)
+            return ("activity_must_be_unknown", "GARMENT_ACTIVITY_UNCERTAIN carries payload.activity UNKNOWN (the best guess goes in payload.candidate).");
+        if (type == MonitoringEventTypes.GarmentActivityChanged && a == Unknown)
+            return ("activity_state_unknown", "A change to UNKNOWN is reported as GARMENT_ACTIVITY_UNCERTAIN.");
+        if (previous is not null && Parse(previous) is null) return ("previous_activity_invalid", "payload.previousActivity is not a valid label.");
+        if (string.IsNullOrWhiteSpace(modelVersion))
+            return ("model_version_required", "Garment activity events name the trained model: modelName and modelVersion.");
+        return null;
+    }
+}
+
+/// <summary>An activity event family: the generic posture activity or the garment-specific one.</summary>
+public sealed record ActivityFamily(string Kind, string Classified, string Changed, string Uncertain, Func<string?, string?> Parse,
+    IReadOnlyList<string> Labels)
+{
+    public static readonly ActivityFamily Generic = new("generic", MonitoringEventTypes.ActivityClassified, MonitoringEventTypes.ActivityStateChanged,
+        MonitoringEventTypes.ActivityUncertain, ActivityLabels.Parse, ActivityLabels.Observable);
+    public static readonly ActivityFamily Garment = new("garment", MonitoringEventTypes.GarmentActivityClassified, MonitoringEventTypes.GarmentActivityChanged,
+        MonitoringEventTypes.GarmentActivityUncertain, GarmentActivityLabels.Parse, GarmentActivityLabels.Default);
+
+    public string[] Types => new[] { Classified, Changed, Uncertain };
+    public static ActivityFamily For(string? kind) => string.Equals(kind?.Trim(), "garment", StringComparison.OrdinalIgnoreCase) ? Garment : Generic;
 }
 
 /// <summary>VISION events concern people seen by cameras and need <c>monitoring.view</c>; SYSTEM events concern equipment.</summary>
@@ -97,6 +212,8 @@ public static class MonitoringProducers
     {
         MonitoringEventTypes.PersonDetected, MonitoringEventTypes.TrackUpdated, MonitoringEventTypes.PersonLost,
         MonitoringEventTypes.ZoneEntered, MonitoringEventTypes.ZoneExited, MonitoringEventTypes.UncertainDetection,
+        MonitoringEventTypes.ActivityClassified, MonitoringEventTypes.ActivityStateChanged, MonitoringEventTypes.ActivityUncertain,
+        MonitoringEventTypes.GarmentActivityClassified, MonitoringEventTypes.GarmentActivityChanged, MonitoringEventTypes.GarmentActivityUncertain,
         MonitoringEventTypes.CameraStatusChanged, MonitoringEventTypes.ModelStatusChanged,
     };
 }
@@ -279,6 +396,13 @@ public static class MonitoringRules
         MonitoringEventTypes.ZoneEntered => new(true, false, true, true, false, false, false, false, true),
         MonitoringEventTypes.ZoneExited => new(true, false, true, true, false, false, false, false, true),
         MonitoringEventTypes.ActivityClassified => new(true, false, false, true, true, false, false, true, true),
+        MonitoringEventTypes.ActivityStateChanged => new(true, false, false, true, true, false, false, true, true),
+        // "Can't tell" stays anonymous, like an uncertain detection.
+        MonitoringEventTypes.ActivityUncertain => new(true, false, false, true, false, false, false, true, false),
+        // Garment predictions come from a trained model, which must be named.
+        MonitoringEventTypes.GarmentActivityClassified => new(true, false, false, true, true, false, true, true, true),
+        MonitoringEventTypes.GarmentActivityChanged => new(true, false, false, true, true, false, true, true, true),
+        MonitoringEventTypes.GarmentActivityUncertain => new(true, false, false, true, false, false, true, true, false),
         // Uncertain stays uncertain: it can never name a worker.
         MonitoringEventTypes.UncertainDetection => new(true, false, false, false, true, false, false, false, false),
         MonitoringEventTypes.CameraStatusChanged => new(true, false, false, false, false, true, false, false, false),
@@ -373,7 +497,8 @@ public static class MonitoringRules
     };
 
     public static string Summary(string type, bool simulated, string? cameraCode, string? deviceCode, string? zoneName, string? trackId,
-        double? confidence, string? toStatus, string? activity, string? modelName, bool hasVerifiedWorker)
+        double? confidence, string? toStatus, string? activity, string? modelName, bool hasVerifiedWorker, string? previousActivity = null,
+        string? reason = null)
     {
         var where = cameraCode is null ? "" : $" on {cameraCode}";
         var track = trackId is null ? "" : $" (track {trackId})";
@@ -385,7 +510,16 @@ public static class MonitoringRules
             MonitoringEventTypes.PersonLost => $"Track {trackId} lost{where}",
             MonitoringEventTypes.ZoneEntered => $"Track {trackId} entered zone {zoneName}{where}",
             MonitoringEventTypes.ZoneExited => $"Track {trackId} left zone {zoneName}{where}",
-            MonitoringEventTypes.ActivityClassified => $"Activity '{activity}' classified{where}{track}{conf}",
+            MonitoringEventTypes.ActivityClassified => $"Predicted activity {activity}{where}{track}{conf}",
+            MonitoringEventTypes.ActivityStateChanged =>
+                $"Predicted activity changed to {activity}{(previousActivity is null ? "" : $" from {previousActivity}")}{where}{track}{conf}",
+            MonitoringEventTypes.GarmentActivityClassified => $"Predicted garment activity {activity}{where}{track}{conf} (model {modelName})",
+            MonitoringEventTypes.GarmentActivityChanged =>
+                $"Predicted garment activity changed to {activity}{(previousActivity is null ? "" : $" from {previousActivity}")}{where}{track}{conf} (model {modelName})",
+            MonitoringEventTypes.GarmentActivityUncertain =>
+                $"Garment activity uncertain{(previousActivity is null ? "" : $" (was {previousActivity})")}{where}{track}{(reason is null ? "" : $": {reason.ToLowerInvariant().Replace('_', ' ')}")}",
+            MonitoringEventTypes.ActivityUncertain =>
+                $"Activity uncertain{(previousActivity is null ? "" : $" (was {previousActivity})")}{where}{track}{(reason is null ? "" : $": {reason.ToLowerInvariant().Replace('_', ' ')}")}",
             MonitoringEventTypes.UncertainDetection => $"Uncertain detection{where}{conf} (needs human review)",
             MonitoringEventTypes.CameraStatusChanged => $"Camera {cameraCode} is now {toStatus}",
             MonitoringEventTypes.DeviceStatusChanged => $"Device {deviceCode} is now {toStatus}",

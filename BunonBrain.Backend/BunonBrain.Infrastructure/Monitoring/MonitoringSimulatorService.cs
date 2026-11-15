@@ -268,11 +268,18 @@ public sealed class MonitoringSimulatorService : IMonitoringSimulatorService
                 payload["reason"] = "partly occluded";
                 break;
             case MonitoringEventTypes.ActivityClassified:
+            case MonitoringEventTypes.ActivityStateChanged:
                 var activity = string.IsNullOrWhiteSpace(r.Activity) ? MonitoringSimulation.SampleActivities[rng.Next(MonitoringSimulation.SampleActivities.Length)] : r.Activity.Trim().ToUpperInvariant();
                 if (activity.Length > 40) return AccessResult<SimulatorTriggerResult>.Invalid("activity_too_long", "Activities are at most 40 characters.");
                 payload["activity"] = activity;
                 payload["sample"] = true;
                 confidence ??= Math.Round(0.55 + rng.NextDouble() * 0.37, 2);
+                break;
+            case MonitoringEventTypes.ActivityUncertain:
+                payload["activity"] = ActivityLabels.Unknown;
+                payload["reason"] = "LOW_CONFIDENCE";
+                payload["sample"] = true;
+                confidence ??= Math.Round(0.2 + rng.NextDouble() * 0.3, 2);
                 break;
             case MonitoringEventTypes.PersonDetected:
             case MonitoringEventTypes.TrackUpdated:

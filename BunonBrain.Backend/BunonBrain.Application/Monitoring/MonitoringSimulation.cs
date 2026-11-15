@@ -18,6 +18,8 @@ public sealed class SimTrack
     public SimTrack(string id) { Id = id; }
     public string Id { get; }
     public Guid? ZoneId { get; set; }
+    /// <summary>The track's current simulated activity (null until one is "predicted").</summary>
+    public string? Activity { get; set; }
 }
 
 /// <summary>What the generator remembers between events of one run.</summary>
@@ -48,14 +50,16 @@ public static class MonitoringSimulation
     public const int MaxCameras = 20;
     public const int MaxEventsPerRun = 5000;
 
-    public static readonly string[] SampleActivities = { "SEWING", "MATERIAL_HANDLING", "WALKING", "UNKNOWN" };
+    /// <summary>Simulated activities: the observable labels a pose-based model could predict (never garment operations).</summary>
+    public static readonly string[] SampleActivities =
+        { ActivityLabels.Standing, ActivityLabels.Sitting, ActivityLabels.Walking, ActivityLabels.Bending, ActivityLabels.Reaching };
 
     /// <summary>Event types the simulator can generate (all of the contract except model status).</summary>
     public static readonly string[] Generatable =
     {
         MonitoringEventTypes.PersonDetected, MonitoringEventTypes.TrackUpdated, MonitoringEventTypes.PersonLost,
         MonitoringEventTypes.ZoneEntered, MonitoringEventTypes.ZoneExited, MonitoringEventTypes.ActivityClassified,
-        MonitoringEventTypes.UncertainDetection, MonitoringEventTypes.CameraStatusChanged, MonitoringEventTypes.DeviceStatusChanged,
+        MonitoringEventTypes.ActivityStateChanged, MonitoringEventTypes.ActivityUncertain, MonitoringEventTypes.UncertainDetection, MonitoringEventTypes.CameraStatusChanged, MonitoringEventTypes.DeviceStatusChanged,
         MonitoringEventTypes.ModelStatusChanged,
     };
 
@@ -124,13 +128,33 @@ public static class MonitoringSimulation
                     tr.ZoneId = null;
                     return new SimEvent(MonitoringEventTypes.ZoneExited, cam.Id, zone, tr.Id, Between(rng, 0.7, 0.95), Base());
                 }));
-            if (allowed.Contains(MonitoringEventTypes.ActivityClassified))
+            if (allowed.Contains(MonitoringEventTypes.ActivityStateChanged))
                 options.Add((1.5, () =>
                 {
                     var tr = Pick();
-                    var activity = SampleActivities[rng.Next(SampleActivities.Length)];
-                    return new SimEvent(MonitoringEventTypes.ActivityClassified, cam.Id, tr.ZoneId, tr.Id, Between(rng, 0.55, 0.92),
-                        Base(new() { ["activity"] = activity, ["sample"] = true }));
+                    var choices = SampleActivities.Where(a => a != tr.Activity).ToArray();
+                    var activity = choices[rng.Next(choices.Length)];
+                    var p = new Dictionary<string, object?> { ["activity"] = activity, ["sample"] = true };
+                    if (tr.Activity is not null) p["previousActivity"] = tr.Activity;
+                    tr.Activity = activity;
+                    return new SimEvent(MonitoringEventTypes.ActivityStateChanged, cam.Id, tr.ZoneId, tr.Id, Between(rng, 0.6, 0.93), Base(p));
+                }));
+            if (allowed.Contains(MonitoringEventTypes.ActivityClassified) && tracks.Any(x => x.Activity is not null and not ActivityLabels.Unknown))
+                options.Add((1.5, () =>
+                {
+                    var known = tracks.Where(x => x.Activity is not null and not ActivityLabels.Unknown).ToList();
+                    var tr = known[rng.Next(known.Count)];
+                    return new SimEvent(MonitoringEventTypes.ActivityClassified, cam.Id, tr.ZoneId, tr.Id, Between(rng, 0.6, 0.93),
+                        Base(new() { ["activity"] = tr.Activity, ["sample"] = true }));
+                }));
+            if (allowed.Contains(MonitoringEventTypes.ActivityUncertain))
+                options.Add((0.5, () =>
+                {
+                    var tr = Pick();
+                    var p = new Dictionary<string, object?> { ["activity"] = ActivityLabels.Unknown, ["reason"] = "LOW_CONFIDENCE", ["sample"] = true };
+                    if (tr.Activity is not null) p["previousActivity"] = tr.Activity;
+                    tr.Activity = ActivityLabels.Unknown;
+                    return new SimEvent(MonitoringEventTypes.ActivityUncertain, cam.Id, tr.ZoneId, tr.Id, Between(rng, 0.2, 0.5), Base(p));
                 }));
             if (allowed.Contains(MonitoringEventTypes.PersonLost))
                 options.Add((1, () =>

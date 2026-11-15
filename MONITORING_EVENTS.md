@@ -91,6 +91,13 @@ fields, status values, limits).
 | `CAMERA_STATUS_CHANGED` | SYSTEM | `cameraId` | `toStatus`: ONLINE, OFFLINE, ACTIVE, INACTIVE, MAINTENANCE |
 | `DEVICE_STATUS_CHANGED` | SYSTEM | `deviceId` | `toStatus`: ONLINE, OFFLINE, ERROR, ACTIVE, MAINTENANCE, DISABLED |
 | `MODEL_STATUS_CHANGED` | SYSTEM | `modelName` | `toStatus`: LOADING, READY, DEGRADED, ERROR, OFFLINE |
+| `MACHINE_STATE_CHANGED` | SYSTEM | `machineId` (IoT pipeline only) | `toStatus` / `fromStatus`: RUNNING, STOPPED, IDLE, MAINTENANCE, ERROR, OFFLINE, UNKNOWN; `reason`, `trigger` |
+| `MACHINE_CONDITION` | SYSTEM | `machineId` (IoT pipeline only) | `toStatus`: ACTIVE or CLEARED; `condition`: UNEXPECTED_STOP, LONG_IDLE, ABNORMAL_TEMPERATURE, HIGH_VIBRATION, COUNTER_DISCONNECTED, UNUSUAL_TRANSITION |
+
+Machine events are derived by the IoT pipeline from machine sensor data
+(producer `IOT_PIPELINE`, REAL or SIMULATED like their devices); the ingestion
+API refuses them (`machine_events_are_derived`). They never carry a worker.
+See [IOT_INTEGRATION.md](IOT_INTEGRATION.md).
 
 VISION events are visible with `monitoring.view` only. SYSTEM events are also
 visible to IT / Device Administrators (`devices.view`).
@@ -182,6 +189,8 @@ A producer doesn't need to send those.
    | Model status → ERROR / OFFLINE / DEGRADED | `MODEL_UNAVAILABLE` | MEDIUM / LOW |
    | `UNCERTAIN_DETECTION` | `UNCERTAIN_DETECTION_REVIEW` | LOW |
    | `ZONE_ENTERED` a zone of type Restricted | `RESTRICTED_ZONE_ENTRY` | HIGH |
+   | Machine → OFFLINE / ERROR | `MACHINE_OFFLINE` / `MACHINE_ERROR` | MEDIUM / HIGH |
+   | Machine condition ACTIVE | `MACHINE_UNEXPECTED_STOP`, `MACHINE_LONG_IDLE`, `MACHINE_ABNORMAL_TEMPERATURE`, `MACHINE_HIGH_VIBRATION`, `PRODUCTION_COUNTER_DISCONNECTED`, `MACHINE_UNUSUAL_TRANSITION` | LOW – HIGH |
 
    The same situation again updates the open alert (occurrence count). A
    return to normal (ONLINE / READY) is noted on the open alert, which a person
@@ -211,6 +220,8 @@ the `Authorization` header otherwise. Connecting needs `monitoring.view` or
      The pushed alert's `can` flags are all false; fetch the alert to see
      what you may do.
    - `cameraStatus`, `deviceStatus`: `{ id, code, status, sourceType, occurredAt, eventId }`.
+   - `machineState`: `{ change: "state" | "condition", machine }` (SYSTEM groups).
+   - `productionChanged`: `{ factoryId, lineId, machineId, sourceType, at }` — no numbers; reload through `/api/iot/production`.
 3. After a reconnect, call `Subscribe` again (a new connection has no groups)
    and refetch to fill the gap. The server closes the connection when the
    access token expires; reconnect with a fresh token.

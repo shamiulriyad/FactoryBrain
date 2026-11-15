@@ -531,6 +531,18 @@ temporary password to `/app/account`, and starts users without an overview
   returned (`…C3D4`); card management stays with `workers.manage`. Physical
   readers post as a user account with `devices.manage` (no per-reader tokens
   yet).
+- Machine monitoring and IoT ([IOT_INTEGRATION.md](IOT_INTEGRATION.md)) use
+  existing permissions only: machine views need `monitoring.view`,
+  `devices.view` or `production.view` (line scope via the machine's
+  workstation); production counts `production.view` or `monitoring.view`
+  (IT / Device Administrators see machines and devices but no counts);
+  IoT configuration, machine rules, maintenance and device keys
+  `devices.manage`; production corrections `production.manage`; counter
+  resets `production.manage` or `devices.manage`; the IoT simulator
+  `devices.simulate`. HR and Workers see no machine data. MQTT devices
+  authenticate at the broker (per-device accounts and ACL); HTTP devices with
+  a per-device key (stored hashed) on `POST /api/iot/device/{channel}`, the
+  only anonymous IoT route.
 - System roles are fixed; custom roles are not supported (by design for now).
 - Token freshness is cached for 30 s per API instance: on a multi-instance
   deployment another instance may accept an old token for up to 30 s.

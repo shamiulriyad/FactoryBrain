@@ -1,0 +1,23 @@
+# A local MQTT broker for testing BunonBrain with real devices.
+#   docker compose -f deploy/mosquitto/docker-compose.yml up -d
+# Then in the repo-root .env:
+#   Iot__Mqtt__Enabled=true
+#   Iot__Mqtt__Host=localhost
+#   Iot__Mqtt__Username=bunonbrain-backend
+#   Iot__Mqtt__Password=<the password you set with mosquitto_passwd>
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0.20
+    container_name: bunonbrain-mosquitto
+    ports:
+      - "1883:1883"
+      # - "8883:8883"   # TLS listener (see mosquitto.conf)
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./acl:/mosquitto/config/acl:ro
+      - ./passwd:/mosquitto/config/passwd
+      - mosquitto-data:/mosquitto/data
+    restart: unless-stopped
+
+volumes:
+  mosquitto-data:

@@ -11,6 +11,9 @@ namespace BunonBrain.Infrastructure.Qc;
 ///   <see cref="HttpDefectDetectionProvider"/>) | unset / <c>none</c> (inference not configured).</item>
 ///   <item><c>QC_VISION_MODEL</c>: model for <c>llm</c> mode (defaults to the LLM model).</item>
 ///   <item><c>QC_VISION_HTTP_URL</c>, <c>QC_VISION_HTTP_API_KEY</c>: endpoint and bearer key for <c>http</c> mode.</item>
+///   <item><c>QC_VISION_TILE_GRID</c> (llm mode, default 2): besides the whole photo, inspect an
+///   N×N grid of zoomed, overlapping crops so several defects are found, not just the most
+///   obvious one. 1 = whole photo only; 2 = 2×2 (5 model calls); 3 = 3×3 (10 calls).</item>
 ///   <item><c>QC_VISION_TIMEOUT_SECONDS</c> (default 60), <c>QC_VISION_MIN_CONFIDENCE</c> (default 0.25),
 ///   <c>QC_MAX_ATTEMPTS</c> (default 3).</item>
 ///   <item><c>QC_IMAGE_STORAGE_PATH</c> (default <c>&lt;content root&gt;/App_Data/qc-images</c>),
@@ -30,8 +33,13 @@ public sealed record QcOptions(
     long MaxImageBytes,
     bool WorkerEnabled,
     /// <summary>Why the configured mode can't run (e.g. http mode without a URL); null when fine.</summary>
-    string? ConfigurationError)
+    string? ConfigurationError,
+    /// <summary>llm mode: N×N grid of zoomed crops inspected besides the whole photo (1 = off).</summary>
+    int TileGrid = QcOptions.DefaultTileGrid)
 {
+    public const int DefaultTileGrid = 2;
+    public const int MaxTileGrid = 3;
+
     public const string ModeNone = "none";
     public const string ModeLlm = "llm";
     public const string ModeHttp = "http";
@@ -68,8 +76,9 @@ public sealed record QcOptions(
         var maxBytes = Math.Min((long)(maxMb * 1024 * 1024), QcLimits.MaxImageBytesCeiling);
         var storage = Clean(env("QC_IMAGE_STORAGE_PATH")) ?? Path.Combine(contentRoot, "App_Data", "qc-images");
         var worker = !bool.TryParse(Clean(env("QC_WORKER_ENABLED")), out var w) || w;
+        var tileGrid = int.TryParse(Clean(env("QC_VISION_TILE_GRID")), out var g) && g is >= 1 and <= MaxTileGrid ? g : DefaultTileGrid;
 
         return new QcOptions(mode, Clean(env("QC_VISION_MODEL")), url, Clean(env("QC_VISION_HTTP_API_KEY")),
-            TimeSpan.FromSeconds(timeout), minConfidence, maxAttempts, Path.GetFullPath(storage), maxBytes, worker, error);
+            TimeSpan.FromSeconds(timeout), minConfidence, maxAttempts, Path.GetFullPath(storage), maxBytes, worker, error, tileGrid);
     }
 }

@@ -379,6 +379,18 @@ and `recommended_action`. The prompt asks for a box around the whole defect
 area rather than a point inside it. The `http` contract below has no
 explanation fields; those columns stay empty for it.
 
+**Several defects per piece (`llm` mode).** A general vision model sees a
+downscaled photo and tends to report only the most obvious defect. So the
+whole photo is sent with an instruction to report every separate defect, and
+in parallel an N×N grid of overlapping zoomed crops (`QC_VISION_TILE_GRID`,
+default 2 → 4 crops, 5 calls; 1 turns it off) is inspected too
+(`QcTiling`). Crop boxes are mapped back to whole-photo coordinates and the
+results merged: boxes overlapping by IoU ≥ 0.3, or with the same label and
+IoU ≥ 0.1 / one containing the other's centre, are one defect (the most
+confident copy is kept). The whole-photo call decides success; a failed crop
+only loses that crop's extra findings. All calls share
+`QC_VISION_TIMEOUT_SECONDS`.
+
 No code path produces a prediction a provider did not return. Tests use a
 deterministic detector served by the outbound-HTTP guard (backend) or the e2e
 harness, and its model name says it is a test model.

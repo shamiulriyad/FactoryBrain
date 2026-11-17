@@ -356,6 +356,11 @@ export type QcFinding = {
   polygon?: number[][] | null;
   severity: QcSeverity;
   description?: string | null;
+  /** Model explanation (advisory): specific defect type, what it means, typical causes, what to do. */
+  defectType?: string | null;
+  meaning?: string | null;
+  probableCauses?: string | null;
+  recommendedAction?: string | null;
   decision: QcDecision;
   correctedCategoryCode?: string | null;
   correctedSeverity?: QcSeverity | null;

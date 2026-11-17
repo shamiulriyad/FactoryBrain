@@ -421,6 +421,17 @@ export default function InspectionDetailPage() {
   );
 }
 
+const INSIGHT_ROWS = [
+  ["description", "What we see"],
+  ["meaning", "What it means"],
+  ["probableCauses", "Why it happens"],
+  ["recommendedAction", "What to do"],
+] as const satisfies readonly (readonly [keyof QcFinding, string])[];
+
+function hasInsight(f: QcFinding): boolean {
+  return Boolean(f.meaning || f.probableCauses || f.recommendedAction);
+}
+
 function FindingRow({
   f, highlighted, onHover, reviewing, draft, categories, onDecision
 }: {
@@ -445,14 +456,30 @@ function FindingRow({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-body font-medium text-fg-primary">
-            {findingLabel(f)}
+            {f.defectType ?? findingLabel(f)}
+            {f.defectType && <span className="ml-2 text-caption text-fg-tertiary">{findingLabel(f)}</span>}
             {!f.categoryCode && f.source === "model" && <span className="ml-2 text-caption text-[var(--risk-medium)]">(not in the taxonomy)</span>}
           </p>
           <p className="text-caption text-fg-tertiary">
             {f.source === "model" ? `Confidence ${formatConfidence(f.confidence)}` : "Added by inspector"}
             {f.box ? " · located" : f.source === "model" ? " · no location" : ""}
-            {f.description ? ` · ${f.description}` : ""}
+            {f.description && !hasInsight(f) ? ` · ${f.description}` : ""}
           </p>
+          {hasInsight(f) && (
+            <dl className="mt-2 grid gap-2 text-body" data-testid="qc-finding-insight">
+              {INSIGHT_ROWS.map(([key, title]) =>
+                f[key] ? (
+                  <div key={key}>
+                    <dt className="text-caption font-medium text-fg-secondary">{title}</dt>
+                    <dd className="text-fg-primary">{f[key]}</dd>
+                  </div>
+                ) : null,
+              )}
+              <p className="text-caption text-fg-tertiary">
+                Explanation from the AI model: typical causes for this defect type, not a verified root cause.
+              </p>
+            </dl>
+          )}
           {f.reviewerNote && <p className="mt-1 text-caption text-fg-secondary">Note: {f.reviewerNote}</p>}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">

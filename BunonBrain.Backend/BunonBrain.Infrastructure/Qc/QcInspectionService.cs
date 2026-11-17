@@ -559,7 +559,8 @@ public sealed class QcInspectionService : IQcInspectionService
                     QcWire.Severity(f.Severity), f.Description, QcWire.Decision(f.Decision),
                     f.CorrectedCategoryCode, f.CorrectedSeverity is { } cs ? QcWire.Severity(cs) : null, f.ReviewerNote,
                     effective, Name(effective), QcWire.Severity(f.CorrectedSeverity ?? f.Severity),
-                    QcMetricsCalculator.IsVerified(f.Source, f.Decision), f.CreatedAt, f.ReviewedAt);
+                    QcMetricsCalculator.IsVerified(f.Source, f.Decision), f.CreatedAt, f.ReviewedAt,
+                    f.DefectType, f.Meaning, f.ProbableCauses, f.RecommendedAction);
             })
             .ToList();
 

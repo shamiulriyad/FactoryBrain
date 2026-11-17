@@ -371,6 +371,14 @@ timeout + 2 minutes, at most `QC_MAX_ATTEMPTS` times, then marked failed.
 | `http` | Your detection model behind `QC_VISION_HTTP_URL` | boxes and polygons, if the model returns them | the model's score |
 | unset | Nothing: inspections are stored as failed with `provider_not_configured`; inspectors can still review them manually | — | — |
 
+In `llm` mode each finding also carries a plain-language explanation for the
+line, stored with the finding and shown on the inspection page: `defect_type`
+(a specific name such as "Broken yarn"), `meaning`, `probable_causes` (typical
+causes for that defect type, labelled as advisory, not a verified root cause)
+and `recommended_action`. The prompt asks for a box around the whole defect
+area rather than a point inside it. The `http` contract below has no
+explanation fields; those columns stay empty for it.
+
 No code path produces a prediction a provider did not return. Tests use a
 deterministic detector served by the outbound-HTTP guard (backend) or the e2e
 harness, and its model name says it is a test model.
@@ -403,7 +411,9 @@ category is kept as "unmapped" for the inspector to correct or reject.
 **Data.** `qc_inspections` (context, storage key, SHA-256, dimensions, status,
 provider / model / version, threshold, review, `xmin` concurrency token,
 per-user unique `Idempotency-Key`), `qc_inspection_findings` (the original
-prediction is never modified; decisions and corrections are separate columns),
+prediction is never modified; decisions and corrections are separate columns;
+`DefectType` / `Meaning` / `ProbableCauses` / `RecommendedAction` hold the
+model's explanation),
 `qc_defect_categories` (seeded once with 13 garment defects, then managed by
 Admins; deactivated, never deleted). Check constraints keep confidence and
 boxes in range at the database level.

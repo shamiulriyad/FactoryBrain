@@ -70,7 +70,12 @@ public sealed record QcFindingDto(
     /// <summary>True for inspector-added findings and accepted / corrected predictions.</summary>
     bool Verified,
     DateTime CreatedAt,
-    DateTime? ReviewedAt);
+    DateTime? ReviewedAt,
+    /// <summary>Model explanation: specific defect type, what it means, typical causes, recommended action.</summary>
+    string? DefectType = null,
+    string? Meaning = null,
+    string? ProbableCauses = null,
+    string? RecommendedAction = null);
 
 public sealed record QcImageDto(
     string Url,

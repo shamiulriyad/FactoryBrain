@@ -1,3 +1,4 @@
+using BunonBrain.Application.Qc;
 using BunonBrain.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -94,6 +95,10 @@ public class QcInspectionFindingConfiguration : IEntityTypeConfiguration<QcInspe
         b.Property(x => x.Polygon).HasColumnType("double precision[]");
         b.Property(x => x.Severity).HasConversion<string>().HasMaxLength(16);
         b.Property(x => x.Description).HasMaxLength(500);
+        b.Property(x => x.DefectType).HasMaxLength(QcLimits.MaxDefectTypeLength);
+        b.Property(x => x.Meaning).HasMaxLength(QcLimits.MaxInsightLength);
+        b.Property(x => x.ProbableCauses).HasMaxLength(QcLimits.MaxInsightLength);
+        b.Property(x => x.RecommendedAction).HasMaxLength(QcLimits.MaxInsightLength);
         b.Property(x => x.Decision).HasConversion<string>().HasMaxLength(16);
         b.Property(x => x.CorrectedCategoryCode).HasMaxLength(40);
         b.Property(x => x.CorrectedSeverity).HasConversion<string>().HasMaxLength(16);

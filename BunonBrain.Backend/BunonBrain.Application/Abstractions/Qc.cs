@@ -130,7 +130,23 @@ public sealed record DetectedDefect(
     /// <summary>Flat [x1,y1,x2,y2,…] polygon, normalised; null when not supported.</summary>
     double[]? Polygon,
     string? Severity,
-    string? Description);
+    string? Description,
+    /// <summary>Plain-language explanation for the people on the line; null when the provider gives none.</summary>
+    DefectInsight? Insight = null);
+
+/// <summary>
+/// What a defect is, why it typically happens and what to do about it, as
+/// explained by the vision model. Advisory text, not a verified root cause.
+/// </summary>
+public sealed record DefectInsight(
+    /// <summary>Specific defect type, e.g. "Broken yarn" (more precise than the category).</summary>
+    string? DefectType,
+    /// <summary>What this defect is and why it matters for the garment.</summary>
+    string? Meaning,
+    /// <summary>The usual causes of this kind of defect.</summary>
+    string? ProbableCauses,
+    /// <summary>What the line should do about it.</summary>
+    string? RecommendedAction);
 
 public sealed record DefectDetectionResult(
     string Provider,

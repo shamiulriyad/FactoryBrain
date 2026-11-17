@@ -106,8 +106,16 @@ public sealed class MachineStateProcessor
                 s.Version++;
             }
             _db.MachineTelemetry.Add(t);
+            // machine_state_transitions is append-only (a trigger rejects UPDATE), and a transition
+            // points at the telemetry that caused it: write the telemetry first, then insert each
+            // transition once, already complete, in the same transaction.
+            foreach (var tr in pending.Transitions) _db.Entry(tr).State = EntityState.Detached;
             await _db.SaveChangesAsync(ct);
-            foreach (var tr in pending.Transitions) tr.TelemetryId = t.Id;
+            foreach (var tr in pending.Transitions)
+            {
+                tr.TelemetryId = t.Id;
+                _db.MachineStateTransitions.Add(tr);
+            }
             if (pending.Transitions.Count > 0) await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
             return (new TelemetryOutcome(t.Id, t.Outcome, s.State, pending.Transitions.Count > 0), pending);

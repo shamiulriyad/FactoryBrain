@@ -90,6 +90,24 @@ export function AccountMenu({
         </span>
       </button>
 
+      {/* Always visible: signing out should never need a menu. */}
+      <button
+        type="button"
+        onClick={() => void signOut()}
+        aria-label={t("auth.signOut")}
+        data-testid="sign-out"
+        onMouseEnter={(e) => collapsed && onHint?.(t("auth.signOut"), e.currentTarget)}
+        onMouseLeave={() => collapsed && onHint?.(null)}
+        className={cn(
+          "mt-0.5 flex min-h-11 items-center rounded-lg text-[14px] text-sb-dim transition-colors hover:bg-sb-hover hover:text-sb-text",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sb-accent",
+          collapsed ? "mx-auto size-11 justify-center" : "w-full gap-3 px-2.5",
+        )}
+      >
+        <LogOut size={18} strokeWidth={1.8} aria-hidden="true" className="shrink-0 text-sb-muted" />
+        {!collapsed && <span>{t("auth.signOut")}</span>}
+      </button>
+
       {pop.open && (
         <div ref={pop.menuRef} role="menu" aria-label={t("sidebar.account")} className={menuPanel} style={pop.style} onKeyDown={pop.onMenuKeyDown}>
           <div className="px-2.5 pb-2 pt-2">

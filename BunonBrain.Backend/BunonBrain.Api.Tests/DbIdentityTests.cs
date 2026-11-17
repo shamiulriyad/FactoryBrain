@@ -118,8 +118,8 @@ public sealed class DbIdentityTests
                 LineId = line, Polygon = "[{\"x\":0.1,\"y\":0.1},{\"x\":0.5,\"y\":0.1},{\"x\":0.5,\"y\":0.9}]", CreatedByEmail = "test", UpdatedByEmail = "test" });
             foreach (var (id, code, simulated) in new[] { (real, $"RF-{t[..4]}-R", false), (sim, $"RF-{t[..4]}-S", true), (broad, $"RF-{t[..4]}-B", false) })
                 db.Devices.Add(new Device { Id = id, FactoryId = factory, Code = code, Name = code, Category = "RfidReader", IsSimulated = simulated, CreatedByEmail = "test" });
-            db.Workers.Add(new WorkerProfile { Id = wa, FactoryId = factory, WorkerCode = $"WA-{t}", FullName = "Worker A", LineId = line });
-            db.Workers.Add(new WorkerProfile { Id = wb, FactoryId = factory, WorkerCode = $"WB-{t}", FullName = "Worker B", LineId = line });
+            db.Workers.Add(new WorkerProfile { Id = wa, WorkerNumber = await TestWorkers.NextNumberAsync(db), FactoryId = factory, WorkerCode = $"WA-{t}", FullName = "Worker A", LineId = line });
+            db.Workers.Add(new WorkerProfile { Id = wb, WorkerNumber = await TestWorkers.NextNumberAsync(db), FactoryId = factory, WorkerCode = $"WB-{t}", FullName = "Worker B", LineId = line });
             await db.SaveChangesAsync();
             db.WorkerCards.Add(new WorkerCard { WorkerId = wa, FactoryId = factory, CardUid = ca, Label = "A-badge" });
             db.WorkerCards.Add(new WorkerCard { WorkerId = wb, FactoryId = factory, CardUid = cb });
@@ -225,7 +225,20 @@ public sealed class DbIdentityTests
         Is(HttpStatusCode.Created, await Track(r, "ZONE_ENTERED", "s1-t3"));
         Assert.Equal(("UNVERIFIED", "MAPPING_NOT_WORKSTATION"),
             (S((await Read(r, r.CardA, r.BroadReader)).Body, "read", "evaluation"), S((await Read(r, r.CardA, r.BroadReader)).Body, "read", "evaluationCode")));
-        var b = await Read(r, r.CardB);                     // worker B isn't assigned to this workstation
+        var b = await Read(r, r.CardB);                     // worker B has no workstation assignment at all
+        Assert.Equal(("UNVERIFIED", "NO_ACTIVE_ASSIGNMENT"), (S(b.Body, "read", "evaluation"), S(b.Body, "read", "evaluationCode")));
+        // Worker B works at another workstation of the line: a read here contradicts that assignment.
+        await Rag.WithDb(Api, async db =>
+        {
+            var here = await db.Workstations.AsNoTracking().FirstAsync(w => w.Id == r.Workstation);
+            var other = new Workstation { Id = Guid.NewGuid(), FactoryId = r.Factory, DepartmentId = here.DepartmentId, LineId = here.LineId, Code = here.Code + "B", Capacity = 1, Position = here.Position + 1 };
+            db.Workstations.Add(other);
+            await db.SaveChangesAsync();
+            db.Assignments.Add(new WorkstationAssignment { WorkerId = r.WorkerB, FactoryId = r.Factory, DepartmentId = here.DepartmentId, LineId = here.LineId, WorkstationId = other.Id,
+                StartAt = DateTimeOffset.UtcNow.AddHours(-1), AssignedByEmail = "test" });
+            return await db.SaveChangesAsync();
+        });
+        b = await Read(r, r.CardB);
         Assert.Equal(("UNVERIFIED", "ASSIGNMENT_MISMATCH"), (S(b.Body, "read", "evaluation"), S(b.Body, "read", "evaluationCode")));
         var r2 = await NewRig();                            // no track in the zone yet
         Assert.Equal("PENDING", S((await Read(r2, r2.CardA)).Body, "read", "evaluation"));
@@ -360,6 +373,17 @@ public sealed class DbIdentityTests
         var read = simOnly.Body.GetProperty("reads").EnumerateArray().Single().GetProperty("read");
         Assert.Equal(("True", "Simulator"), (S(read, "isSimulated"), S(read, "source")));
         Assert.NotEqual("VERIFIED", S(read, "evaluation"));                              // a simulated read never verifies a real track
+        // Two people tap the same reader: worker B shares A's workstation (capacity 2), so B's read
+        // reaches the "other workers at this reader" check instead of stopping at NO_ACTIVE_ASSIGNMENT.
+        await Rag.WithDb(Api, async db =>
+        {
+            var ws = await db.Workstations.FirstAsync(w => w.Id == r.Workstation);
+            ws.Capacity = 2;
+            await db.SaveChangesAsync();
+            db.Assignments.Add(new WorkstationAssignment { WorkerId = r.WorkerB, FactoryId = r.Factory, DepartmentId = ws.DepartmentId, LineId = ws.LineId, WorkstationId = ws.Id,
+                StartAt = DateTimeOffset.UtcNow.AddHours(-1), AssignedByEmail = "test" });
+            return await db.SaveChangesAsync();
+        });
         var withTrack = await Post("/api/identity/simulator", r.Admin.Token,
             new { factoryId = r.Factory, deviceId = r.SimReader, scenario = "MULTIPLE", workerId = r.WorkerA, secondWorkerId = r.WorkerB, withSimulatedTrack = true });
         Is(HttpStatusCode.OK, withTrack);

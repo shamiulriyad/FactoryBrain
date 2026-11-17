@@ -151,7 +151,11 @@ public sealed record OvertimeListQuery(
 public sealed record AttendanceStatisticsDto(
     DateOnly Date, Guid? FactoryId, int ScheduledWorkers, int Present, int Absent, int Late, int CheckedIn, int MissingPunches,
     int OnBreak, int OverdueBreaks, int PendingOvertimeApprovals, int CompletedOvertime, int PendingCorrections,
-    int SimulatedEvents, int DeviceEvents, int ManualEvents, IReadOnlyList<BreakSessionDto> OverdueBreakList);
+    int SimulatedEvents, int DeviceEvents, int ManualEvents, IReadOnlyList<BreakSessionDto> OverdueBreakList,
+    /// <summary>Scheduled workers on approved leave (not absent).</summary>
+    int OnLeave = 0,
+    /// <summary>Name of the factory holiday on this day, if it is one (nobody is absent).</summary>
+    string? Holiday = null);
 
 public sealed record AttendanceReportRow(
     Guid WorkerId, string WorkerCode, string WorkerName, string? LineId, int Sessions, int DaysPresent, int LateDays, int LateMinutes,

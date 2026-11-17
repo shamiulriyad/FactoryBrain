@@ -47,7 +47,13 @@ const ROLE_TONE: Record<string, BadgeTone> = {
   MonitoringOperator: "success",
   HrOfficer: "success",
   DeviceAdmin: "success",
-  Worker: "neutral"
+  Worker: "neutral",
+  DocumentController: "warning",
+  Merchandiser: "info",
+  StoreOfficer: "success",
+  QcOfficer: "success",
+  ComplianceOfficer: "warning",
+  CommercialOfficer: "info"
 };
 
 /** Role chip (system role id → readable name), for the signed-in user and user lists. */

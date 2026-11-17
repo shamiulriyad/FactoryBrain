@@ -29,7 +29,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { KeyRound, ShieldHalf, UserCircle2, UserCog, Building2, IdCard, Inbox, Globe, ArrowRightLeft, CalendarCheck, Cctv } from "lucide-react";
+import { FileStack, Target, KeyRound, ShieldHalf, UserCircle2, UserCog, Building2, IdCard, Inbox, Globe, ArrowRightLeft, CalendarCheck, Cctv, ChartNoAxesCombined } from "lucide-react";
 import { P } from "@/lib/access";
 
 export type FloorId = "fabric" | "cutting" | "sewing" | "qc" | "packing";
@@ -79,7 +79,8 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "monitor",
     labelKey: "sidebar.monitor",
     items: [
-      { id: "overview", labelKey: "nav.overview", href: "/app", icon: LayoutGrid, perms: [P.ProductionView, P.MonitoringView, P.ReportsView], keywords: "dashboard home line board brief" },
+      { id: "overview", labelKey: "nav.overview", href: "/app", icon: LayoutGrid, perms: [P.ProductionView, P.MonitoringView, P.ReportsView, P.PlanningView, P.AttendanceView, P.DevicesView, P.UsersView, P.WorkersView], keywords: "home dashboard my work today summary" },
+      { id: "floor-board", labelKey: "nav.floorBoard", href: "/app/overview", icon: Gauge, perms: [P.ProductionView, P.MonitoringView, P.ReportsView], keywords: "dashboard line board brief decisions floor sensors" },
       { id: "monitoring", labelKey: "nav.monitoring", href: "/app/monitoring", icon: MonitorDot, perms: [P.MonitoringView, P.DevicesView], keywords: "monitoring room control room central live realtime real-time signalr events timeline alerts acknowledge escalate resolve dismiss camera grid cctv feed track zone simulator simulated" },
       { id: "floor-map", labelKey: "nav.floorMap", href: "/app/floor-map", icon: Layers, perms: [P.MonitoringView, P.ProductionView], keywords: "building floors map live" },
       { id: "alerts", labelKey: "nav.alerts", href: "/app/activity", icon: Bell, badge: "alerts", perms: [P.MonitoringView, P.ProductionView], keywords: "alerts whatsapp floor notifications activity" },
@@ -104,8 +105,11 @@ export const NAV_GROUPS: NavGroup[] = [
     labelKey: "sidebar.plan",
     items: [
       { id: "orders", labelKey: "nav.orders", href: "/app/merchandising", icon: Truck, perms: [P.MerchandisingView], keywords: "merchandising buyer order po purchase order shipment tech pack milestones deadlines" },
-      { id: "inventory", labelKey: "nav.inventory", href: "/app/inventory", icon: Box, perms: [P.ProductionView], keywords: "stock fabric trims warehouse" },
-      { id: "reports", labelKey: "nav.reports", href: "/app/reports", icon: BarChart3, perms: [P.ReportsView], keywords: "report export summary" },
+      { id: "planning", labelKey: "nav.planning", href: "/app/planning", icon: Target, perms: [P.PlanningView], keywords: "planning production plan order orders style styles allocation allocate line target targets daily plan publish capacity monitoring delay exception behind plan actual delivery deadline report" },
+      { id: "documents", labelKey: "nav.documents", href: "/app/documents", icon: FileStack, perms: [P.DocumentsView, P.DocumentsMonitor], keywords: "documents documentation paperwork report reports form forms approval approve reject submit review grn requisition issue note invoice packing list shipment aql capa inspection attendance overtime leave payroll bom costing po purchase order compliance audit safety training maintenance device log upload ocr extract archive version" },
+      { id: "inventory", labelKey: "nav.inventory", href: "/app/inventory", icon: Box, perms: [P.InventoryView], keywords: "store stock fabric accessories trims warehouse inventory balance ledger grn issue reorder" },
+      { id: "analytics", labelKey: "nav.analytics", href: "/app/analytics", icon: ChartNoAxesCombined, perms: [P.ProductionView, P.MonitoringView, P.DevicesView, P.AttendanceView, P.OvertimeView, P.WorkersView, P.ReportsView], keywords: "analytics kpi dashboard overview production output trend line shift machine uptime downtime attendance workforce overtime ai activity insights bottleneck coverage" },
+      { id: "reports", labelKey: "nav.reports", href: "/app/analytics/reports", icon: BarChart3, perms: [P.ProductionView, P.MonitoringView, P.DevicesView, P.AttendanceView, P.OvertimeView, P.WorkersView, P.ReportsView], keywords: "report export summary csv pdf daily weekly monthly" },
     ],
   },
   {
@@ -163,6 +167,103 @@ export const FOOTER_ITEMS: NavItem[] = [
 
 /** Every navigable item, for the palette and page titles. */
 export const ALL_NAV_ITEMS: NavItem[] = [...NAV_GROUPS.flatMap((g) => g.items), ...FOOTER_ITEMS, ...PERSONAL_ITEMS];
+
+/**
+ * What each role sees in the sidebar: only the pages it works in, in the order it
+ * uses them. Everything else stays reachable from the dashboard's shortcuts and the
+ * search (Ctrl K), and every page still checks its permission, so a shorter menu
+ * never grants or hides access by itself. A person with several roles gets the
+ * union of their roles' menus. Group ids are shared so two roles' groups merge.
+ */
+type RoleMenu = { id: string; labelKey: string; items: string[] }[];
+
+const ROLE_MENUS: Record<string, RoleMenu> = {
+  SuperAdmin: [
+    { id: "home", labelKey: "sidebar.monitor", items: ["overview", "monitoring", "alerts"] },
+    { id: "work", labelKey: "sidebar.plan", items: ["planning", "documents", "analytics", "reports", "approvals"] },
+    { id: "admin", labelKey: "sidebar.admin", items: ["admin-users", "admin-roles", "admin-factories", "admin-website", "admin-inquiries"] },
+    { id: "system", labelKey: "sidebar.system", items: ["audit"] },
+  ],
+  FactoryAdmin: [
+    { id: "home", labelKey: "sidebar.monitor", items: ["overview", "monitoring", "alerts"] },
+    { id: "work", labelKey: "sidebar.plan", items: ["planning", "documents", "inventory", "analytics", "reports", "approvals"] },
+    { id: "people", labelKey: "sidebar.people", items: ["workers", "attendance", "assignments"] },
+    { id: "admin", labelKey: "sidebar.admin", items: ["admin-users", "admin-roles", "admin-factories"] },
+    { id: "system", labelKey: "sidebar.system", items: ["audit"] },
+  ],
+  FactoryManager: [
+    { id: "home", labelKey: "sidebar.monitor", items: ["overview", "monitoring", "alerts"] },
+    { id: "work", labelKey: "sidebar.plan", items: ["planning", "documents", "orders", "approvals", "analytics", "reports", "qc", "inventory"] },
+    { id: "people", labelKey: "sidebar.people", items: ["attendance", "assignments", "workers"] },
+  ],
+  ProductionSupervisor: [
+    { id: "home", labelKey: "sidebar.monitor", items: ["overview", "alerts", "floor-board"] },
+    { id: "work", labelKey: "sidebar.plan", items: ["planning", "documents", "qc"] },
+    { id: "people", labelKey: "sidebar.people", items: ["assignments", "attendance", "workers"] },
+  ],
+  MonitoringOperator: [
+    { id: "home", labelKey: "sidebar.monitor", items: ["overview", "monitoring", "alerts", "floor-map"] },
+    { id: "work", labelKey: "sidebar.plan", items: ["planning", "documents", "analytics"] },
+    { id: "system", labelKey: "sidebar.system", items: ["cameras-devices"] },
+  ],
+  HrOfficer: [
+    { id: "home", labelKey: "sidebar.monitor", items: ["overview"] },
+    { id: "people", labelKey: "sidebar.people", items: ["workers", "attendance", "assignments"] },
+    { id: "work", labelKey: "sidebar.plan", items: ["documents", "analytics", "reports"] },
+  ],
+  DeviceAdmin: [
+    { id: "home", labelKey: "sidebar.monitor", items: ["overview", "monitoring"] },
+    { id: "system", labelKey: "sidebar.system", items: ["cameras-devices", "sensors", "documents", "analytics"] },
+  ],
+  DocumentController: [
+    { id: "home", labelKey: "sidebar.monitor", items: ["overview"] },
+    { id: "work", labelKey: "sidebar.plan", items: ["documents", "inventory", "reports"] },
+  ],
+  Merchandiser: [
+    { id: "work", labelKey: "sidebar.plan", items: ["documents", "orders", "planning", "inventory"] },
+  ],
+  StoreOfficer: [
+    { id: "work", labelKey: "sidebar.plan", items: ["documents", "inventory"] },
+  ],
+  QcOfficer: [
+    { id: "work", labelKey: "sidebar.plan", items: ["documents", "qc", "vision"] },
+  ],
+  ComplianceOfficer: [
+    { id: "work", labelKey: "sidebar.plan", items: ["documents"] },
+    { id: "people", labelKey: "sidebar.people", items: ["workers"] },
+  ],
+  CommercialOfficer: [
+    { id: "work", labelKey: "sidebar.plan", items: ["documents", "orders"] },
+  ],
+};
+
+/**
+ * The sidebar groups for a signed-in user: their roles' curated menus, limited to
+ * pages their permissions open. A user whose roles have no curated menu (or none of
+ * its pages) gets the full permitted list, so nobody ends up with an empty menu.
+ */
+export function menuFor(user: { roles?: string[]; permissions?: string[] } | null | undefined, allowed: (item: NavItem) => boolean): NavGroup[] {
+  const byId = new Map(ALL_NAV_ITEMS.map((i) => [i.id, i]));
+  const groups = new Map<string, NavGroup>();
+  const seen = new Set<string>();
+  for (const role of user?.roles ?? []) {
+    for (const g of ROLE_MENUS[role] ?? []) {
+      for (const id of g.items) {
+        const item = byId.get(id);
+        if (!item || seen.has(id) || !allowed(item)) continue;
+        seen.add(id);
+        const group = groups.get(g.id) ?? { id: g.id, labelKey: g.labelKey, items: [] };
+        group.items.push(item);
+        groups.set(g.id, group);
+      }
+    }
+  }
+  // Groups keep the order of the highest-ranked role that has them.
+  const curated = [...groups.values()];
+  if (curated.length > 0) return curated;
+  return NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter(allowed) })).filter((g) => g.items.length > 0);
+}
+
 
 /** Stable test id per item, matching the e2e suite (`nav-<path after /app/>`). */
 export function navTestId(item: NavItem): string {

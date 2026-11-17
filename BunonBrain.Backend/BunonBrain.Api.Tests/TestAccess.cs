@@ -115,3 +115,16 @@ public sealed class AlwaysCurrentSessions : ISessionValidator
         Task.FromResult(!string.IsNullOrEmpty(securityStamp));
     public void Invalidate(Guid userId) { }
 }
+
+/// <summary>Test data that must satisfy the same database rules as real records.</summary>
+public static class TestWorkers
+{
+    /// <summary>
+    /// A permanent worker number from <c>worker_number_seq</c>, the same source worker
+    /// registration uses: unique, positive (<c>CK_workers_worker_number</c>) and never reused.
+    /// Fixtures that insert <see cref="WorkerProfile"/> rows directly must use it.
+    /// </summary>
+    public static async Task<long> NextNumberAsync(BunonBrainDbContext db) =>
+        (await db.Database.SqlQueryRaw<long>(
+            $"SELECT nextval('{BunonBrain.Infrastructure.Persistence.Configurations.WorkerProfileConfiguration.NumberSequence}') AS \"Value\"").ToListAsync()).Single();
+}

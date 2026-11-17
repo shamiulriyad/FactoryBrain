@@ -9,7 +9,7 @@ namespace BunonBrain.Api.Tests;
 
 /// <summary>
 /// The role → permission matrix and the grant rules, checked against the
-/// requirements for each of the eight predefined roles. Pure catalog logic
+/// requirements for each predefined role. Pure catalog logic
 /// plus token round-trips; no database.
 /// </summary>
 [Collection(ApiCollection.Name)]
@@ -21,10 +21,11 @@ public sealed class RoleMatrixTests
     private static IReadOnlyList<string> PermsOf(string role) => AccessCatalog.Role(role)!.Permissions;
 
     [Fact]
-    public void There_are_exactly_the_eight_predefined_roles()
+    public void There_are_exactly_the_predefined_roles()
     {
         Assert.Equal(
-            new[] { R.SuperAdmin, R.FactoryAdmin, R.FactoryManager, R.ProductionSupervisor, R.MonitoringOperator, R.HrOfficer, R.DeviceAdmin, R.Worker }.OrderBy(x => x),
+            new[] { R.SuperAdmin, R.FactoryAdmin, R.FactoryManager, R.ProductionSupervisor, R.MonitoringOperator, R.HrOfficer, R.DeviceAdmin, R.Worker,
+                    R.DocumentController, R.Merchandiser, R.StoreOfficer, R.QcOfficer, R.ComplianceOfficer, R.CommercialOfficer }.OrderBy(x => x),
             AccessCatalog.AllRoles.Select(r => r.Id).OrderBy(x => x));
         Assert.All(AccessCatalog.AllRoles, r => Assert.All(r.Permissions, p => Assert.NotNull(AccessCatalog.Permission(p))));
     }
@@ -120,14 +121,46 @@ public sealed class RoleMatrixTests
     }
 
     [Fact]
+    public void Documentation_roles_hold_only_their_own_document_categories()
+    {
+        static string[] Cats(string role) => PermsOf(role).Where(p => p.StartsWith("documents.cat.", StringComparison.Ordinal)).OrderBy(x => x).ToArray();
+        Assert.Equal(AccessCatalog.DocumentCategoryPermissions.OrderBy(x => x), Cats(R.DocumentController));
+        Assert.Equal(AccessCatalog.DocumentCategoryPermissions.OrderBy(x => x), Cats(R.FactoryManager));
+        Assert.Equal(new[] { P.DocCatMerchandising }, Cats(R.Merchandiser));
+        Assert.Equal(new[] { P.DocCatStore }, Cats(R.StoreOfficer));
+        Assert.Equal(new[] { P.DocCatQuality }, Cats(R.QcOfficer));
+        Assert.Equal(new[] { P.DocCatCompliance }, Cats(R.ComplianceOfficer));
+        Assert.Equal(new[] { P.DocCatCommercial }, Cats(R.CommercialOfficer));
+        Assert.Equal(new[] { P.DocCatProduction }, Cats(R.ProductionSupervisor));
+        Assert.Equal(new[] { P.DocCatHr }, Cats(R.HrOfficer));
+        Assert.Equal(new[] { P.DocCatDevices }, Cats(R.DeviceAdmin));
+        Assert.Empty(Cats(R.MonitoringOperator));
+        Assert.Contains(P.DocumentsMonitor, PermsOf(R.MonitoringOperator));
+        Assert.Empty(Cats(R.Worker));
+
+        // Approval stays with management: preparers and the document controller can't approve.
+        foreach (var role in new[] { R.DocumentController, R.Merchandiser, R.StoreOfficer, R.QcOfficer, R.ComplianceOfficer, R.CommercialOfficer,
+                                     R.ProductionSupervisor, R.HrOfficer, R.DeviceAdmin, R.MonitoringOperator, R.Worker })
+        {
+            Assert.DoesNotContain(P.DocumentsApprove, PermsOf(role));
+            Assert.DoesNotContain(P.DocumentsApproveHigh, PermsOf(role));
+        }
+        Assert.Contains(P.DocumentsApproveHigh, PermsOf(R.FactoryManager));
+        Assert.Contains(P.DocumentsControl, PermsOf(R.DocumentController));
+        Assert.All(new[] { R.DocumentController, R.Merchandiser, R.StoreOfficer, R.QcOfficer, R.ComplianceOfficer, R.CommercialOfficer },
+            r => Assert.Equal(RoleScope.Factory, AccessCatalog.Role(r)!.Scope));
+    }
+
+    [Fact]
     public void Super_admin_grants_every_role_factory_admin_grants_only_lower_roles_and_nobody_else_grants_anything()
     {
         string[] Grantable(string role) => AccessCatalog.GrantableBy(new[] { role }, PermsOf(role).ToArray()).OrderBy(x => x).ToArray();
 
         Assert.Equal(AccessCatalog.AllRoles.Select(r => r.Id).OrderBy(x => x), Grantable(R.SuperAdmin));
-        Assert.Equal(new[] { R.FactoryManager, R.ProductionSupervisor, R.MonitoringOperator, R.HrOfficer, R.DeviceAdmin, R.Worker }.OrderBy(x => x),
-            Grantable(R.FactoryAdmin));
-        foreach (var role in new[] { R.FactoryManager, R.ProductionSupervisor, R.MonitoringOperator, R.HrOfficer, R.DeviceAdmin, R.Worker })
+        var lower = new[] { R.FactoryManager, R.ProductionSupervisor, R.MonitoringOperator, R.HrOfficer, R.DeviceAdmin, R.Worker,
+            R.DocumentController, R.Merchandiser, R.StoreOfficer, R.QcOfficer, R.ComplianceOfficer, R.CommercialOfficer };
+        Assert.Equal(lower.OrderBy(x => x), Grantable(R.FactoryAdmin));
+        foreach (var role in lower)
             Assert.Empty(Grantable(role));
     }
 

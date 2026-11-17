@@ -57,7 +57,7 @@ public sealed class ProductionSetupService : IProductionSetupService
             await _db.ProductionLines.CountAsync(l => l.IsActive, ct),
             await _db.ProductionShifts.CountAsync(s => s.IsActive, ct),
             await _db.ProductionStyles.CountAsync(s => s.IsActive, ct),
-            await _db.ProductionOrders.CountAsync(o => o.Status == ProductionOrderStatus.Open, ct),
+            await _db.ProductionOrders.CountAsync(o => (o.Status == ProductionOrderStatus.InProgress || o.Status == ProductionOrderStatus.Planned), ct),
             new[]
             {
                 new DataSourceStatus("manual", "available", "Operators record output per line, order, stage and interval on the Production page.", Count(ProductionDataSource.Manual)),
@@ -371,6 +371,44 @@ public sealed class ProductionSetupService : IProductionSetupService
             else errors.Add("approvedSmv", "Approved SMV must be more than 0 and at most 600 minutes.");
         }
         if (b.IsActive is { } a) s.IsActive = a;
+
+        // Planning specification (optional; an empty string clears a text field, an empty list clears a list).
+        if (b.GarmentCategory is not null)
+        {
+            var c = Clean(b.GarmentCategory);
+            if (c is { Length: > 64 }) errors.Add("garmentCategory", "Garment category is limited to 64 characters.");
+            else s.GarmentCategory = c;
+        }
+        if (b.Description is not null)
+        {
+            var d = Clean(b.Description);
+            if (d is { Length: > 1000 }) errors.Add("description", "Description is limited to 1000 characters.");
+            else s.Description = d;
+        }
+        if (b.Complexity is not null)
+        {
+            if (Clean(b.Complexity) is null) s.Complexity = null;
+            else if (BunonBrain.Application.Planning.StyleComplexities.Parse(b.Complexity) is { } cx) s.Complexity = cx;
+            else errors.Add("complexity", $"Complexity must be one of: {string.Join(", ", BunonBrain.Application.Planning.StyleComplexities.All)}.");
+        }
+        if (b.SizeRange is not null) { var l = CleanList(errors, "sizeRange", b.SizeRange, 40, 24); if (l is not null) s.SizeRange = l; }
+        if (b.ColorVariants is not null) { var l = CleanList(errors, "colorVariants", b.ColorVariants, 60, 60); if (l is not null) s.ColorVariants = l; }
+        if (b.QualityCheckpoints is not null) { var l = CleanList(errors, "qualityCheckpoints", b.QualityCheckpoints, 160, 40); if (l is not null) s.QualityCheckpoints = l; }
+    }
+
+    /// <summary>Trims, drops blanks and duplicates (case-insensitive), and checks length and count limits.</summary>
+    private static string[]? CleanList(Dictionary<string, string[]> errors, string field, IReadOnlyList<string> input, int maxLength, int maxCount)
+    {
+        var list = new List<string>();
+        foreach (var raw in input)
+        {
+            var v = Clean(raw);
+            if (v is null) continue;
+            if (v.Length > maxLength) { errors.Add(field, $"Each entry is limited to {maxLength} characters."); return null; }
+            if (!list.Contains(v, StringComparer.OrdinalIgnoreCase)) list.Add(v);
+        }
+        if (list.Count > maxCount) { errors.Add(field, $"At most {maxCount} entries."); return null; }
+        return list.ToArray();
     }
 
     private static List<StyleOperation> ValidateOperations(Dictionary<string, string[]> errors, IReadOnlyList<StyleOperationWrite> input, IReadOnlyList<StyleOperation>? existing)

@@ -1,12 +1,14 @@
 "use client";
 
-import { Search, Moon, Sun, Monitor, HelpCircle, Menu } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { Search, Moon, Sun, Monitor, HelpCircle, LogOut, Menu } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { logout } from "@/lib/auth";
 import { LanguageToggle } from "@/components/ui/LanguageToggle";
 import { useAppStore, type Theme } from "@/store/app.store";
 import { useT } from "@/lib/useT";
 import { cn } from "@/lib/cn";
 import { currentNavItem } from "@/lib/navigation";
+import { NotificationBell } from "@/components/layout/NotificationBell";
 
 const THEME_OPTIONS: Array<{ value: Theme; icon: typeof Sun; label: string }> = [
   { value: "light", icon: Sun, label: "Light theme" },
@@ -20,6 +22,7 @@ export function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
   const theme = useAppStore((s) => s.theme);
   const { t } = useT();
   const pathname = usePathname();
+  const router = useRouter();
   const current = currentNavItem(pathname);
 
   return (
@@ -82,6 +85,8 @@ export function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
           })}
         </div>
 
+        <NotificationBell />
+
         <LanguageToggle />
 
         <button
@@ -92,6 +97,18 @@ export function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
           className="hidden sm:inline-flex size-9 rounded-[var(--radius-control)] items-center justify-center text-fg-tertiary hover:text-fg-primary hover:bg-surface-2"
         >
           <HelpCircle size={16} />
+        </button>
+
+        <button
+          type="button"
+          onClick={async () => { await logout(); router.replace("/login"); }}
+          aria-label={t("auth.signOut")}
+          title={t("auth.signOut")}
+          data-testid="topbar-sign-out"
+          className="inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-control)] border border-border-subtle px-2.5 text-caption font-medium text-fg-secondary hover:bg-surface-2 hover:text-fg-primary"
+        >
+          <LogOut size={15} aria-hidden="true" />
+          <span className="hidden sm:inline">{t("auth.signOut")}</span>
         </button>
       </div>
     </header>

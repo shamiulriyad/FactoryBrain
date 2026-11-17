@@ -4,14 +4,14 @@ import Link from "next/link";
 import { Logo, LogoSymbol } from "@/components/brand/Logo";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, useMemo } from "react";
-import { ChevronDown, PanelLeftClose, Search, X } from "lucide-react";
+import { ChevronDown, KeyRound, PanelLeftClose, Search, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { appFontVariables } from "@/lib/fonts";
 import { can, useAuthStore } from "@/lib/auth";
 import { SCOPE_LABEL } from "@/lib/access";
 import { useT } from "@/lib/useT";
 import { useAppStore } from "@/store/app.store";
-import { FOOTER_ITEMS, NAV_GROUPS, isActivePath, navTestId, type NavItem, type FactoryOption } from "@/lib/navigation";
+import { FOOTER_ITEMS, menuFor, isActivePath, navTestId, type NavItem, type FactoryOption } from "@/lib/navigation";
 import { useFloorStatus, usePendingCount } from "@/lib/useFloorStatus";
 import { AccountMenu } from "./AccountMenu";
 import { FactorySwitcher } from "./FactorySwitcher";
@@ -103,9 +103,9 @@ function useClosedGroups(): [Record<string, boolean>, (id: string) => void] {
 /* Logo                                                                */
 /* ------------------------------------------------------------------ */
 
-/** The sidebar is always deep navy, so it uses the on-dark symbol. */
+/** The sidebar follows the black / white theme, so the symbol takes its text colour. */
 function LogoMark({ size = 28 }: { size?: number }) {
-  return <LogoSymbol size={size} tone="onDark" />;
+  return <span className="text-sb-text"><LogoSymbol size={size} tone="mono" /></span>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -123,7 +123,7 @@ export function Sidebar({ mode, onClose }: { mode: "rail" | "drawer"; onClose?: 
   const { t } = useT();
   const user = useAuthStore((s) => s.user);
   const openPalette = useAppStore((s) => s.openCommandPalette);
-  const { statuses, alertCount } = useFloorStatus();
+  const { statuses, alertCount, source: statusSource } = useFloorStatus();
   const pendingCount = usePendingCount();
   // The factories this account is assigned to (a Super Admin reaches all of them).
   const factories = useMemo<FactoryOption[]>(() => {
@@ -140,6 +140,8 @@ export function Sidebar({ mode, onClose }: { mode: "rail" | "drawer"; onClose?: 
   const [query, setQuery] = useState("");
   const [hint, setHint] = useState<{ text: string; style: CSSProperties } | null>(null);
   const [closedGroups, toggleGroup] = useClosedGroups();
+  // Only the pages this person's role works in (see menuFor); the rest is reachable from the home shortcuts and search.
+  const menu = useMemo(() => menuFor(user, (it) => can(user, ...it.perms)), [user]);
 
   const onHint: HintHandler = useCallback((text, anchor) => {
     if (!text || !anchor) return setHint(null);
@@ -231,9 +233,10 @@ export function Sidebar({ mode, onClose }: { mode: "rail" | "drawer"; onClose?: 
     const label = t(item.labelKey);
     const active = isActivePath(pathname, item.href);
     const badgeCount = item.badge === "alerts" ? alertCount : item.badge === "approvals" ? pendingCount : 0;
-    const status = item.floorId ? statuses[item.floorId] : undefined;
+    // Floor status is sample data until the API provides it: never show it as if it were live.
+    const status = item.floorId && statusSource === "live" ? statuses[item.floorId] : undefined;
     let ariaLabel: string | undefined;
-    if (item.floorId && item.floorCode) {
+    if (item.floorId && item.floorCode && status) {
       ariaLabel = t("sidebar.floorAria", { code: item.floorCode, name: label, status: statusWord(item.floorId) });
     } else if (badgeCount > 0) {
       ariaLabel = t("sidebar.countAria", { name: label, n: badgeCount });
@@ -248,7 +251,7 @@ export function Sidebar({ mode, onClose }: { mode: "rail" | "drawer"; onClose?: 
         ariaLabel={ariaLabel}
         badgeCount={badgeCount}
         status={status}
-        statusLabel={item.floorId ? statusWord(item.floorId) : undefined}
+        statusLabel={item.floorId && status ? statusWord(item.floorId) : undefined}
         demoLabel={t("sidebar.demoTag")}
         testId={navTestId(item)}
         onNavigate={onClose}
@@ -290,7 +293,7 @@ export function Sidebar({ mode, onClose }: { mode: "rail" | "drawer"; onClose?: 
               onClick={onClose}
               className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sb-accent"
             >
-              <Logo height={30} tone="onDark" label="BunonBrain" />
+              <span className="text-sb-text"><Logo height={30} tone="mono" label="BunonBrain" /></span>
             </Link>
             {mode === "drawer" ? (
               <button type="button" onClick={onClose} aria-label={t("sidebar.close")} className={iconButton} data-drawer-close>
@@ -390,9 +393,23 @@ export function Sidebar({ mode, onClose }: { mode: "rail" | "drawer"; onClose?: 
           scrolledDown ? "border-sb-divider" : "border-transparent",
         )}
       >
-        {NAV_GROUPS.map((group) => {
-          const items = group.items.filter((it) => can(user, ...it.perms));
-          if (items.length === 0) return null;
+        {user?.mustChangePassword && (
+          <div className={cn("pt-3", collapsed ? "px-0" : "px-3")} data-testid="sidebar-must-change">
+            {collapsed ? (
+              <Link href="/app/account?changePassword=1" onClick={onClose} aria-label="Set a new password to unlock your menu" className={cn(iconButton, "mx-auto flex")}>
+                <KeyRound size={18} aria-hidden="true" />
+              </Link>
+            ) : (
+              <div className="rounded-lg border border-sb-border bg-sb-input p-3 text-[13px] leading-5">
+                <p className="flex items-center gap-2 font-semibold text-sb-text"><KeyRound size={15} aria-hidden="true" /> Menu locked</p>
+                <p className="mt-1 text-sb-dim">You&apos;re signed in with a temporary password. Set a new one and your menu opens.</p>
+                <Link href="/app/account?changePassword=1" onClick={onClose} className="mt-2 inline-flex h-9 items-center rounded-md bg-sb-accent px-3 font-medium text-sb-ink hover:opacity-90">Set a new password</Link>
+              </div>
+            )}
+          </div>
+        )}
+        {menu.map((group) => {
+          const items = group.items;
           const headingId = `sb-${mode}-${group.id}`;
           // The group holding the current page always stays open.
           const holdsActive = items.some((it) => isActivePath(pathname, it.href));
@@ -409,7 +426,7 @@ export function Sidebar({ mode, onClose }: { mode: "rail" | "drawer"; onClose?: 
                   disabled={holdsActive}
                   aria-expanded={open}
                   aria-controls={`${headingId}-list`}
-                  className="mb-1 flex w-full items-center gap-1.5 rounded-md px-2.5 py-0.5 text-left font-plexmono text-[11px] font-medium uppercase leading-5 tracking-[0.1em] text-sb-label transition-colors hover:text-sb-text disabled:cursor-default disabled:hover:text-sb-label focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sb-accent"
+                  className="mb-1 flex w-full items-center gap-1.5 rounded-md px-2.5 py-0.5 text-left text-[12px] font-semibold leading-5 tracking-[0.02em] text-sb-label transition-colors hover:text-sb-text disabled:cursor-default disabled:hover:text-sb-label focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sb-accent"
                   data-testid={`nav-group-${group.id}`}
                 >
                   <span className="flex-1">{t(group.labelKey)}</span>

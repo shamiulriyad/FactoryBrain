@@ -5,7 +5,7 @@ scope. Every decision is made **on the server**; the frontend only hides what
 the server would refuse.
 
 - **Source of truth:** `BunonBrain.Backend/BunonBrain.Application/Access/AccessCatalog.cs`
-  (permissions, the eight system roles, which role grants what, who may grant whom).
+  (permissions, the fourteen system roles, which role grants what, who may grant whom).
 - **Enforcement:** `[RequirePermission(...)]` on every controller action
   (`BunonBrain.Api/Authorization/PermissionAuthorization.cs`), plus scope
   rules inside the services (`BunonBrain.Infrastructure/Access/*`).
@@ -18,7 +18,7 @@ the server would refuse.
 | Concept | Table | Notes |
 |---|---|---|
 | Login account | `users` | Email, PBKDF2 password hash, full name, phone, `IsActive`, `MustChangePassword`, `SecurityStamp`, last sign-in. |
-| Role | `roles` | The eight system roles (projection of the catalog, `IsSystem = true`). Not editable through the API. |
+| Role | `roles` | The fourteen system roles (projection of the catalog, `IsSystem = true`). Not editable through the API. |
 | Permission | `permissions` | Dotted codes grouped by module. `PlatformOnly` ones can only ever reach Super Admin; `Reserved` ones exist for modules not built yet. |
 | Role → permissions | `role_permissions` | Synced from the catalog at startup. |
 | User → roles | `user_roles` | A user may hold several roles; permissions add up. |
@@ -55,6 +55,12 @@ Lines that existed before factories are attached to `MAIN` when it is created.
 | HR / Attendance Officer | Assigned factories | Super / Factory Admin | Worker records, attendance, shifts, leave, overtime |
 | IT / Device Administrator | Assigned factories | Super / Factory Admin | Cameras, devices, integrations, technical logs, camera / device / model status events, the monitoring ingestion API |
 | Worker | Own records | Super / Factory Admin | Own profile, workstation, attendance and notifications |
+| Document Controller | Assigned factories | Super / Factory Admin | Every document category: tracking, verification, archiving, approval / schedule settings, status board (approves nothing) |
+| Merchandiser | Assigned factories | Super / Factory Admin | Buyer orders; PO, order sheet, BOM, costing, buyer instructions |
+| Store / Inventory Officer | Assigned factories | Super / Factory Admin | Store items; GRN, requisition, issue note, stock register and balance |
+| QC / QA Officer | Assigned factories | Super / Factory Admin | QC inspections; inspection, defect, rework, AQL and CAPA reports |
+| Compliance Officer | Assigned factories | Super / Factory Admin | Compliance audits, safety inspections, training records |
+| Commercial / Shipping Officer | Assigned factories | Super / Factory Admin | Commercial invoices, packing lists, shipment documents |
 
 A user's reach is the widest of their roles. A non-platform user with no
 active factory keeps only self-service permissions.
@@ -116,6 +122,18 @@ active factory keeps only self-service permissions.
 | `production.manage` | ✓ | ✓ | ✓ | | | | | |
 | `production.setup` | ✓ | ✓ | | | | | | |
 | `production.alerts.review` | ✓ | ✓ | | ✓ | | | | |
+| **Production planning** |
+| `planning.view` | ✓ | ✓ | ✓ | ✓ (their lines) | ✓ (published plans only) | | | |
+| `planning.orders.manage` | ✓ | ✓ | ✓ | | | | | |
+| `planning.styles.manage` | ✓ | ✓ | ✓ | | | | | |
+| `planning.allocations.manage` | ✓ | ✓ | ✓ | | | | | |
+| `planning.targets.manage` | ✓ | ✓ | ✓ | ✓ (their lines) | | | | |
+| `planning.plans.manage` | ✓ | ✓ | ✓ | | | | | |
+| `planning.plans.approve` | ✓ | ✓ | ✓ | | | | | |
+| `planning.plans.publish` | ✓ | ✓ | ✓ | | | | | |
+| `planning.exceptions.review` | ✓ | ✓ | ✓ | ✓ (their lines) | | | | |
+| `planning.setup` | ✓ | ✓ | ✓ | | | | | |
+| `planning.reports.export` | ✓ | ✓ | ✓ | ✓ (their lines) | | | | |
 | `qc.view` | ✓ | ✓ | ✓ | ✓ | | | | |
 | `qc.manage` | ✓ | ✓ | | ✓ | | | | |
 | `merchandising.view` | ✓ | ✓ | ✓ | ✓ | | | | |
@@ -128,13 +146,38 @@ active factory keeps only self-service permissions.
 | `devices.manage` | ✓ | ✓ | | | | | ✓ | |
 | `devices.logs.view` | ✓ | ✓ | | | | | ✓ | |
 | `devices.simulate` | ✓ | ✓ | | | | | ✓ | |
+| **Documents** (see [DOCUMENTS.md](DOCUMENTS.md); columns for the six documentation roles below) |
+| `documents.view` | ✓ | ✓ | ✓ | ✓ (their lines) | | ✓ | ✓ | |
+| `documents.create` | ✓ | ✓ | | ✓ (their lines) | | ✓ | ✓ | |
+| `documents.review` | ✓ | ✓ | ✓ | | | ✓ | | |
+| `documents.approve` | ✓ | ✓ | ✓ | | | | | |
+| `documents.approve_high` | ✓ | ✓ | ✓ | | | | | |
+| `documents.control` | ✓ | ✓ | | | | | | |
+| `documents.monitor` | ✓ | ✓ | ✓ | | ✓ | | | |
+| `documents.cat.*` (category) | all | all | all | production | | hr | devices | |
+| `inventory.view` | ✓ | ✓ | ✓ | | | | | |
+| `inventory.manage` | ✓ | ✓ | | | | | | |
 | **Reports & AI** |
 | `reports.view` | ✓ | ✓ | ✓ | | | ✓ | | |
 | `knowledge.view` | ✓ | ✓ | ✓ | ✓ | | | | |
 | `agents.run` | ✓ | ✓ | ✓ | | | | | |
 | **Self-service** |
 | `self.view` | ✓ | ✓ | | | | | | ✓ |
-| `notifications.view` *R* | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `notifications.view` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+Documentation roles (all factory scope, granted by Super / Factory Admin):
+
+| Role | Document permissions | Categories | Other |
+|---|---|---|---|
+| Document Controller | view, create, review, control, monitor | all | `factories.view`, `lines.view`, `inventory.view` |
+| Merchandiser | view, create | merchandising | `merchandising.view/manage`, `planning.view`, `inventory.view` |
+| Store / Inventory Officer | view, create | store | `inventory.view/manage`, `lines.view` |
+| QC / QA Officer | view, create, review | quality | `qc.view/manage`, `production.view`, `lines.view` |
+| Compliance Officer | view, create, review | compliance | `workers.view`, `lines.view` |
+| Commercial / Shipping Officer | view, create | commercial | `merchandising.view` |
+
+All of them hold `notifications.view`. None can approve: approval stays with the
+Factory Manager (and administrators).
 
 `GET /api/permissions` and the **Permissions** page show the live matrix.
 
@@ -485,8 +528,8 @@ temporary password to `/app/account`, and starts users without an overview
   hold single-plant data without a factory column. They are permission-gated,
   and Production Supervisors are line-limited on QC writes, but their records
   are not yet partitioned by factory.
-- Leave and notifications are reserved permissions: the
-  roles carry them, but those modules aren't built yet. Attendance doesn't yet account for leave or holidays: a scheduled
+- Leave is a reserved permission (no leave module; leave is recorded as a
+  Leave Record document). Notifications are live (`/api/notifications`, the bell). Attendance doesn't yet account for leave or holidays: a scheduled
   worker with no attendance counts as absent.
 - Attendance: a reader event with an unknown card UID is refused (404
   `card_not_recognised`) and not stored, since there is no worker to attach
@@ -543,6 +586,27 @@ temporary password to `/app/account`, and starts users without an overview
   authenticate at the broker (per-device accounts and ACL); HTTP devices with
   a per-device key (stored hashed) on `POST /api/iot/device/{channel}`, the
   only anonymous IoT route.
+- Factory analytics ([ANALYTICS.md](ANALYTICS.md)) adds no permission: each
+  section needs the permission of its data (production: `production.view` /
+  `monitoring.view`; machines: `monitoring.view` / `devices.view` /
+  `production.view`; attendance: `attendance.view`; overtime: `overtime.view` /
+  `attendance.view`; assignments: `workers.view`; AI activity:
+  `monitoring.view`; devices and alerts: `devices.view` / `monitoring.view`),
+  within the usual factory / line scope. Sections a role can't see are marked
+  NOT_PERMITTED and never computed; reports and exports follow the same rules
+  and are audited (`analytics.report_generated` / `analytics.report_exported`).
+- Production planning ([PLANNING.md](PLANNING.md)) adds eleven `planning.*`
+  permissions. Orders and styles keep their `/api/production` routes and accept
+  either the old production permission or the planning one. Every record is
+  limited to the caller's factories and a supervisor's own lines on the server
+  (another factory's id answers 403/404); people who only follow the plan see
+  published plans, never drafts. Targets of factory, department or floor level,
+  and daily plans, are approved by a different person than the one who created
+  or submitted them (`PRODUCTION_REQUIRE_SEPARATE_APPROVER`).
+- Factory documents ([DOCUMENTS.md](DOCUMENTS.md)): permission + document category +
+  factory (+ line for supervisors, who prepare only line documents of their lines).
+  Nobody approves what they prepared or submitted; high-risk documents need
+  `documents.approve_high`. Every endpoint is listed in `EndpointAccessMatrixTests`.
 - System roles are fixed; custom roles are not supported (by design for now).
 - Token freshness is cached for 30 s per API instance: on a multi-instance
   deployment another instance may accept an old token for up to 30 s.

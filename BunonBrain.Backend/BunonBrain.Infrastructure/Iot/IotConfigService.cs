@@ -262,7 +262,8 @@ public sealed class IotConfigService : IIotConfigService
             {
                 var res = await _devices.CreateAsync(caller, new CreateDeviceRequest(m.FactoryId, code, name, category, true, null, m.WorkstationId, m.Id,
                     HeartbeatIntervalSeconds: 30, OfflineAfterSeconds: 120), traceId, ct);
-                if (res.Outcome != AccessOutcome.Ok) return $"{code}: {res.Message}";
+                // Registration answers Created (201) for a new device; anything else is a refusal with its reason.
+                if (res.Outcome is not (AccessOutcome.Created or AccessOutcome.Ok)) return $"{code}: {res.Message ?? res.Code}";
                 dev = await _db.Devices.AsNoTracking().FirstAsync(d => d.Id == res.Value!.Id, ct);
                 notes.Add($"Registered simulated device {code}.");
             }
@@ -395,7 +396,8 @@ public sealed class ProductionCorrectionService : IProductionCorrectionService
             $"{r.PiecesDelta:+0;-0} pieces ({source.ToLowerInvariant()}) — {reason}", traceId, r.FactoryId));
         await _db.SaveChangesAsync(ct);
         var lineName = await _db.ProductionLines.AsNoTracking().Where(l => l.Id == lineId).Select(l => l.Name).FirstAsync(ct);
-        return AccessResult<ProductionCorrectionDto>.Ok(new ProductionCorrectionDto(c.Id, c.FactoryId, new MonLine(lineId, lineName),
+        // A correction is a new record: 201 with its Location (the controller builds it).
+        return AccessResult<ProductionCorrectionDto>.Created(new ProductionCorrectionDto(c.Id, c.FactoryId, new MonLine(lineId, lineName),
             ws is null ? null : new MonRef(ws.Id, ws.Code, ws.Name), machine is null ? null : new MonRef(machine.Id, machine.Code, machine.MachineType), c.ProductionDate,
             c.ShiftCode, c.HourStart, c.PiecesDelta, c.Reason, c.SourceType, c.CreatedByEmail, c.CreatedByRole, c.CreatedAt));
     }

@@ -513,7 +513,7 @@ export const PRODUCTION_STAGES = ["cutting", "sewing_input", "sewing_output", "f
 export type ProductionStage = (typeof PRODUCTION_STAGES)[number];
 export const PLAN_STATUSES = ["draft", "pending_approval", "active", "completed", "cancelled"] as const;
 export type PlanStatus = (typeof PLAN_STATUSES)[number];
-export const ORDER_STATUSES = ["open", "closed", "cancelled"] as const;
+export const ORDER_STATUSES = ["draft", "planned", "in_progress", "on_hold", "completed", "cancelled"] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const PROPOSAL_STATUSES = ["proposed", "pending_approval", "applied", "rejected", "superseded"] as const;
 export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number];
@@ -554,6 +554,14 @@ export type ProductionStyle = {
   isActive: boolean;
   version: number;
   operations: StyleOperation[];
+  garmentCategory?: string | null;
+  description?: string | null;
+  sizeRange?: string[] | null;
+  colorVariants?: string[] | null;
+  complexity?: "LOW" | "MEDIUM" | "HIGH" | "VERY_HIGH" | null;
+  qualityCheckpoints?: string[] | null;
+  /** Machine types the style's operations need (derived from the operation sequence). */
+  requiredMachineTypes?: string[] | null;
 };
 
 export type DataSourceStatus = { source: OutputSource; status: "available" | "receiving" | "not_connected"; description: string; recordsLast24h: number };
@@ -592,6 +600,12 @@ export type ProductionOrderListItem = {
   riskLevel: RiskLevel;
   projectedCompletion?: string | null;
   version: number;
+  factoryId?: string | null;
+  orderReference?: string | null;
+  productCategory?: string | null;
+  priority?: string | null;
+  startDate?: string | null;
+  plannedCompletionDate?: string | null;
 };
 
 export type ProductionOrder = {
@@ -607,6 +621,16 @@ export type ProductionOrder = {
   createdAt: string;
   createdByEmail: string;
   version: number;
+  factoryId?: string | null;
+  factoryCode?: string | null;
+  orderReference?: string | null;
+  productDescription?: string | null;
+  productCategory?: string | null;
+  startDate?: string | null;
+  plannedCompletionDate?: string | null;
+  priority?: string | null;
+  statusReason?: string | null;
+  allowedStatuses?: OrderStatus[] | null;
 };
 
 export type StageProgress = { stage: ProductionStage; good: number; reject: number; rework: number; records: number };

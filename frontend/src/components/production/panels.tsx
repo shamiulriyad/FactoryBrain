@@ -85,6 +85,7 @@ export function OrdersPanel({ operator, styles }: { operator: boolean; styles: P
         </div>
         <FilterSelect label="Status" value={f.status} onChange={(v) => setF((x) => ({ ...x, status: v, page: 1 }))} testId="orders-status">
           <option value="">All</option>
+          <option value="open">Open (planned + in progress)</option>
           {ORDER_STATUSES.map((s) => <option key={s} value={s}>{ORDER_STATUS_LABEL[s]}</option>)}
         </FilterSelect>
         <div className="ml-auto flex gap-2">

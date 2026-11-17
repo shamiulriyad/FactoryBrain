@@ -52,12 +52,32 @@ export const P = {
   ApprovalsView: "approvals.view",
   ApprovalsDecide: "approvals.decide",
   ApprovalsDecideHigh: "approvals.decide_high",
+  PlanningView: "planning.view",
+  PlanningOrdersManage: "planning.orders.manage",
+  PlanningStylesManage: "planning.styles.manage",
+  PlanningAllocationsManage: "planning.allocations.manage",
+  PlanningTargetsManage: "planning.targets.manage",
+  PlanningPlansManage: "planning.plans.manage",
+  PlanningPlansApprove: "planning.plans.approve",
+  PlanningPlansPublish: "planning.plans.publish",
+  PlanningExceptionsReview: "planning.exceptions.review",
+  PlanningSetup: "planning.setup",
+  PlanningReportsExport: "planning.reports.export",
   DevicesView: "devices.view",
   DevicesManage: "devices.manage",
   DevicesLogsView: "devices.logs.view",
   DevicesSimulate: "devices.simulate",
   CamerasView: "cameras.view",
   CamerasManage: "cameras.manage",
+  DocumentsView: "documents.view",
+  DocumentsCreate: "documents.create",
+  DocumentsReview: "documents.review",
+  DocumentsApprove: "documents.approve",
+  DocumentsApproveHigh: "documents.approve_high",
+  DocumentsControl: "documents.control",
+  DocumentsMonitor: "documents.monitor",
+  InventoryView: "inventory.view",
+  InventoryManage: "inventory.manage",
   ReportsView: "reports.view",
   KnowledgeView: "knowledge.view",
   AgentsRun: "agents.run",
@@ -75,7 +95,13 @@ export const ROLE_IDS = [
   "MonitoringOperator",
   "HrOfficer",
   "DeviceAdmin",
-  "Worker"
+  "Worker",
+  "DocumentController",
+  "Merchandiser",
+  "StoreOfficer",
+  "QcOfficer",
+  "ComplianceOfficer",
+  "CommercialOfficer"
 ] as const;
 
 export type RoleId = (typeof ROLE_IDS)[number];
@@ -88,7 +114,13 @@ export const ROLE_LABEL: Record<RoleId, string> = {
   MonitoringOperator: "Monitoring Operator",
   HrOfficer: "HR / Attendance Officer",
   DeviceAdmin: "IT / Device Administrator",
-  Worker: "Worker"
+  Worker: "Worker",
+  DocumentController: "Document Controller",
+  Merchandiser: "Merchandiser",
+  StoreOfficer: "Store / Inventory Officer",
+  QcOfficer: "QC / QA Officer",
+  ComplianceOfficer: "Compliance Officer",
+  CommercialOfficer: "Commercial / Shipping Officer"
 };
 
 export function roleLabel(id: string): string {

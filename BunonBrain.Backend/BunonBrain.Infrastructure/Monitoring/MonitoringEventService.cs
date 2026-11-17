@@ -201,6 +201,9 @@ public sealed class MonitoringEventService : IMonitoringEventService
             activity = ActivityLabels.Parse(activity);
             previousActivity = ActivityLabels.Parse(previousActivity);
         }
+        // Store the validated labels in their canonical form: filters and activity views match on them.
+        if (activity is not null || previousActivity is not null)
+            payloadJson = MonitoringRules.WithCanonicalLabels(payloadJson, activity, previousActivity);
         var modelVersion = input.ModelVersion?.Trim();
         if (modelVersion is { Length: > 40 }) return Invalid("model_version_too_long", "modelVersion is at most 40 characters.");
 

@@ -2,6 +2,7 @@ using BunonBrain.Api.Authorization;
 using BunonBrain.Application.Access;
 using BunonBrain.Api.Middleware;
 using BunonBrain.Application.Abstractions.Interfaces;
+using BunonBrain.Application.Dtos.Planning;
 using BunonBrain.Application.Dtos.Production;
 using BunonBrain.Application.Production;
 using Microsoft.AspNetCore.Authorization;
@@ -82,54 +83,69 @@ public class ProductionController : ControllerBase
         Map(await _setup.UpdateShiftAsync(code, body, Actor, Trace, ct));
 
     [HttpGet("styles")]
-    [RequirePermission(Permissions.ProductionView)]
+    [RequirePermission(Permissions.ProductionView, Permissions.PlanningView)]
     public async Task<IActionResult> Styles([FromQuery] bool? includeInactive, CancellationToken ct) => Ok(await _setup.ListStylesAsync(includeInactive ?? false, ct));
 
     [HttpGet("styles/{id}")]
-    [RequirePermission(Permissions.ProductionView)]
+    [RequirePermission(Permissions.ProductionView, Permissions.PlanningView)]
     public async Task<IActionResult> Style([FromRoute] string id, CancellationToken ct) =>
         Guid.TryParse(id, out var g) && await _setup.GetStyleAsync(g, ct) is { } s ? Ok(s) : NotFound(new { error = "style_not_found" });
 
     [HttpPost("styles")]
-    [RequirePermission(Permissions.ProductionSetup)]
+    [RequirePermission(Permissions.ProductionSetup, Permissions.PlanningStylesManage)]
     public async Task<IActionResult> CreateStyle([FromBody] StyleWrite body, CancellationToken ct) =>
         Map(await _setup.CreateStyleAsync(body, Actor, Trace, ct), s => $"/api/production/styles/{s.Id}");
 
     [HttpPut("styles/{id}")]
-    [RequirePermission(Permissions.ProductionSetup)]
+    [RequirePermission(Permissions.ProductionSetup, Permissions.PlanningStylesManage)]
     public async Task<IActionResult> UpdateStyle([FromRoute] string id, [FromBody] StyleWrite body, CancellationToken ct) =>
         Guid.TryParse(id, out var g) ? Map(await _setup.UpdateStyleAsync(g, body, Actor, Trace, ct)) : NotFound(new { error = "style_not_found" });
 
     // ── Orders ──────────────────────────────────────────────────────────────
 
     [HttpGet("orders")]
-    [RequirePermission(Permissions.ProductionView)]
+    [RequirePermission(Permissions.ProductionView, Permissions.PlanningView)]
     public async Task<IActionResult> Orders([FromQuery] string? q, [FromQuery] string? status, [FromQuery] string? styleId,
-        [FromQuery] int? page, [FromQuery] int? pageSize, [FromQuery] string? sort, [FromQuery] bool? includeRisk, CancellationToken ct)
+        [FromQuery] int? page, [FromQuery] int? pageSize, [FromQuery] string? sort, [FromQuery] bool? includeRisk, [FromQuery] Guid? factoryId, [FromQuery] string? priority, CancellationToken ct)
     {
         if (!TryGuid(styleId, "styleId", out var sid, out var bad)) return bad!;
-        return Map(await _orders.ListAsync(new OrderQuery(Blank(q), Blank(status), sid, page ?? 1, pageSize ?? 20, Blank(sort), includeRisk ?? true), ct));
+        return Map(await _orders.ListAsync(new OrderQuery(Blank(q), Blank(status), sid, page ?? 1, pageSize ?? 20, Blank(sort), includeRisk ?? true, factoryId, Blank(priority)), this.Caller(), ct));
     }
 
     [HttpGet("orders/{id}")]
-    [RequirePermission(Permissions.ProductionView)]
+    [RequirePermission(Permissions.ProductionView, Permissions.PlanningView)]
     public async Task<IActionResult> Order([FromRoute] string id, CancellationToken ct) =>
-        Guid.TryParse(id, out var g) && await _orders.GetAsync(g, ct) is { } o ? Ok(o) : NotFound(new { error = "order_not_found" });
+        Guid.TryParse(id, out var g) && await _orders.GetAsync(g, this.Caller(), ct) is { } o ? Ok(o) : NotFound(new { error = "order_not_found" });
+
+    [HttpGet("orders/{id}/transitions")]
+    [RequirePermission(Permissions.ProductionView, Permissions.PlanningView)]
+    public async Task<IActionResult> OrderTransitions([FromRoute] string id, CancellationToken ct) =>
+        Guid.TryParse(id, out var g) ? Map(await _orders.TransitionsAsync(g, this.Caller(), ct)) : NotFound(new { error = "order_not_found" });
 
     [HttpGet("orders/{id}/risk")]
-    [RequirePermission(Permissions.ProductionView)]
-    public async Task<IActionResult> OrderRisk([FromRoute] string id, CancellationToken ct) =>
-        Guid.TryParse(id, out var g) ? Map(await _analysis.OrderRiskAsync(g, ct)) : NotFound(new { error = "order_not_found" });
+    [RequirePermission(Permissions.ProductionView, Permissions.PlanningView)]
+    public async Task<IActionResult> OrderRisk([FromRoute] string id, CancellationToken ct)
+    {
+        if (!Guid.TryParse(id, out var g)) return NotFound(new { error = "order_not_found" });
+        // The order must be in the caller's factories before its risk is read.
+        var visible = await _orders.TransitionsAsync(g, this.Caller(), ct);
+        return visible.Outcome == ProductionOutcome.Ok ? Map(await _analysis.OrderRiskAsync(g, ct)) : Map(visible);
+    }
 
     [HttpPost("orders")]
-    [RequirePermission(Permissions.ProductionManage)]
+    [RequirePermission(Permissions.ProductionManage, Permissions.PlanningOrdersManage)]
     public async Task<IActionResult> CreateOrder([FromBody] OrderWrite body, CancellationToken ct) =>
-        Map(await _orders.CreateAsync(body, Actor, Trace, ct), o => $"/api/production/orders/{o.Id}");
+        Map(await _orders.CreateAsync(body, this.Caller(), Trace, ct), o => $"/api/production/orders/{o.Id}");
 
     [HttpPut("orders/{id}")]
-    [RequirePermission(Permissions.ProductionManage)]
+    [RequirePermission(Permissions.ProductionManage, Permissions.PlanningOrdersManage)]
     public async Task<IActionResult> UpdateOrder([FromRoute] string id, [FromBody] OrderWrite body, CancellationToken ct) =>
-        Guid.TryParse(id, out var g) ? Map(await _orders.UpdateAsync(g, body, Actor, Trace, ct)) : NotFound(new { error = "order_not_found" });
+        Guid.TryParse(id, out var g) ? Map(await _orders.UpdateAsync(g, body, this.Caller(), Trace, ct)) : NotFound(new { error = "order_not_found" });
+
+    [HttpPost("orders/{id}/status")]
+    [RequirePermission(Permissions.ProductionManage, Permissions.PlanningOrdersManage)]
+    public async Task<IActionResult> ChangeOrderStatus([FromRoute] string id, [FromBody] OrderStatusRequest body, CancellationToken ct) =>
+        Guid.TryParse(id, out var g) ? Map(await _orders.ChangeStatusAsync(g, body, this.Caller(), Trace, ct)) : NotFound(new { error = "order_not_found" });
 
     // ── Plans ───────────────────────────────────────────────────────────────
 

@@ -68,3 +68,16 @@ public interface IOvertimeService
     Task<AccessResult<OvertimeDto>> CancelAsync(AccessContext caller, Guid id, OvertimeReasonRequest request, string? traceId, CancellationToken ct);
     Task<AccessResult<OvertimeDto>> ConfirmPayableAsync(AccessContext caller, Guid id, ConfirmPayableRequest request, string? traceId, CancellationToken ct);
 }
+
+/// <summary>A factory holiday: no scheduled worker is expected, so nobody is absent.</summary>
+public sealed record HolidayDto(Guid Id, Guid FactoryId, DateOnly Date, string Name, string Kind, DateTimeOffset CreatedAt, string CreatedByEmail, bool CanRemove);
+
+public sealed record HolidayWrite(Guid? FactoryId, DateOnly Date, string Name, string? Kind);
+
+/// <summary>Factory holiday calendar (attendance). Past holidays are kept as they were reported.</summary>
+public interface IHolidayService
+{
+    Task<AccessResult<IReadOnlyList<HolidayDto>>> ListAsync(AccessContext caller, Guid? factoryId, DateOnly? from, DateOnly? to, CancellationToken ct);
+    Task<AccessResult<HolidayDto>> CreateAsync(AccessContext caller, HolidayWrite body, string? traceId, CancellationToken ct);
+    Task<AccessResult<HolidayDto>> RemoveAsync(AccessContext caller, Guid id, string? traceId, CancellationToken ct);
+}

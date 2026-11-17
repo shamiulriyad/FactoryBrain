@@ -161,7 +161,10 @@ internal static class ProductionSupport
         var (smv, basis) = StyleSmv.Resolve(s.ApprovedSmv, ops.Select(o => o.Smv));
         return new StyleDto(s.Id, s.Code, s.Name, s.ProductType, s.ApprovedSmv, smv, ProductionWire.SmvBasisName(basis),
             Math.Round(ops.Sum(o => o.Smv), 4), s.IsActive, s.Version,
-            ops.Select(o => new StyleOperationDto(o.Id, o.Sequence, o.Name, o.Smv, o.MachineType, o.Predecessors)).ToList());
+            ops.Select(o => new StyleOperationDto(o.Id, o.Sequence, o.Name, o.Smv, o.MachineType, o.Predecessors)).ToList(),
+            s.GarmentCategory, s.Description, s.SizeRange, s.ColorVariants, s.Complexity, s.QualityCheckpoints,
+            ops.Select(o => o.MachineType).Where(m => !string.IsNullOrWhiteSpace(m)).Select(m => m!).Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(m => m, StringComparer.OrdinalIgnoreCase).ToList());
     }
 
     public static BalanceOperation ToBalance(StyleOperation o) => new(o.Id, o.Sequence, o.Name, o.Smv, o.MachineType, o.Predecessors);

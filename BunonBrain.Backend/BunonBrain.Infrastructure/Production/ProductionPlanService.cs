@@ -174,7 +174,7 @@ public sealed class ProductionPlanService : IProductionPlanService
         {
             order = await _db.ProductionOrders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == oid, ct);
             if (order is null) errors.Add("orderId", "The order does not exist.");
-            else if (order.Status != ProductionOrderStatus.Open) errors.Add("orderId", "Plans can only be made for open orders.");
+            else if (order.Status is not (ProductionOrderStatus.Planned or ProductionOrderStatus.InProgress)) errors.Add("orderId", "Plans can only be made for planned or in-progress orders.");
         }
         if (errors.Count > 0) return ProductionResult<PlanDetail>.Invalid(errors);
 
@@ -278,7 +278,7 @@ public sealed class ProductionPlanService : IProductionPlanService
         var errors = Errors();
         await ValidateValuesAsync(errors, new PlanWrite(null, null, null, null, null, null, null, null, null, null, null, null), Values(plan), ct);
         var order = await _db.ProductionOrders.AsNoTracking().FirstAsync(o => o.Id == plan.OrderId, ct);
-        if (order.Status != ProductionOrderStatus.Open) errors.Add("orderId", "The order is no longer open.");
+        if (order.Status is not (ProductionOrderStatus.Planned or ProductionOrderStatus.InProgress)) errors.Add("orderId", "The order is no longer open for production.");
         if (errors.Count > 0) return ProductionResult<PlanActionResponse>.Invalid(errors);
 
         var now = DateTime.UtcNow;

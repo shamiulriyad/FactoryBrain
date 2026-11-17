@@ -107,6 +107,17 @@ public class BunonBrainDbContext : DbContext
     public DbSet<ProductionOrder>        ProductionOrders        => Set<ProductionOrder>();
     public DbSet<ProductionPlan>         ProductionPlans         => Set<ProductionPlan>();
     public DbSet<ProductionPlanChange>   ProductionPlanChanges   => Set<ProductionPlanChange>();
+    public DbSet<ProductionOrderStatusChange> ProductionOrderStatusChanges => Set<ProductionOrderStatusChange>();
+    public DbSet<ProductionAllocation>   ProductionAllocations   => Set<ProductionAllocation>();
+    public DbSet<ProductionAllocationChange> ProductionAllocationChanges => Set<ProductionAllocationChange>();
+    public DbSet<LineOutputPoint>        LineOutputPoints        => Set<LineOutputPoint>();
+    public DbSet<LineCapacitySetting>    LineCapacitySettings    => Set<LineCapacitySetting>();
+    public DbSet<ProductionTarget>       ProductionTargets       => Set<ProductionTarget>();
+    public DbSet<ProductionTargetRevision> ProductionTargetRevisions => Set<ProductionTargetRevision>();
+    public DbSet<DailyProductionPlan>    DailyProductionPlans    => Set<DailyProductionPlan>();
+    public DbSet<DailyPlanItem>          DailyPlanItems          => Set<DailyPlanItem>();
+    public DbSet<DailyPlanEvent>         DailyPlanEvents         => Set<DailyPlanEvent>();
+    public DbSet<ProductionException>    ProductionExceptions    => Set<ProductionException>();
     public DbSet<ProductionOutputEvent>  ProductionOutputEvents  => Set<ProductionOutputEvent>();
     public DbSet<OperationObservation>   OperationObservations   => Set<OperationObservation>();
     public DbSet<LineLayout>             LineLayouts             => Set<LineLayout>();
@@ -119,6 +130,21 @@ public class BunonBrainDbContext : DbContext
     public DbSet<MerchDocumentPage>      MerchDocumentPages      => Set<MerchDocumentPage>();
     public DbSet<MerchExtractedField>    MerchExtractedFields    => Set<MerchExtractedField>();
     public DbSet<MerchConflict>          MerchConflicts          => Set<MerchConflict>();
+
+    // Factory documentation automation, notifications, AI usage, store.
+    public DbSet<FactoryDocument>        FactoryDocuments        => Set<FactoryDocument>();
+    public DbSet<FactoryDocumentVersion> FactoryDocumentVersions => Set<FactoryDocumentVersion>();
+    public DbSet<FactoryDocumentFile>    FactoryDocumentFiles    => Set<FactoryDocumentFile>();
+    public DbSet<FactoryDocumentEvent>   FactoryDocumentEvents   => Set<FactoryDocumentEvent>();
+    public DbSet<DocumentTypeSetting>    DocumentTypeSettings    => Set<DocumentTypeSetting>();
+    public DbSet<UserNotification>       UserNotifications       => Set<UserNotification>();
+    public DbSet<AiApiUsage>             AiApiUsage              => Set<AiApiUsage>();
+    public DbSet<InventoryItem>          InventoryItems          => Set<InventoryItem>();
+    public DbSet<StockMovement>          StockMovements          => Set<StockMovement>();
+    public DbSet<InventoryRoll>          InventoryRolls          => Set<InventoryRoll>();
+    public DbSet<InventoryRollMovement>  InventoryRollMovements  => Set<InventoryRollMovement>();
+    public DbSet<DocumentScheduleRun>    DocumentScheduleRuns    => Set<DocumentScheduleRun>();
+    public DbSet<FactoryHoliday>         FactoryHolidays         => Set<FactoryHoliday>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {

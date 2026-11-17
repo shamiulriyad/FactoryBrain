@@ -37,6 +37,13 @@ function Inner({ children }: { children: React.ReactNode }) {
   // Keeps the sidebar's alert / approval counts (and later floor status) fresh.
   useFloorStatusFeed();
 
+  // The signed-in app is plain black and white (tokens in globals.css under .app-mono);
+  // the class lives on <html> so portals (dialogs, menus) are covered, and goes when the app unmounts.
+  useEffect(() => {
+    document.documentElement.classList.add("app-mono");
+    return () => document.documentElement.classList.remove("app-mono");
+  }, []);
+
   useEffect(() => {
     applyTheme();
   }, [applyTheme]);

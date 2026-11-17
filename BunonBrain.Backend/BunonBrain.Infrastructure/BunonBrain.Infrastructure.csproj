@@ -37,6 +37,12 @@
     <!-- MQTT client for the IoT bridge (machine telemetry, counters, device status). -->
     <PackageReference Include="MQTTnet" Version="5.2.0.1603" />
     <PackageReference Include="PdfPig" Version="0.1.16" />
+    <!-- Document PDF exports with complex-script shaping (Bangla): Skia's PDF backend
+         + HarfBuzz, both MIT. Linux native assets for the container image. -->
+    <PackageReference Include="SkiaSharp" Version="3.119.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
+    <PackageReference Include="HarfBuzzSharp" Version="8.3.1.2" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" Version="8.3.1.2" />
     <PackageReference Include="Pgvector" Version="0.3.2" />
     <PackageReference Include="Pgvector.EntityFrameworkCore" Version="0.3.0" />
     <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="9.0.0" />
@@ -59,6 +65,16 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BunonBrain.Application\BunonBrain.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="BunonBrain.Api.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Noto Sans + Noto Sans Bengali (SIL Open Font License 1.1, see Documents/Fonts/OFL.txt), embedded so
+         PDF exports look the same on every host (the runtime image has no system fonts). -->
+    <EmbeddedResource Include="Documents\Fonts\*.ttf" LogicalName="BunonBrain.Fonts.%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

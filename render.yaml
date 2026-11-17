@@ -1,21 +1,24 @@
-# Render Blueprint for BunonBrain. Step-by-step guide: DEPLOY_RENDER.md
+# Render Blueprint for BunonBrain — FREE plan. Step-by-step guide: DEPLOY_RENDER.md
 #
-#   bunonbrain-web  Next.js frontend         FREE     https://bunonbrain-web.onrender.com
-#   bunonbrain-api  .NET 10 API (Docker)     starter  https://bunonbrain-api.onrender.com
-#   bunonbrain-rag  Python PDF RAG (Docker)  FREE     https://bunonbrain-rag.onrender.com (every route but /health needs PYRAG_API_KEY)
-#
-# Budget setup (~$7.25/month): only the API is paid, because it runs background
-# workers and needs the disk. Free services sleep after 15 idle minutes and take
-# ~1 minute to wake. Free services can't receive private-network traffic, so the
-# API reaches the RAG service over its public URL.
+#   bunonbrain-web  Next.js frontend         free  https://bunonbrain-web.onrender.com
+#   bunonbrain-api  .NET 10 API (Docker)     free  https://bunonbrain-api.onrender.com
+#   bunonbrain-rag  Python PDF RAG (Docker)  free  https://bunonbrain-rag.onrender.com (every route but /health needs PYRAG_API_KEY)
 #
 # Not on Render: the database (Supabase), the vector store (Qdrant Cloud) and the
 # computer-vision service (a PC inside the factory, next to the cameras).
 #
-# Every "sync: false" value is asked for once, when the Blueprint is created in
-# the Render dashboard. Secrets are never written in this file.
+# Free plan limits (see DEPLOY_RENDER.md, section 1):
+#   - each service sleeps after 15 idle minutes and takes ~1 minute to wake;
+#   - no disk: uploaded files (QC images, documents, photos) are lost whenever
+#     the API sleeps, restarts or redeploys; everything in the database stays;
+#   - free services can't receive private-network traffic, so they call each
+#     other over their public https URLs;
+#   - 750 free instance hours per month for the whole workspace.
 #
-# All services sit in one region so they share Render's private network.
+# If Render adds a suffix to a service name (bunonbrain-api-ab12.onrender.com),
+# fix the URLs below in the dashboard. Every "sync: false" value is asked for
+# when the Blueprint is created. Secrets are never written in this file.
+#
 # Singapore is the closest Render region to Supabase ap-south-1 (Mumbai).
 
 services:
@@ -24,20 +27,13 @@ services:
     name: bunonbrain-api
     runtime: docker
     region: singapore
-    plan: starter            # 512 MB. Move to "standard" (2 GB) if logs show out-of-memory restarts.
+    plan: free
     dockerContext: .
     dockerfilePath: ./BunonBrain.Backend/BunonBrain.Api/Dockerfile
     healthCheckPath: /health
     buildFilter:
       paths:
         - BunonBrain.Backend/**
-    # Uploaded QC images, documents, worker photos and camera files. Without a
-    # disk they are lost on every deploy/restart. (A disk means one instance
-    # and a short downtime on each deploy.)
-    disk:
-      name: app-data
-      mountPath: /app/App_Data
-      sizeGB: 1                # grow later in the dashboard (disks can grow, never shrink)
     envVars:
       - key: PORT
         value: "8080"
@@ -65,22 +61,26 @@ services:
       - key: AI_SETTINGS_ENCRYPTION_KEY
         sync: false
 
-      # Browser → frontend → (private network) → API. Render's proxy appends the
-      # real client IP to X-Forwarded-For; the API takes the last hop, so the
-      # login rate limit works per user.
+      # The frontend calls the API over its public URL, so the API sees the
+      # frontend server's IP for every user: the per-IP login limit is shared.
+      # 30/minute keeps brute force slow without locking out a classroom of users.
       - key: FORWARDED_HEADERS_ENABLED
         value: "true"
+      - key: LOGIN_RATE_LIMIT_PER_MINUTE
+        value: "30"
       - key: CORS_ORIGINS          # e.g. https://bunonbrain-web.onrender.com
         sync: false
       - key: PUBLIC_APP_URL        # same frontend URL, used in password-reset emails
         sync: false
 
-      # LLM (Ask BunonBrain, QC vision)
+      # LLM (Ask BunonBrain, QC vision): Gemini has a free tier. For OpenAI set
+      # LLM_PROVIDER=openai and an OpenAI model/key. A provider saved later under
+      # Settings → AI (stored in the database) overrides these.
       - key: LLM_PROVIDER
-        value: openai
+        value: gemini
       - key: LLM_MODEL
-        sync: false
-      - key: LLM_API_KEY
+        value: gemini-2.5-flash
+      - key: LLM_API_KEY           # Gemini key (the same one as GOOGLE_API_KEY below)
         sync: false
       - key: QC_VISION_PROVIDER
         value: llm
@@ -89,8 +89,7 @@ services:
       - key: Rag__EmbeddingDimensions
         value: "384"
 
-      # Python RAG service (free plan, public URL). If Render gave it a suffixed
-      # name (bunonbrain-rag-xxxx.onrender.com), fix this value.
+      # Python RAG service (public URL, protected by the generated key).
       - key: PYRAG_SERVICE_URL
         value: https://bunonbrain-rag.onrender.com
       - key: PYRAG_API_KEY
@@ -100,7 +99,7 @@ services:
           envVarKey: PYRAG_API_KEY
       - key: PYRAG_COLLECTION_NAME
         value: pdf_rag
-      - key: PYRAG_TIMEOUT_SECONDS   # leaves room for a ~1 minute free-plan wake-up
+      - key: PYRAG_TIMEOUT_SECONDS   # leaves room for the RAG service to wake up
         value: "120"
 
       # Computer-vision service (runs in the factory). Copy this generated value
@@ -123,9 +122,9 @@ services:
     name: bunonbrain-web
     runtime: node
     region: singapore
-    plan: free               # sleeps when idle; free services may still SEND private-network requests
+    plan: free
     rootDir: frontend
-    # Lint is run separately (see build-environment notes); a lint crash must not block a deploy.
+    # Lint is run separately; a lint crash must not block a deploy.
     buildCommand: npm ci && npx next build --no-lint
     startCommand: npx next start      # next start listens on $PORT
     healthCheckPath: /
@@ -136,13 +135,13 @@ services:
         value: "1"
       - key: NEXT_PUBLIC_SHOW_ARCHITECTURE
         value: "false"
-      # /api/* and /hubs/* are proxied server-side to the API over the private
-      # network. These are read at BUILD time (rewrites are baked in), so
-      # redeploy the frontend after changing them.
+      # /api/* and /hubs/* are proxied server-side to the API. Read at BUILD
+      # time (rewrites are baked in): after changing them use
+      # Manual Deploy → Clear build cache & deploy.
       - key: NEXT_PUBLIC_API_URL
-        value: http://bunonbrain-api:8080
+        value: https://bunonbrain-api.onrender.com
       - key: DOTNET_API_URL
-        value: http://bunonbrain-api:8080
+        value: https://bunonbrain-api.onrender.com
 
   # ───────────────────────────── Python PDF RAG ─────────────────────────────
   - type: web
@@ -162,7 +161,6 @@ services:
       - key: PYRAG_API_KEY
         generateValue: true
       # Gemini embeddings: no torch in the image, fits in 512 MB.
-      # (huggingface embeddings need requirements-local.txt and the "standard" plan.)
       - key: PYRAG_EMBEDDING_PROVIDER
         value: google
       - key: GOOGLE_API_KEY

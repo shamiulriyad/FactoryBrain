@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using SkiaSharp;
 using BunonBrain.Application.Abstractions.Interfaces;
 using BunonBrain.Application.Qc;
 using BunonBrain.Application.Settings;
@@ -66,17 +67,119 @@ public sealed class LlmVisionDefectProvider : IDefectDetectionProvider
         var provider = status.Provider!;
         var model = status.Model!;
 
-        using var http = BuildRequest(provider, model, key, request);
-        var client = _http.CreateClient(nameof(LlmVisionDefectProvider));
-        client.Timeout = Timeout.InfiniteTimeSpan; // the linked token below enforces QC_VISION_TIMEOUT_SECONDS
+        // One deadline (QC_VISION_TIMEOUT_SECONDS) for the whole analysis; the
+        // whole-photo pass and the zoomed tile passes run in parallel under it.
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(_options.Timeout);
-
         var sw = Stopwatch.StartNew();
+
+        var tiles = CropTiles(request);
+        var wholeTask = CallAsync(provider, model, key, request.Image, request.ContentType, BuildPrompt(request), ct, timeout.Token);
+        var tileTasks = tiles
+            .Select(t => CallTileAsync(provider, model, key, request, t.Box, t.Name, t.Jpeg, ct, timeout.Token))
+            .ToList();
+
+        IReadOnlyList<DetectedDefect> whole;
+        string? version;
+        try
+        {
+            (whole, version) = await wholeTask;
+        }
+        catch
+        {
+            // The whole-photo pass decides success; stop the tiles before failing.
+            await timeout.CancelAsync();
+            await Task.WhenAll(tileTasks);
+            throw;
+        }
+        var tileDefects = await Task.WhenAll(tileTasks);
+        var merged = QcTiling.Merge(whole, tileDefects.SelectMany(d => d));
+
+        _log.LogInformation(
+            "QC vision call to {Provider} model={Model}: whole photo {Whole} defect(s), {Tiles} tile(s) {TileCount} defect(s), {Merged} after merging, {Ms} ms.",
+            provider, model, whole.Count, tiles.Count, tileDefects.Sum(d => d.Count), merged.Count, sw.ElapsedMilliseconds);
+        return new DefectDetectionResult(provider, model, version, LocalizationSupported: true, merged);
+    }
+
+    /// <summary>Smallest photo side (pixels) worth tiling; below it the crops add nothing.</summary>
+    private const int MinTileSourcePixels = 320;
+
+    /// <summary>
+    /// The overlapping N×N crops of the photo (QC_VISION_TILE_GRID), as JPEG,
+    /// with their exact position in whole-image coordinates. Empty when tiling
+    /// is off, the photo is small or it can't be decoded (the whole-photo pass
+    /// still runs).
+    /// </summary>
+    private IReadOnlyList<(NormalizedBox Box, string Name, byte[] Jpeg)> CropTiles(DefectDetectionRequest r)
+    {
+        var grid = _options.TileGrid;
+        if (grid <= 1) return Array.Empty<(NormalizedBox, string, byte[])>();
+        try
+        {
+            using var bitmap = SKBitmap.Decode(r.Image);
+            if (bitmap is null || Math.Min(bitmap.Width, bitmap.Height) < MinTileSourcePixels)
+                return Array.Empty<(NormalizedBox, string, byte[])>();
+
+            var (w, h) = (bitmap.Width, bitmap.Height);
+            var result = new List<(NormalizedBox, string, byte[])>();
+            var tiles = QcTiling.Tiles(grid);
+            for (var i = 0; i < tiles.Count; i++)
+            {
+                var t = tiles[i];
+                var left = (int)Math.Floor(t.X * w);
+                var top = (int)Math.Floor(t.Y * h);
+                var right = Math.Min(w, (int)Math.Ceiling((t.X + t.Width) * w));
+                var bottom = Math.Min(h, (int)Math.Ceiling((t.Y + t.Height) * h));
+                if (right - left < 16 || bottom - top < 16) continue;
+
+                using var crop = new SKBitmap();
+                if (!bitmap.ExtractSubset(crop, new SKRectI(left, top, right, bottom))) continue;
+                using var image = SKImage.FromBitmap(crop);
+                using var data = image.Encode(SKEncodedImageFormat.Jpeg, 90);
+                if (data is null) continue;
+                // The exact pixel crop, so boxes map back without rounding drift.
+                var box = new NormalizedBox((double)left / w, (double)top / h, (double)(right - left) / w, (double)(bottom - top) / h);
+                result.Add((box, QcTiling.Describe(i, grid), data.ToArray()));
+            }
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning("QC tiling skipped: the photo could not be cropped ({ErrorType}).", ex.GetType().Name);
+            return Array.Empty<(NormalizedBox, string, byte[])>();
+        }
+    }
+
+    /// <summary>One zoomed crop. Never throws: a failed tile only loses that tile's extra findings.</summary>
+    private async Task<IReadOnlyList<DetectedDefect>> CallTileAsync(
+        string provider, string model, string key, DefectDetectionRequest request,
+        NormalizedBox tile, string name, byte[] jpeg, CancellationToken ct, CancellationToken deadline)
+    {
+        try
+        {
+            var (defects, _) = await CallAsync(provider, model, key, jpeg, "image/jpeg", BuildPrompt(request, name), ct, deadline);
+            return defects.Select(d => QcTiling.ToWholeImage(d, tile)).ToList();
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning("QC vision tile '{Tile}' skipped ({ErrorType}).", name, ex.GetType().Name);
+            return Array.Empty<DetectedDefect>();
+        }
+    }
+
+    /// <summary>One model call: send the image and prompt, return the parsed defects and the model version.</summary>
+    private async Task<(IReadOnlyList<DetectedDefect> Defects, string? Version)> CallAsync(
+        string provider, string model, string key, byte[] image, string contentType, string prompt,
+        CancellationToken ct, CancellationToken deadline)
+    {
+        using var http = BuildRequest(provider, model, key, image, contentType, prompt);
+        var client = _http.CreateClient(nameof(LlmVisionDefectProvider));
+        client.Timeout = Timeout.InfiniteTimeSpan; // the deadline token enforces QC_VISION_TIMEOUT_SECONDS
+
         HttpResponseMessage resp;
         try
         {
-            resp = await client.SendAsync(http, timeout.Token);
+            resp = await client.SendAsync(http, deadline);
         }
         catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
         {
@@ -101,17 +204,27 @@ public sealed class LlmVisionDefectProvider : IDefectDetectionProvider
                     : new DefectDetectionException(DefectDetectionException.ProviderError, $"The {provider} API returned HTTP {(int)resp.StatusCode}.");
             }
             var (content, version) = ReadContent(provider, raw);
-            var defects = QcDetectionNormalizer.ParseVisionModelJson(content);
-            _log.LogInformation("QC vision call to {Provider} model={Model} returned {Count} defect(s) in {Ms} ms.",
-                provider, model, defects.Count, sw.ElapsedMilliseconds);
-            return new DefectDetectionResult(provider, model, version, LocalizationSupported: true, defects);
+            return (QcDetectionNormalizer.ParseVisionModelJson(content), version);
         }
     }
 
-    public static string BuildPrompt(DefectDetectionRequest r)
+    /// <param name="region">For a zoomed crop: which part of the photo it is (e.g. "top-left"); null for the whole photo.</param>
+    public static string BuildPrompt(DefectDetectionRequest r, string? region = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"Product type: {r.ProductType}. Inspection stage: {r.Stage}.");
+        if (region is null)
+        {
+            sb.AppendLine("Inspect the WHOLE photo systematically, region by region (top-left to bottom-right), not only the most obvious spot. " +
+                          "A piece often has several defects: report EVERY separate defect as its own entry, including several of the same type. " +
+                          "Never merge defects that are apart into one entry, and do not stop after the first one.");
+        }
+        else
+        {
+            sb.AppendLine($"This image is a zoomed crop of the {region} part of a larger photo of the piece. " +
+                          "Inspect all of it closely and report EVERY separate defect visible in this crop as its own entry; " +
+                          "box_2d is relative to this crop. For a defect cut off by the crop edge, box the visible part.");
+        }
         sb.AppendLine("Look for these defect categories (use the code as the label):");
         foreach (var c in r.Categories)
             sb.AppendLine($"- {c.Code}: {c.Name}{(string.IsNullOrWhiteSpace(c.Description) ? "" : " — " + c.Description)}");
@@ -138,10 +251,9 @@ public sealed class LlmVisionDefectProvider : IDefectDetectionProvider
         "You are a garment quality-control inspector examining a photo from a production line. " +
         "You report visible manufacturing defects precisely and never invent defects that are not visible.";
 
-    private HttpRequestMessage BuildRequest(string provider, string model, string key, DefectDetectionRequest r)
+    private HttpRequestMessage BuildRequest(string provider, string model, string key, byte[] image, string contentType, string prompt)
     {
-        var b64 = Convert.ToBase64String(r.Image);
-        var prompt = BuildPrompt(r);
+        var b64 = Convert.ToBase64String(image);
         HttpRequestMessage msg;
         object body;
         switch (provider)
@@ -164,7 +276,7 @@ public sealed class LlmVisionDefectProvider : IDefectDetectionProvider
                             content = new object[]
                             {
                                 new { type = "text", text = prompt },
-                                new { type = "image_url", image_url = new { url = $"data:{r.ContentType};base64,{b64}", detail = "high" } },
+                                new { type = "image_url", image_url = new { url = $"data:{contentType};base64,{b64}", detail = "high" } },
                             },
                         },
                     },
@@ -187,7 +299,7 @@ public sealed class LlmVisionDefectProvider : IDefectDetectionProvider
                             role = "user",
                             content = new object[]
                             {
-                                new { type = "image", source = new { type = "base64", media_type = r.ContentType, data = b64 } },
+                                new { type = "image", source = new { type = "base64", media_type = contentType, data = b64 } },
                                 new { type = "text", text = prompt },
                             },
                         },
@@ -209,7 +321,7 @@ public sealed class LlmVisionDefectProvider : IDefectDetectionProvider
                             role = "user",
                             parts = new object[]
                             {
-                                new { inline_data = new { mime_type = r.ContentType, data = b64 } },
+                                new { inline_data = new { mime_type = contentType, data = b64 } },
                                 new { text = prompt },
                             },
                         },

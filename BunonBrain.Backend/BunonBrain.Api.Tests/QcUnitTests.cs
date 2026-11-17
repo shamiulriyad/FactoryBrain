@@ -4,6 +4,7 @@ using BunonBrain.Api.Middleware;
 using BunonBrain.Application.Abstractions.Interfaces;
 using BunonBrain.Application.Dtos.Qc;
 using BunonBrain.Application.Qc;
+using BunonBrain.Application.Settings;
 using BunonBrain.Application.Validation;
 using BunonBrain.Domain.Entities;
 using BunonBrain.Infrastructure.Qc;
@@ -314,6 +315,169 @@ public sealed class QcProviderTests
         Assert.Equal(QcLimits.MaxInsightLength, insight.ProbableCauses!.Length);
         Assert.Equal("Reject the panel; check the loom.", insight.RecommendedAction);
         Assert.Null(mapped[1].Insight);
+    }
+
+    [Fact]
+    public void Tiles_cover_the_whole_photo_with_overlap()
+    {
+        Assert.Empty(QcTiling.Tiles(1));
+        var tiles = QcTiling.Tiles(2);
+        Assert.Equal(4, tiles.Count);
+        Assert.All(tiles, t => Assert.True(t.X >= 0 && t.Y >= 0 && t.X + t.Width <= 1 + 1e-9 && t.Y + t.Height <= 1 + 1e-9));
+        // Neighbouring tiles overlap, so a defect on the middle line is seen whole by one of them.
+        Assert.True(tiles[0].X + tiles[0].Width > tiles[1].X);
+        Assert.True(tiles[0].Y + tiles[0].Height > tiles[2].Y);
+        Assert.Equal("top-left", QcTiling.Describe(0, 2));
+        Assert.Equal("bottom-right", QcTiling.Describe(3, 2));
+        Assert.Equal("centre", QcTiling.Describe(4, 3));
+    }
+
+    [Fact]
+    public void Tile_boxes_are_mapped_back_to_whole_photo_coordinates()
+    {
+        var tile = new NormalizedBox(0.5, 0.5, 0.5, 0.5); // bottom-right quarter
+        var d = QcTiling.ToWholeImage(new DetectedDefect("hole", 0.8, new NormalizedBox(0.2, 0.4, 0.2, 0.2), null, null, null), tile);
+        Assert.Equal(new NormalizedBox(0.6, 0.7, 0.1, 0.1), d.Box);
+    }
+
+    [Fact]
+    public void Merging_keeps_separate_defects_and_drops_duplicates_from_overlapping_passes()
+    {
+        var insight = new DefectInsight("Broken yarn", "A yarn is broken.", null, null);
+        DetectedDefect D(string label, double conf, double x, double y, double size = 0.1, DefectInsight? i = null) =>
+            new(label, conf, new NormalizedBox(x, y, size, size), null, null, null, i);
+
+        var whole = new[] { D("fabric_flaw", 0.9, 0.30, 0.30) };          // the obvious one
+        var tiles = new[]
+        {
+            D("fabric_flaw", 0.7, 0.31, 0.31, 0.1, insight),               // same defect again (from a tile)
+            D("fabric_flaw", 0.8, 0.75, 0.70),                             // a second flaw, far away
+            D("stain", 0.6, 0.10, 0.80),                                   // a different defect
+            new DetectedDefect("hole", 0.9, null, null, null, null),        // unlocated tile result: dropped
+        };
+
+        var merged = QcTiling.Merge(whole, tiles);
+
+        Assert.Equal(3, merged.Count);
+        var first = merged.Single(m => m.Box!.X == 0.30);
+        Assert.Equal(0.9, first.Confidence);                                // the higher-confidence copy is kept…
+        Assert.Equal(insight, first.Insight);                               // …and gets the duplicate's explanation
+        Assert.Contains(merged, m => m.Box!.X == 0.75);
+        Assert.Contains(merged, m => m.Label == "stain");
+        Assert.DoesNotContain(merged, m => m.Label == "hole");
+    }
+
+    [Fact]
+    public void Merging_keeps_an_unlocated_whole_photo_defect_only_when_nothing_located_has_its_label()
+    {
+        var whole = new[]
+        {
+            new DetectedDefect("stain", 0.7, null, null, null, null),
+            new DetectedDefect("hole", 0.6, null, null, null, null),
+        };
+        var tiles = new[] { new DetectedDefect("stain", 0.8, new NormalizedBox(0.1, 0.1, 0.1, 0.1), null, null, null) };
+
+        var merged = QcTiling.Merge(whole, tiles);
+
+        Assert.Equal(2, merged.Count);
+        Assert.Single(merged, m => m.Label == "stain" && m.Box is not null);
+        Assert.Single(merged, m => m.Label == "hole" && m.Box is null);
+    }
+
+    [Fact]
+    public void Vision_prompt_asks_for_every_defect_and_explains_crops()
+    {
+        Assert.Contains("report EVERY separate defect", LlmVisionDefectProvider.BuildPrompt(Request()));
+        var crop = LlmVisionDefectProvider.BuildPrompt(Request(), "top-left");
+        Assert.Contains("zoomed crop of the top-left part", crop);
+        Assert.Contains("box_2d is relative to this crop", crop);
+    }
+
+    [Fact]
+    public async Task Llm_vision_inspects_the_whole_photo_and_each_tile_and_merges_the_results()
+    {
+        var prompts = new System.Collections.Concurrent.ConcurrentBag<string>();
+        // Every call (whole photo and each crop) "sees" one flaw at the same crop-relative spot.
+        var http = new StubHttp(async (req, ct) =>
+        {
+            prompts.Add(await req.Content!.ReadAsStringAsync(ct));
+            const string content = "{\\\"defects\\\":[{\\\"label\\\":\\\"stain\\\",\\\"confidence\\\":0.9,\\\"box_2d\\\":[100,100,300,300],\\\"defect_type\\\":\\\"Oil stain\\\"}]}";
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent($$$"""{"model":"gpt-test","choices":[{"message":{"content":"{{{content}}}"}}]}""", Encoding.UTF8, "application/json"),
+            };
+        });
+        var options = QcOptions.FromEnvironment(k => k switch { "QC_VISION_PROVIDER" => "llm", "QC_VISION_MODEL" => "gpt-test", _ => null }, Path.GetTempPath());
+        var provider = new LlmVisionDefectProvider(new FakeAiSettings("openai", "gpt-test", "sk-test"), http, options, NullLogger<LlmVisionDefectProvider>.Instance);
+        var request = new DefectDetectionRequest(TestImages.Png(800, 600), "image/png", 800, 600,
+            new[] { new DetectionCategory("stain", "Stain", null) }, "t-shirt", "final");
+
+        var result = await provider.DetectAsync(request, CancellationToken.None);
+
+        Assert.Equal(5, prompts.Count);                                     // whole photo + 2×2 tiles
+        Assert.Single(prompts, p => p.Contains("Inspect the WHOLE photo"));
+        Assert.Equal(4, prompts.Count(p => p.Contains("zoomed crop")));
+        // The top-left tile's flaw is the whole photo's flaw again (merged); the other three are new places.
+        Assert.Equal(4, result.Defects.Count);
+        Assert.All(result.Defects, d =>
+        {
+            Assert.NotNull(d.Box);
+            Assert.True(d.Box!.X >= 0 && d.Box.Y >= 0 && d.Box.X + d.Box.Width <= 1.0001 && d.Box.Y + d.Box.Height <= 1.0001);
+            Assert.Equal("Oil stain", d.Insight?.DefectType);
+        });
+        Assert.Equal(4, result.Defects.Select(d => (Math.Round(d.Box!.X, 2), Math.Round(d.Box.Y, 2))).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task Llm_vision_with_tiling_off_makes_one_call()
+    {
+        var calls = 0;
+        var http = new StubHttp((_, _) =>
+        {
+            Interlocked.Increment(ref calls);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"model":"gpt-test","choices":[{"message":{"content":"{\"defects\":[]}"}}]}""", Encoding.UTF8, "application/json"),
+            });
+        });
+        var options = QcOptions.FromEnvironment(k => k switch
+        {
+            "QC_VISION_PROVIDER" => "llm", "QC_VISION_MODEL" => "gpt-test", "QC_VISION_TILE_GRID" => "1", _ => null,
+        }, Path.GetTempPath());
+        var provider = new LlmVisionDefectProvider(new FakeAiSettings("openai", "gpt-test", "sk-test"), http, options, NullLogger<LlmVisionDefectProvider>.Instance);
+
+        var result = await provider.DetectAsync(new DefectDetectionRequest(TestImages.Png(800, 600), "image/png", 800, 600,
+            Array.Empty<DetectionCategory>(), "t-shirt", "final"), CancellationToken.None);
+
+        Assert.Equal(1, calls);
+        Assert.Empty(result.Defects);
+    }
+
+    private sealed class FakeAiSettings : IAiSettingsProvider
+    {
+        private readonly AiSettingsSnapshot _snap;
+        public FakeAiSettings(string? provider, string? model, string? key)
+        {
+            var secret = SecretValue.From(key);
+            _snap = new AiSettingsSnapshot(new LlmSettings(provider, model, secret, secret is null ? SecretStatus.NotSet : SecretStatus.Set, AiSettingsSource.RuntimeOverride),
+                new EmbeddingSettings("local", "hash-md5", 384, null, SecretStatus.NotSet, AiSettingsSource.Default), 1, null, null);
+        }
+        public ValueTask<AiSettingsSnapshot> GetAsync(CancellationToken ct = default) => ValueTask.FromResult(_snap);
+        public AiSettingsSnapshot GetCurrent() => _snap;
+        public IDisposable BeginOverride(AiSettingsOverride settingsOverride) => throw new NotSupportedException();
+        public StartupAiConfig Startup => StartupAiConfig.Empty;
+        public void Invalidate() { }
+    }
+
+    [Fact]
+    public void Tile_grid_is_read_from_the_environment_with_a_safe_default()
+    {
+        QcOptions Read(string? v) => QcOptions.FromEnvironment(k => k == "QC_VISION_TILE_GRID" ? v : null, Path.GetTempPath());
+        Assert.Equal(QcOptions.DefaultTileGrid, Read(null).TileGrid);
+        Assert.Equal(1, Read("1").TileGrid);
+        Assert.Equal(3, Read("3").TileGrid);
+        Assert.Equal(QcOptions.DefaultTileGrid, Read("9").TileGrid);
+        Assert.Equal(QcOptions.DefaultTileGrid, Read("abc").TileGrid);
     }
 
     [Fact]

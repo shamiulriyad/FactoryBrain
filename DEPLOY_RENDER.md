@@ -7,9 +7,9 @@ the external services, the secrets, the PDF data and the computer-vision PC.
 
 | Part | Runs on | Why |
 |---|---|---|
-| Frontend (Next.js) | Render web service `bunonbrain-web` | public website |
-| API (.NET 10, Docker) | Render web service `bunonbrain-api` + 5 GB disk | public (CV PC and IoT devices call it); the disk keeps uploaded files |
-| PDF RAG (FastAPI, Docker) | Render **private** service `bunonbrain-rag` | only the API calls it, so it isn't on the internet |
+| Frontend (Next.js) | Render web service `bunonbrain-web` (**free**) | public website |
+| API (.NET 10, Docker) | Render web service `bunonbrain-api` (**starter**) + 1 GB disk | public (CV PC and IoT devices call it); the disk keeps uploaded files |
+| PDF RAG (FastAPI, Docker) | Render web service `bunonbrain-rag` (**free**) | public URL, but every route except `/health` needs `PYRAG_API_KEY`, which only the API has |
 | Database | Supabase (as today) | Postgres + pgvector |
 | Vector store | Qdrant Cloud (free 1 GB cluster) | Render has no managed Qdrant, and a self-hosted one needs another service + disk |
 | Computer vision | a PC/server inside the factory | it must reach the RTSP cameras / webcams on the factory LAN; CPU-only YOLO on Render is slow and needs a 2 GB plan |
@@ -18,19 +18,30 @@ the external services, the secrets, the PDF data and the computer-vision PC.
 ```
 Browser ──https──> bunonbrain-web ──private network──> bunonbrain-api ──> Supabase
                                                           │   ▲
-                                         private network  │   │ https (X-Service-Key)
+                              https (X-Rag-Api-Key)       │   │ https (X-Service-Key)
                                                           ▼   │
                                                   bunonbrain-rag ──> Qdrant Cloud, Gemini
                                                               │
                                           Factory PC: computer-vision ──> cameras (RTSP)
 ```
 
-All three Render services are in **Singapore** (closest to Supabase in Mumbai) and on paid
-plans: free instances sleep after 15 minutes (which stops the API's background workers),
-can't have a disk and can't receive private-network traffic.
+All three Render services are in **Singapore** (closest to Supabase in Mumbai).
 
-**Cost:** 3 × Starter ($7) + 5 GB disk (~$1.25) ≈ **$22/month**. Qdrant Cloud free tier is $0.
-If the API restarts with out-of-memory errors, move it to Standard (2 GB, $25).
+**Cost (budget setup):** API Starter ($7) + 1 GB disk ($0.25) ≈ **$7.25/month**; the frontend,
+RAG service and Qdrant Cloud are free. A $50 Render credit lasts about 7 months. Keep the
+workspace on the free **Hobby** plan.
+
+Only the API must be paid: free instances sleep after 15 idle minutes (which would stop the
+API's background workers) and can't have a disk. The free frontend and RAG service sleep too,
+so after a quiet period:
+- the first page load takes ~1 minute;
+- the first Ask can fail with a timeout (the frontend's `/api` proxy gives up after 30 s while
+  the RAG service wakes up); asking again works.
+
+Free instance hours are shared by the workspace (750 h/month), so don't keep both free services
+awake 24/7 with an uptime pinger. To remove the wake-ups, set `plan: starter` on
+`bunonbrain-web` / `bunonbrain-rag` (+$7 each). If the API restarts with out-of-memory errors,
+move it to Standard (2 GB, $25).
 
 ## 2. Before you start
 
@@ -72,11 +83,11 @@ First build takes ~10 minutes (the .NET image is the slowest).
 ## 4. Check the generated addresses
 
 - If a service name was already taken, Render adds a suffix (e.g. `bunonbrain-web-ab12.onrender.com`).
-  Fix `CORS_ORIGINS` / `PUBLIC_APP_URL` to the real frontend URL.
-- Open each service → **Connect → Internal** and confirm the private addresses are
-  `bunonbrain-api:8080` and `bunonbrain-rag:8000`. If not, fix `NEXT_PUBLIC_API_URL` +
-  `DOTNET_API_URL` (frontend) or `PYRAG_SERVICE_URL` (API). The frontend bakes its value in at
-  build time, so use **Manual Deploy → Clear build cache & deploy** after changing it.
+  Fix `CORS_ORIGINS` / `PUBLIC_APP_URL` (frontend URL) and `PYRAG_SERVICE_URL` (RAG URL) on the API.
+- Open `bunonbrain-api` → **Connect → Internal** and confirm the private address is
+  `bunonbrain-api:8080`. If not, fix `NEXT_PUBLIC_API_URL` + `DOTNET_API_URL` on the frontend.
+  The frontend bakes them in at build time, so use **Manual Deploy → Clear build cache & deploy**
+  after changing them.
 
 ## 5. Load the PDFs into Qdrant Cloud
 

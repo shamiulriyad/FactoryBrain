@@ -73,17 +73,19 @@ services:
       - key: PUBLIC_APP_URL        # same frontend URL, used in password-reset emails
         sync: false
 
-      # LLM (Ask BunonBrain, QC vision): Gemini has a free tier. For OpenAI set
-      # LLM_PROVIDER=openai and an OpenAI model/key. A provider saved later under
-      # Settings → AI (stored in the database) overrides these.
+      # LLM for the API's own AI features, including QC defect detection (vision).
+      # A provider saved later under Settings → AI (stored in the database)
+      # overrides these.
       - key: LLM_PROVIDER
-        value: gemini
+        value: openai
       - key: LLM_MODEL
-        value: gemini-2.5-flash
-      - key: LLM_API_KEY           # Gemini key (the same one as GOOGLE_API_KEY below)
+        value: gpt-6-luna
+      - key: LLM_API_KEY           # OpenAI key
         sync: false
       - key: QC_VISION_PROVIDER
         value: llm
+      - key: QC_VISION_MODEL       # vision-capable model for QC images
+        value: gpt-4o
 
       # Backend pgvector RAG: keep 384 (local embedder) to match vectors already in the DB.
       - key: Rag__EmbeddingDimensions
@@ -160,15 +162,19 @@ services:
         value: "8000"
       - key: PYRAG_API_KEY
         generateValue: true
-      # Gemini embeddings: no torch in the image, fits in 512 MB.
+      # Retrieval: Gemini embeddings (no torch in the image, fits in 512 MB).
+      # Changing the embedding model means re-ingesting every PDF.
       - key: PYRAG_EMBEDDING_PROVIDER
         value: google
       - key: GOOGLE_API_KEY
         sync: false
+      # Answers: OpenAI. No PYRAG_TEMPERATURE: gpt-6-luna accepts only its default.
+      - key: PYRAG_LLM_PROVIDER
+        value: openai
       - key: PYRAG_LLM_MODEL
-        value: gemini-2.5-flash
-      - key: PYRAG_TEMPERATURE
-        value: "0.2"
+        value: gpt-6-luna
+      - key: PYRAG_OPENAI_API_KEY
+        sync: false
       - key: PYRAG_TOP_K
         value: "4"
       # Qdrant Cloud cluster URL (https://...:6333) and API key.

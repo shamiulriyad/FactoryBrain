@@ -9,6 +9,6 @@
 7  step07_user_question   User question
 8  step08_query_embedding Query embedding
 9  step09_retrieve        Retrieve relevant chunks
-10 step10_generate        Gemini
+10 step10_generate        Gemini or OpenAI (PYRAG_LLM_PROVIDER)
 11 step11_answer          Answer + sources
 """

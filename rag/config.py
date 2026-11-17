@@ -104,9 +104,39 @@ MIN_TEXT_CHARS = int(_env("MIN_TEXT_CHARS", "200"))
 # --- Step 9: Retrieval ---------------------------------------------------
 TOP_K = int(_env("TOP_K", "4"))
 
-# --- Step 10: Gemini LLM -------------------------------------------------
-LLM_MODEL = _env("LLM_MODEL", "gemini-2.5-flash")
-TEMPERATURE = float(_env("TEMPERATURE", "0.2"))
+# --- Step 10: answering LLM ----------------------------------------------
+# Which model writes the answers. Independent of the embedding provider above:
+# answers can come from OpenAI while retrieval keeps Gemini embeddings.
+#   google : Gemini chat model. Needs GOOGLE_API_KEY.
+#   openai : OpenAI chat model. Needs PYRAG_OPENAI_API_KEY (or OPENAI_API_KEY).
+LLM_PROVIDER = _env("LLM_PROVIDER", "google").strip().lower()
+KNOWN_LLM_PROVIDERS = ("google", "openai")
+_DEFAULT_LLM_MODEL = {"google": "gemini-2.5-flash", "openai": "gpt-4o-mini"}
+LLM_MODEL = _env("LLM_MODEL", "").strip() or _DEFAULT_LLM_MODEL.get(LLM_PROVIDER, "gemini-2.5-flash")
+OPENAI_API_KEY = _env("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY") or None
+# Optional OpenAI-compatible endpoint (e.g. a proxy). Empty = api.openai.com.
+OPENAI_BASE_URL = _env("OPENAI_BASE_URL") or None
+# Empty = the model's default. Newer OpenAI models (e.g. gpt-6-luna) accept only
+# their default and reject any other value, so the default is empty for openai.
+_temperature = _env("TEMPERATURE", "0.2" if LLM_PROVIDER == "google" else "").strip()
+TEMPERATURE = float(_temperature) if _temperature else None
+
+
+def require_llm_api_key() -> None:
+    """Fail early, with a clear message, on a bad answering-LLM setup."""
+    if LLM_PROVIDER not in KNOWN_LLM_PROVIDERS:
+        raise RuntimeError(
+            f"PYRAG_LLM_PROVIDER='{LLM_PROVIDER}' is not valid. "
+            f"Use one of: {', '.join(KNOWN_LLM_PROVIDERS)} (set it in .env)."
+        )
+    if LLM_PROVIDER == "openai":
+        if not OPENAI_API_KEY:
+            raise RuntimeError(
+                "PYRAG_LLM_PROVIDER=openai but PYRAG_OPENAI_API_KEY is not set. Put your "
+                "OpenAI API key in the repo-root .env (https://platform.openai.com/api-keys)."
+            )
+    else:
+        require_api_key()
 
 
 def require_api_key() -> None:

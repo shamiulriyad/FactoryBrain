@@ -1,5 +1,5 @@
 // Sensors store — keeps the slice of recent sensor readings the agents see.
-// Pattern mirrors ask.store.ts: Zustand state, persisted under a
+// Pattern: Zustand state, persisted under a
 // "bunonbrain:*" key, with a small mutator set and a reset hook for the
 // demo-reset affordance.
 

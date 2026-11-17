@@ -227,6 +227,9 @@ public static class EndpointMatrix
         // Knowledge & AI.
         ("POST",  "/api/ask",                   G(P.KnowledgeView)),
         ("GET",   "/api/ask/status",            G(P.KnowledgeView)),
+        ("GET",   "/api/ask/conversations",     G(P.KnowledgeView)),
+        ("GET",   "/api/ask/conversations/{conversationId}", G(P.KnowledgeView)),
+        ("DELETE", "/api/ask/conversations/{conversationId}", G(P.KnowledgeView)),
         ("GET",   "/api/agents",                G(P.KnowledgeView)),
         ("POST",  "/api/agents/{agentId}/run",  G(P.AgentsRun)),
         ("GET",   "/api/rag/documents",         G(P.KnowledgeView)),
@@ -518,6 +521,7 @@ public static class EndpointMatrix
         .Replace("{floorId}", "5b1f0c9e-0000-4000-8000-000000000003")
         .Replace("{cardId}", "5b1f0c9e-0000-4000-8000-000000000004")
         .Replace("{workerId}", "5b1f0c9e-0000-4000-8000-000000000005")
+        .Replace("{conversationId}", "5b1f0c9e-0000-4000-8000-000000000006")
         .Replace("{id}", "alert-1")
         .Replace("{code}", "stain");
 

@@ -138,6 +138,8 @@ public class BunonBrainDbContext : DbContext
     public DbSet<FactoryDocumentEvent>   FactoryDocumentEvents   => Set<FactoryDocumentEvent>();
     public DbSet<DocumentTypeSetting>    DocumentTypeSettings    => Set<DocumentTypeSetting>();
     public DbSet<UserNotification>       UserNotifications       => Set<UserNotification>();
+    public DbSet<AskConversation>        AskConversations        => Set<AskConversation>();
+    public DbSet<AskMessage>             AskMessages             => Set<AskMessage>();
     public DbSet<AiApiUsage>             AiApiUsage              => Set<AiApiUsage>();
     public DbSet<InventoryItem>          InventoryItems          => Set<InventoryItem>();
     public DbSet<StockMovement>          StockMovements          => Set<StockMovement>();

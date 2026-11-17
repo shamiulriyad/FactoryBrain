@@ -4,7 +4,11 @@ namespace BunonBrain.Application.Dtos.Ask;
 public record AskRequest(
     string Query,
     string? AgentId,
-    RagFilter? Filter
+    RagFilter? Filter,
+    /// <summary>Saved chat to add this question to; null starts a new chat.</summary>
+    Guid? ConversationId = null,
+    /// <summary>True: don't reuse an earlier answer, ask the model again.</summary>
+    bool? Fresh = null
 );
 
 public record RagFilter(

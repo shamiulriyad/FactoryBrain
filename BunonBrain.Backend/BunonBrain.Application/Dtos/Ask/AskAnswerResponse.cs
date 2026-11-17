@@ -31,7 +31,16 @@ public record AskAnswerResponse(
     /// </summary>
     string Mode,
     /// <summary>Optional note about the answer; null when there is nothing to add.</summary>
-    string? Warning
+    string? Warning,
+    /// <summary>True when this is the stored answer to an earlier, equivalent question: no LLM call was made.</summary>
+    bool Cached = false,
+    /// <summary>The earlier question whose answer was reused (when <see cref="Cached"/>).</summary>
+    string? CachedQuestion = null,
+    /// <summary>When the reused answer was first produced (when <see cref="Cached"/>).</summary>
+    DateTimeOffset? CachedAt = null,
+    /// <summary>The saved chat this question was added to; null when history could not be saved.</summary>
+    Guid? ConversationId = null,
+    Guid? MessageId = null
 );
 
 public static class AskModes

@@ -21,14 +21,14 @@ public sealed class PyRagClient : IPyRagClient
     public PyRagClient(IHttpClientFactory http, PyRagOptions options, ILogger<PyRagClient> log)
     { _http = http; Options = options; _log = log; }
 
-    public async Task<PyRagAnswer> QueryAsync(string question, CancellationToken ct)
+    public async Task<PyRagAnswer> QueryAsync(string question, CancellationToken ct, bool useCache = true)
     {
         using var client = Client(Options.Timeout);
         var path = $"api/kb/{Uri.EscapeDataString(Options.Collection)}/query";
         HttpResponseMessage resp;
         try
         {
-            resp = await client.PostAsJsonAsync(path, new { question }, Json, ct);
+            resp = await client.PostAsJsonAsync(path, new { question, use_cache = useCache }, Json, ct);
         }
         catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
@@ -53,7 +53,7 @@ public sealed class PyRagClient : IPyRagClient
             var sources = (body.Sources ?? new())
                 .Select(s => new PyRagSource(s.DocumentId, s.ChunkId, s.Page, s.Source ?? "document", s.Score, s.Excerpt ?? ""))
                 .ToList();
-            return new PyRagAnswer(body.Answer?.Trim() ?? "", sources);
+            return new PyRagAnswer(body.Answer?.Trim() ?? "", sources, body.Cached, body.CachedQuestion, body.CachedAt);
         }
     }
 
@@ -101,6 +101,9 @@ public sealed class PyRagClient : IPyRagClient
     {
         public string? Answer { get; set; }
         public List<SourceOut>? Sources { get; set; }
+        public bool Cached { get; set; }
+        [JsonPropertyName("cached_question")] public string? CachedQuestion { get; set; }
+        [JsonPropertyName("cached_at")] public DateTimeOffset? CachedAt { get; set; }
     }
 
     private sealed class SourceOut

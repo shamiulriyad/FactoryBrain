@@ -22,7 +22,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, FieldCondition, Filter, MatchValue, VectorParams
 
 import config
-from rag import index_meta
+from rag import answer_cache, index_meta
 
 
 def get_client() -> QdrantClient:
@@ -130,6 +130,8 @@ def store_chunks(
 
     # Remember what built this collection so a later model change is caught.
     index_meta.save(collection_name, dimension)
+    # The documents changed, so earlier cached answers may be wrong now.
+    answer_cache.clear(collection_name)
     return store
 
 
@@ -143,6 +145,7 @@ def delete_document(collection_name: str, document_id: str) -> None:
         collection_name=collection_name,
         points_selector=Filter(must=[FieldCondition(key="metadata.document_id", match=MatchValue(value=document_id))]),
     )
+    answer_cache.clear(collection_name)
 
 
 def delete_collection(collection_name: str) -> None:
@@ -151,6 +154,7 @@ def delete_collection(collection_name: str) -> None:
     client = get_client()
     if client.collection_exists(collection_name):
         client.delete_collection(collection_name)
+    answer_cache.clear(collection_name)
     if config.QDRANT_PATH:
         _reset_local_storage(collection_name)
 

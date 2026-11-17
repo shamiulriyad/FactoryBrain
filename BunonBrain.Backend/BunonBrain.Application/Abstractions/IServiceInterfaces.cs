@@ -15,6 +15,27 @@ using BunonBrain.Application.Dtos.Settings;
 
 namespace BunonBrain.Application.Abstractions.Interfaces;
 
+/// <summary>
+/// Saved Ask BunonBrain chats. Every method is scoped to one user: a chat of
+/// someone else behaves exactly like one that doesn't exist.
+/// </summary>
+public interface IAskHistoryService
+{
+    /// <summary>
+    /// Save a question and its answer. Adds to <paramref name="conversationId"/>
+    /// when it is the user's (and not full); otherwise starts a new chat.
+    /// </summary>
+    Task<(Guid ConversationId, Guid MessageId)> AppendAsync(
+        Guid userId, Guid? conversationId, string question, AskAnswerResponse answer, CancellationToken ct);
+
+    /// <summary>The user's chats, most recent first.</summary>
+    Task<IReadOnlyList<AskConversationSummary>> ListAsync(Guid userId, int limit, CancellationToken ct);
+
+    Task<AskConversationDetail?> GetAsync(Guid userId, Guid conversationId, CancellationToken ct);
+
+    Task<bool> DeleteAsync(Guid userId, Guid conversationId, CancellationToken ct);
+}
+
 public interface IAskService
 {
     Task<AskAnswerResponse> AskAsync(AskRequest req, CancellationToken ct);

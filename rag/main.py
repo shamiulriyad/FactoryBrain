@@ -103,6 +103,8 @@ class QueryIn(BaseModel):
     question: str
     top_k: Optional[int] = None
     similarity_threshold: Optional[float] = None
+    # False = ignore earlier answers and ask the model again ("ask fresh").
+    use_cache: bool = True
 
 
 class SourceOut(BaseModel):
@@ -117,6 +119,10 @@ class SourceOut(BaseModel):
 class AnswerOut(BaseModel):
     answer: str
     sources: List[SourceOut]
+    # True when this is the stored answer to an earlier, equivalent question (no LLM call).
+    cached: bool = False
+    cached_question: Optional[str] = None
+    cached_at: Optional[str] = None
 
 
 class IngestOut(BaseModel):
@@ -245,6 +251,7 @@ def query(collection: str, body: QueryIn) -> AnswerOut:
             similarity_threshold=body.similarity_threshold,
             embeddings=_state["embeddings"],
             llm=_state["llm"],
+            use_cache=body.use_cache,
         )
     except KnowledgeBaseNotIndexedError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

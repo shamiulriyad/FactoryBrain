@@ -242,6 +242,12 @@ public sealed class DbApiFactory : WebApplicationFactory<Program>
     /// <summary>Questions the fake RAG service received, with the X-Rag-Api-Key each carried.</summary>
     public ConcurrentQueue<(string Question, string? ApiKey)> RagQuestions { get; } = new();
 
+    /// <summary>The use_cache flag of every query the fake RAG service received.</summary>
+    public ConcurrentQueue<bool> RagUseCache { get; } = new();
+
+    /// <summary>A question containing this gets a reused ("cached") answer while use_cache is true.</summary>
+    public const string RagCachedMarker = "REUSE-EARLIER-ANSWER";
+
     private void InstallRagFake() => Http
         .Fake(FakeRagHost, "/health", (_, _) => OutboundHttpGuard.Json("""{"status":"ok","ready":true,"qdrant":"healthy"}"""))
         .Fake(FakeRagHost, $"/api/kb/{FakeRagCollection}/query", (req, body) =>
@@ -249,14 +255,20 @@ public sealed class DbApiFactory : WebApplicationFactory<Program>
             using var doc = JsonDocument.Parse(body);
             var question = doc.RootElement.GetProperty("question").GetString() ?? "";
             RagQuestions.Enqueue((question, req.Headers.TryGetValues("X-Rag-Api-Key", out var k) ? k.FirstOrDefault() : null));
+            var useCache = !doc.RootElement.TryGetProperty("use_cache", out var uc) || uc.ValueKind != JsonValueKind.False;
+            RagUseCache.Enqueue(useCache);
             if (question.Contains(ForceRagFailure))
                 return OutboundHttpGuard.Json("""{"detail":"Gemini quota exceeded"}""", HttpStatusCode.InternalServerError);
             if (question.Contains(RagNoSourceMarker))
                 return OutboundHttpGuard.Json(JsonSerializer.Serialize(new { answer = FakeRagNoSourceAnswer, sources = Array.Empty<object>() }));
+            var reused = useCache && question.Contains(RagCachedMarker);
             return OutboundHttpGuard.Json(JsonSerializer.Serialize(new
             {
                 answer = FakeRagAnswer,
-                sources = new[] { new { document_id = "doc-test", chunk_id = "0", page = 2, source = FakeRagSourceFile, score = FakeRagScore, excerpt = "Replace the bearing when vibration exceeds 4.5 mm/s." } }
+                sources = new[] { new { document_id = "doc-test", chunk_id = "0", page = 2, source = FakeRagSourceFile, score = FakeRagScore, excerpt = "Replace the bearing when vibration exceeds 4.5 mm/s." } },
+                cached = reused,
+                cached_question = reused ? "the earlier question" : null,
+                cached_at = reused ? "2026-11-01T08:00:00+00:00" : null,
             }));
         });
 

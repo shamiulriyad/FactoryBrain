@@ -176,6 +176,7 @@ export const bn: Dict = {
     people: "মানুষ",
     system: "সিস্টেম",
     tools: "টুলস",
+    assistant: "এআই সহকারী",
     search: "লাইন, PO, অ্যালার্ট খুঁজুন",
     searchLabel: "খুঁজুন",
     collapse: "সাইডবার ছোট করুন",

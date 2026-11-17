@@ -417,3 +417,15 @@ mosquitto_pub -h localhost -u S-L1-T025 -P '<device password>' -q 1 \
   down-sampled long-term telemetry yet.
 * No OPC UA / Modbus driver in the backend: gateways translate to this contract.
 * The database integration tests need Docker (Testcontainers).
+
+
+
+
+
+
+
+
+
+
+
+

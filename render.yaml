@@ -1,8 +1,13 @@
 # Render Blueprint for BunonBrain. Step-by-step guide: DEPLOY_RENDER.md
 #
-#   bunonbrain-web  Next.js frontend           public  https://bunonbrain-web.onrender.com
-#   bunonbrain-api  .NET 10 API (Docker)        public  https://bunonbrain-api.onrender.com
-#   bunonbrain-rag  Python PDF RAG (Docker)     private (only the API can reach it)
+#   bunonbrain-web  Next.js frontend         FREE     https://bunonbrain-web.onrender.com
+#   bunonbrain-api  .NET 10 API (Docker)     starter  https://bunonbrain-api.onrender.com
+#   bunonbrain-rag  Python PDF RAG (Docker)  FREE     https://bunonbrain-rag.onrender.com (every route but /health needs PYRAG_API_KEY)
+#
+# Budget setup (~$7.25/month): only the API is paid, because it runs background
+# workers and needs the disk. Free services sleep after 15 idle minutes and take
+# ~1 minute to wake. Free services can't receive private-network traffic, so the
+# API reaches the RAG service over its public URL.
 #
 # Not on Render: the database (Supabase), the vector store (Qdrant Cloud) and the
 # computer-vision service (a PC inside the factory, next to the cameras).
@@ -32,7 +37,7 @@ services:
     disk:
       name: app-data
       mountPath: /app/App_Data
-      sizeGB: 5
+      sizeGB: 1                # grow later in the dashboard (disks can grow, never shrink)
     envVars:
       - key: PORT
         value: "8080"
@@ -84,19 +89,19 @@ services:
       - key: Rag__EmbeddingDimensions
         value: "384"
 
-      # Python RAG service over Render's private network.
-      # Check the exact internal address in Dashboard → bunonbrain-rag → Connect → Internal.
+      # Python RAG service (free plan, public URL). If Render gave it a suffixed
+      # name (bunonbrain-rag-xxxx.onrender.com), fix this value.
       - key: PYRAG_SERVICE_URL
-        value: http://bunonbrain-rag:8000
+        value: https://bunonbrain-rag.onrender.com
       - key: PYRAG_API_KEY
         fromService:
-          type: pserv
+          type: web
           name: bunonbrain-rag
           envVarKey: PYRAG_API_KEY
       - key: PYRAG_COLLECTION_NAME
         value: pdf_rag
-      - key: PYRAG_TIMEOUT_SECONDS
-        value: "90"
+      - key: PYRAG_TIMEOUT_SECONDS   # leaves room for a ~1 minute free-plan wake-up
+        value: "120"
 
       # Computer-vision service (runs in the factory). Copy this generated value
       # into computer-vision/.env as CV_BACKEND_SERVICE_KEY.
@@ -118,7 +123,7 @@ services:
     name: bunonbrain-web
     runtime: node
     region: singapore
-    plan: starter
+    plan: free               # sleeps when idle; free services may still SEND private-network requests
     rootDir: frontend
     # Lint is run separately (see build-environment notes); a lint crash must not block a deploy.
     buildCommand: npm ci && npx next build --no-lint
@@ -140,17 +145,20 @@ services:
         value: http://bunonbrain-api:8080
 
   # ───────────────────────────── Python PDF RAG ─────────────────────────────
-  - type: pserv
+  - type: web
     name: bunonbrain-rag
     runtime: docker
     region: singapore
-    plan: starter
+    plan: free               # public, so PYRAG_API_KEY (generated below) must stay set
     dockerContext: ./rag
     dockerfilePath: ./rag/Dockerfile
+    healthCheckPath: /health
     buildFilter:
       paths:
         - rag/**
     envVars:
+      - key: PORT
+        value: "8000"
       - key: PYRAG_API_KEY
         generateValue: true
       # Gemini embeddings: no torch in the image, fits in 512 MB.

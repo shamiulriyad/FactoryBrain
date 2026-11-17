@@ -193,7 +193,9 @@ export default function AskPage() {
   );
 
   return (
-    <div className="flex h-full min-h-0" data-tour="ask">
+    // Fill the screen below the 3.5rem top bar (the page wrapper has no fixed height, so
+    // h-full can't be used): the composer stays at the bottom and only the chat scrolls.
+    <div className="flex h-[calc(100dvh-3.5rem)] min-h-0 overflow-hidden" data-tour="ask">
       <aside className="hidden md:flex w-72 shrink-0 flex-col border-r border-border-subtle bg-[var(--bg-surface)]" aria-label="Chat history">
         {history}
       </aside>
@@ -201,7 +203,7 @@ export default function AskPage() {
         {history}
       </Drawer>
 
-      <section className="flex-1 min-w-0 flex flex-col">
+      <section className="flex-1 min-w-0 min-h-0 flex flex-col">
         {/* Header */}
         <header className="border-b border-border-subtle bg-[var(--bg-surface)]">
           <div className="max-w-3xl mx-auto w-full px-4 md:px-6 py-3 flex items-center justify-between gap-3">

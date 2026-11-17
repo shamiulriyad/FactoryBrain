@@ -181,6 +181,7 @@ const ROLE_MENUS: Record<string, RoleMenu> = {
   SuperAdmin: [
     { id: "home", labelKey: "sidebar.monitor", items: ["overview", "monitoring", "alerts"] },
     { id: "work", labelKey: "sidebar.plan", items: ["planning", "documents", "analytics", "reports", "approvals"] },
+    { id: "ai", labelKey: "sidebar.assistant", items: ["ask", "knowledge"] },
     { id: "admin", labelKey: "sidebar.admin", items: ["admin-users", "admin-roles", "admin-factories", "admin-website", "admin-inquiries"] },
     { id: "system", labelKey: "sidebar.system", items: ["audit"] },
   ],
@@ -188,6 +189,7 @@ const ROLE_MENUS: Record<string, RoleMenu> = {
     { id: "home", labelKey: "sidebar.monitor", items: ["overview", "monitoring", "alerts"] },
     { id: "work", labelKey: "sidebar.plan", items: ["planning", "documents", "inventory", "analytics", "reports", "approvals"] },
     { id: "people", labelKey: "sidebar.people", items: ["workers", "attendance", "assignments"] },
+    { id: "ai", labelKey: "sidebar.assistant", items: ["ask", "knowledge"] },
     { id: "admin", labelKey: "sidebar.admin", items: ["admin-users", "admin-roles", "admin-factories"] },
     { id: "system", labelKey: "sidebar.system", items: ["audit"] },
   ],
@@ -195,11 +197,13 @@ const ROLE_MENUS: Record<string, RoleMenu> = {
     { id: "home", labelKey: "sidebar.monitor", items: ["overview", "monitoring", "alerts"] },
     { id: "work", labelKey: "sidebar.plan", items: ["planning", "documents", "orders", "approvals", "analytics", "reports", "qc", "inventory"] },
     { id: "people", labelKey: "sidebar.people", items: ["attendance", "assignments", "workers"] },
+    { id: "ai", labelKey: "sidebar.assistant", items: ["ask"] },
   ],
   ProductionSupervisor: [
     { id: "home", labelKey: "sidebar.monitor", items: ["overview", "alerts", "floor-board"] },
     { id: "work", labelKey: "sidebar.plan", items: ["planning", "documents", "qc"] },
     { id: "people", labelKey: "sidebar.people", items: ["assignments", "attendance", "workers"] },
+    { id: "ai", labelKey: "sidebar.assistant", items: ["ask"] },
   ],
   MonitoringOperator: [
     { id: "home", labelKey: "sidebar.monitor", items: ["overview", "monitoring", "alerts", "floor-map"] },

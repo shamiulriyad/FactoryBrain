@@ -177,6 +177,7 @@ export const en = {
     people: "People",
     system: "System",
     tools: "Tools",
+    assistant: "AI Assistant",
     search: "Search lines, POs, alerts",
     searchLabel: "Search",
     collapse: "Collapse sidebar",

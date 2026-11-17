@@ -13,6 +13,9 @@ pypdf>=4.2.0
 # ---- Step 5 (default) & 10: Gemini embeddings + Gemini LLM ----
 langchain-google-genai>=2.1.0
 
+# ---- Step 10 (optional): OpenAI answers (PYRAG_LLM_PROVIDER=openai) ----
+langchain-openai>=0.3.0
+
 # ---- Step 5: optional local embeddings ----
 # For EMBEDDING_PROVIDER=huggingface (all-MiniLM-L6-v2 or bge-m3) also run:
 #     pip install -r requirements-local.txt

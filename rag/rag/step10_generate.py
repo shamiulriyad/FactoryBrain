@@ -1,4 +1,4 @@
-"""STEP 10 - Gemini.
+"""STEP 10 - answer with the configured LLM (Gemini or OpenAI, PYRAG_LLM_PROVIDER).
 
 The retrieved chunks become the context. For document questions the prompt forces
 the model to answer from that context only, and to tag every claim with the [S1]..[Sn] marker of
@@ -9,10 +9,12 @@ from typing import List, Tuple
 
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 import config
+
+_PROVIDER_LABEL = {"google": "Gemini", "openai": "OpenAI"}
 
 SYSTEM_PROMPT = """You are a friendly assistant that helps people with the documents in their
 knowledge base. Each message is either conversation or a question about the documents -
@@ -52,12 +54,28 @@ PROMPT = ChatPromptTemplate.from_messages([
 ])
 
 
-def get_llm() -> ChatGoogleGenerativeAI:
-    config.require_api_key()
+def get_llm() -> BaseChatModel:
+    config.require_llm_api_key()
+    # Only pass a temperature when one is configured: some models reject anything
+    # but their default.
+    extra = {} if config.TEMPERATURE is None else {"temperature": config.TEMPERATURE}
+
+    if config.LLM_PROVIDER == "openai":
+        from langchain_openai import ChatOpenAI  # imported lazily: Gemini-only setups don't need it
+
+        return ChatOpenAI(
+            model=config.LLM_MODEL,
+            api_key=config.OPENAI_API_KEY,
+            base_url=config.OPENAI_BASE_URL,
+            **extra,
+        )
+
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
     return ChatGoogleGenerativeAI(
         model=config.LLM_MODEL,
         google_api_key=config.GOOGLE_API_KEY,
-        temperature=config.TEMPERATURE,
+        **extra,
     )
 
 
@@ -79,5 +97,6 @@ def generate_answer(question: str, scored_docs: List[Tuple[Document, float]], ll
         "question": question,
     })
 
-    print(f"[10] Gemini    : {config.LLM_MODEL} answered")
+    label = _PROVIDER_LABEL.get(config.LLM_PROVIDER, config.LLM_PROVIDER)
+    print(f"[10] {label:<10}: {config.LLM_MODEL} answered")
     return answer.strip()

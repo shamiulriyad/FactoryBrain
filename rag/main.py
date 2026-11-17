@@ -126,7 +126,15 @@ class IngestOut(BaseModel):
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "ready": bool(_state.get("ready")), "qdrant": "healthy" if qdrant_is_healthy() else "down"}
+    return {
+        "status": "ok",
+        "ready": bool(_state.get("ready")),
+        "qdrant": "healthy" if qdrant_is_healthy() else "down",
+        # Which model actually answers, so the app can label answers correctly
+        # (names only, no keys).
+        "llm_provider": config.LLM_PROVIDER,
+        "llm_model": config.LLM_MODEL,
+    }
 
 
 def _require_server_mode() -> None:

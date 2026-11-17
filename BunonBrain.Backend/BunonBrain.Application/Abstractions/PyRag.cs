@@ -29,7 +29,10 @@ public sealed record PyRagAnswer(string Answer, IReadOnlyList<PyRagSource> Sourc
 public sealed record PyRagSource(
     string? DocumentId, string? ChunkId, int? Page, string Source, double Score, string Excerpt);
 
-public sealed record PyRagHealth(bool Reachable, bool Ready, string Qdrant, string? Error);
+/// <param name="LlmProvider">The answering model's provider as the service reports it; null for older services.</param>
+/// <param name="LlmModel">The answering model as the service reports it; null for older services.</param>
+public sealed record PyRagHealth(bool Reachable, bool Ready, string Qdrant, string? Error,
+    string? LlmProvider = null, string? LlmModel = null);
 
 /// <summary>
 /// Where the service is and which collection to query, from the repo-root

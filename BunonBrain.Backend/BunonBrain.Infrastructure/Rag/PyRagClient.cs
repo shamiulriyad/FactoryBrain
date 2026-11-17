@@ -65,7 +65,7 @@ public sealed class PyRagClient : IPyRagClient
             using var resp = await client.GetAsync("health", ct);
             if (!resp.IsSuccessStatusCode) return new PyRagHealth(true, false, "unknown", $"health returned {(int)resp.StatusCode}");
             var body = await resp.Content.ReadFromJsonAsync<HealthOut>(Json, ct);
-            return new PyRagHealth(true, body?.Ready ?? false, body?.Qdrant ?? "unknown", null);
+            return new PyRagHealth(true, body?.Ready ?? false, body?.Qdrant ?? "unknown", null, body?.LlmProvider, body?.LlmModel);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
@@ -117,5 +117,9 @@ public sealed class PyRagClient : IPyRagClient
     {
         public bool Ready { get; set; }
         public string? Qdrant { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("llm_provider")]
+        public string? LlmProvider { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("llm_model")]
+        public string? LlmModel { get; set; }
     }
 }

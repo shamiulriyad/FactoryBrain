@@ -37,6 +37,18 @@ def test_health_is_open_without_a_key(client):
     assert client.get("/health").status_code != 401
 
 
+def test_health_names_the_answering_model_but_never_a_key(client, monkeypatch):
+    monkeypatch.setattr(main, "qdrant_is_healthy", lambda: True)
+    monkeypatch.setattr(config, "LLM_PROVIDER", "openai")
+    monkeypatch.setattr(config, "LLM_MODEL", "gpt-test")
+    monkeypatch.setattr(config, "OPENAI_API_KEY", "sk-secret-value")
+    body = client.get("/health").json()
+    assert body["llm_provider"] == "openai"
+    assert body["llm_model"] == "gpt-test"
+    assert "sk-secret-value" not in str(body)
+    assert KEY not in str(body)
+
+
 @pytest.mark.parametrize("method,path", [
     ("POST", "/api/kb/kb_x/query"),
     ("POST", "/api/kb/kb_x/ingest?document_id=d"),

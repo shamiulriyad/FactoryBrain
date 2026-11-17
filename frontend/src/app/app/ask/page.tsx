@@ -36,6 +36,9 @@ type Answer = AskAnswer & { ragHits?: AskRagHit[] };
 type Block = AskRecord["blocks"][number];
 
 const MAX_QUERY = 2000;
+/** While the RAG service is not ready: how often to re-check, and for how long. */
+const RAG_WAKE_POLL_MS = 10_000;
+const RAG_WAKE_MAX_MS = 3 * 60_000;
 
 /** Turn an API answer into the blocks the page (and the history) renders. */
 function toBlocks(json: Answer, mode: AskMode): Block[] {
@@ -64,8 +67,17 @@ export default function AskPage() {
   const [copied, setCopied] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
-  const rag = useResource<RagServiceStatus>("/api/ask/status");
+  // A hosted RAG service may be asleep (free hosting stops it after idle time); every
+  // status read wakes it. Re-check every 10 s until it is ready, for at most 3 minutes.
+  const [waitingForRag, setWaitingForRag] = useState(true);
+  const rag = useResource<RagServiceStatus>("/api/ask/status", { pollMs: waitingForRag ? RAG_WAKE_POLL_MS : undefined });
   const ragUp = rag.data ? rag.data.reachable && rag.data.ready && rag.data.qdrant === "healthy" : null;
+  useEffect(() => {
+    if (ragUp === true) { setWaitingForRag(false); return; }
+    if (!waitingForRag) return;
+    const stop = setTimeout(() => setWaitingForRag(false), RAG_WAKE_MAX_MS);
+    return () => clearTimeout(stop);
+  }, [ragUp, waitingForRag]);
 
   // History is kept on this device only, and only the signed-in user's own.
   const allHistory = useAskStore((s) => s.history);
@@ -179,9 +191,17 @@ export default function AskPage() {
         <div className="max-w-3xl mx-auto w-full px-4 md:px-6 py-5 pb-8">
           {!asked && !loading && (
             <div>
-              {ragUp === false && (
-                <Callout tone="danger" className="mb-4" title="The RAG service is not available" testId="ask-rag-down">
-                  {rag.data?.reachable ? `The service is running but not ready (Qdrant: ${rag.data.qdrant}).` : "The API cannot reach the Python RAG service."} Start Qdrant and run <span className="font-mono">uvicorn main:app --port 8000</span> in <span className="font-mono">rag/</span>.
+              {ragUp === false && waitingForRag && (
+                <Callout tone="warning" className="mb-4" title="The RAG service is starting…" testId="ask-rag-waking">
+                  It isn&apos;t ready yet{rag.data?.reachable ? ` (Qdrant: ${rag.data.qdrant})` : ""}. A hosted service that sleeps when idle takes
+                  about a minute to wake; this page checks again every 10 seconds. You can type your question meanwhile.
+                </Callout>
+              )}
+              {ragUp === false && !waitingForRag && (
+                <Callout tone="danger" className="mb-4" title="The RAG service is not available" testId="ask-rag-down"
+                  action={<button type="button" className="underline" onClick={() => { setWaitingForRag(true); void rag.reload(); }}>Check again</button>}>
+                  {rag.data?.reachable ? `The service is running but not ready (Qdrant: ${rag.data.qdrant}).` : "The API cannot reach the Python RAG service."}{" "}
+                  Check that the RAG service and Qdrant are running (locally: start Qdrant and run <span className="font-mono">uvicorn main:app --port 8000</span> in <span className="font-mono">rag/</span>).
                 </Callout>
               )}
               <Callout tone="info">

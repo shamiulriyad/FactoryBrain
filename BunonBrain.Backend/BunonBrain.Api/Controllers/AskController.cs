@@ -50,7 +50,9 @@ public class AskController : ControllerBase
             ready = h.Ready,
             qdrant = h.Qdrant,
             collection = o.Collection,
-            llmModel = o.LlmModel,
+            // What the service says it runs wins over this API's PYRAG_LLM_MODEL guess.
+            llmModel = h.LlmModel ?? o.LlmModel,
+            llmProvider = h.LlmProvider,
             embeddingProvider = o.EmbeddingProvider,
             embeddingModel = o.EmbeddingModel,
             error = h.Error

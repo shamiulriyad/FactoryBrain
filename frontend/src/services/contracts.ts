@@ -503,6 +503,8 @@ export type RagServiceStatus = {
   qdrant: string;
   collection: string;
   llmModel: string;
+  /** The answering model's provider as the RAG service reports it (null for older services). */
+  llmProvider?: string | null;
   embeddingProvider: string;
   embeddingModel: string;
   error?: string | null;

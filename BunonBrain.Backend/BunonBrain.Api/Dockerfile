@@ -75,14 +75,12 @@ ENV ASPNETCORE_URLS=http://+:8080 \
 
 EXPOSE 8080
 
-# Create the non-root user before COPY so file ownership is correct from
-# the first layer (no "chown after copy" pattern that bloats the image).
-RUN groupadd --system --gid 1001 app \
-    && useradd  --system --uid 1001 --gid app --home /app --shell /sbin/nologin app \
-    && mkdir -p /app \
-    && chown -R app:app /app
-
+# The .NET 8+ base images already ship a non-root user named "app"
+# (UID 1654, $APP_UID), so it is reused instead of created (creating it again
+# fails with "group 'app' already exists"). App_Data is the default store for
+# uploaded files (QC images, documents, photos) and must be writable by it.
 WORKDIR /app
+RUN mkdir -p /app/App_Data && chown app:app /app/App_Data
 COPY --from=build --chown=app:app /app/publish .
 
 USER app

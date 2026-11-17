@@ -566,6 +566,7 @@ builder.Services.AddScoped<IAssignmentService, BunonBrain.Infrastructure.Assignm
 // closes sessions with a missing check-out every 5 minutes.
 builder.Services.AddScoped<IShiftService, BunonBrain.Infrastructure.Attendance.ShiftService>();
 builder.Services.AddScoped<IAttendanceService, BunonBrain.Infrastructure.Attendance.AttendanceService>();
+builder.Services.AddScoped<IHolidayService, BunonBrain.Infrastructure.Attendance.HolidayService>();
 builder.Services.AddScoped<IOvertimeService, BunonBrain.Infrastructure.Attendance.OvertimeService>();
 if (!builder.Environment.IsEnvironment("Testing"))
     builder.Services.AddHostedService<BunonBrain.Infrastructure.Attendance.AttendanceReviewWorker>();
@@ -741,6 +742,21 @@ builder.Services.AddScoped<IProductionPlanService, BunonBrain.Infrastructure.Pro
 builder.Services.AddScoped<IProductionOutputService, BunonBrain.Infrastructure.Production.ProductionOutputService>();
 builder.Services.AddScoped<IProductionAnalysisService, BunonBrain.Infrastructure.Production.ProductionAnalysisService>();
 
+// ─── Production planning & target management ───────────────────────────────
+// Allocations, targets, daily plans, capacity and exceptions extend the
+// production module and read the IoT counters; see PLANNING.md.
+builder.Services.AddScoped<IPlanningSetupService, BunonBrain.Infrastructure.Planning.PlanningSetupService>();
+builder.Services.AddScoped<IAllocationService, BunonBrain.Infrastructure.Planning.AllocationService>();
+builder.Services.AddScoped<ITargetService, BunonBrain.Infrastructure.Planning.TargetService>();
+builder.Services.AddScoped<ICapacityService, BunonBrain.Infrastructure.Planning.CapacityService>();
+builder.Services.AddScoped<IDailyPlanService, BunonBrain.Infrastructure.Planning.DailyPlanService>();
+builder.Services.AddScoped<IPlanningMonitorService, BunonBrain.Infrastructure.Planning.PlanningMonitorService>();
+builder.Services.AddScoped<BunonBrain.Infrastructure.Planning.ExceptionService>();
+builder.Services.AddScoped<IProductionExceptionService>(sp => sp.GetRequiredService<BunonBrain.Infrastructure.Planning.ExceptionService>());
+builder.Services.AddScoped<IPlanningReports, BunonBrain.Infrastructure.Planning.PlanningReportService>();
+if (!builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddHostedService<BunonBrain.Infrastructure.Planning.PlanningExceptionWorker>();
+
 // ─── Merchandising & document automation (MERCH_* env vars, read once) ─────
 // Buyer orders, milestones and their documents. Originals go to the file
 // store (MERCH_DOCUMENT_STORAGE_PATH), parsed text, extracted values with
@@ -760,6 +776,28 @@ builder.Services.AddScoped<IMerchDocumentService, BunonBrain.Infrastructure.Merc
 builder.Services.AddScoped<IMerchDocumentProcessor, BunonBrain.Infrastructure.Merchandising.MerchDocumentProcessor>();
 if (!builder.Environment.IsEnvironment("Testing"))
     builder.Services.AddHostedService<BunonBrain.Infrastructure.Merchandising.MerchDocumentWorker>();
+
+// ─── Factory documentation automation (DOCUMENT_* env vars, read once) ─────
+// One engine for production, HR, store, quality, merchandising, compliance,
+// commercial and device documents: deterministic generation from records,
+// uploads to the private file store (DOCUMENT_STORAGE_PATH), extraction with
+// rules first and the configured AI provider only for what is still missing,
+// versioned content, approval by document type and risk, notifications to
+// the responsible people, and the store's stock ledger. See DOCUMENTS.md.
+var documentOptions = BunonBrain.Infrastructure.Documents.DocumentOptions.FromEnvironment(
+    Environment.GetEnvironmentVariable, builder.Environment.ContentRootPath);
+builder.Services.AddSingleton(documentOptions);
+builder.Services.AddSingleton<BunonBrain.Infrastructure.Documents.DocumentFileStore>();
+builder.Services.AddSingleton<BunonBrain.Infrastructure.Documents.DocumentAiClient>();
+builder.Services.AddSingleton<BunonBrain.Infrastructure.Documents.DocumentExtractor>();
+builder.Services.AddScoped<BunonBrain.Infrastructure.Documents.DocumentGenerators>();
+builder.Services.AddScoped<BunonBrain.Infrastructure.Documents.DocumentEnricher>();
+builder.Services.AddScoped<BunonBrain.Infrastructure.Documents.DocumentNotifier>();
+builder.Services.AddScoped<IDocumentService, BunonBrain.Infrastructure.Documents.DocumentService>();
+builder.Services.AddScoped<IInventoryService, BunonBrain.Infrastructure.Documents.InventoryService>();
+builder.Services.AddScoped<INotificationService, BunonBrain.Infrastructure.Documents.NotificationService>();
+if (!builder.Environment.IsEnvironment("Testing") && documentOptions.AutomationEnabled)
+    builder.Services.AddHostedService<BunonBrain.Infrastructure.Documents.DocumentAutomationWorker>();
 
 // ─── Realtime (SignalR) ────────────────────────────────────────────────────
 // FactoryHub is server-to-client only — clients don't call hub methods.

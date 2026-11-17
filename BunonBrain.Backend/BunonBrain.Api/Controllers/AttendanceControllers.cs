@@ -332,3 +332,28 @@ public class RfidSimulatorController : ControllerBase
     public async Task<IActionResult> BreakEnd([FromBody] SimulatorPunchRequest body, CancellationToken ct)
         => AccessResults.From(this, await _attendance.SimulateAsync(this.Caller(), AttendanceEventTypes.BreakEnd, body, ct));
 }
+
+/// <summary>Factory holiday calendar (<c>/api/attendance/holidays</c>): nobody is expected on a holiday, so nobody is absent.</summary>
+[ApiController]
+[Route("api/attendance/holidays")]
+public class HolidaysController : ControllerBase
+{
+    private readonly IHolidayService _holidays;
+    public HolidaysController(IHolidayService holidays) { _holidays = holidays; }
+
+    [HttpGet]
+    [RequirePermission(Permissions.AttendanceView)]
+    public async Task<IActionResult> List([FromQuery] Guid? factoryId, [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken ct) =>
+        AccessResults.From(this, await _holidays.ListAsync(this.Caller(), factoryId, from, to, ct));
+
+    [HttpPost]
+    [RequirePermission(Permissions.AttendanceManage)]
+    public async Task<IActionResult> Create([FromBody] HolidayWrite body, CancellationToken ct) =>
+        AccessResults.From(this, await _holidays.CreateAsync(this.Caller(), body, AccessResults.TraceId(this), ct), h => $"/api/attendance/holidays/{h.Id}");
+
+    [HttpDelete("{id}")]
+    [RequirePermission(Permissions.AttendanceManage)]
+    public async Task<IActionResult> Remove([FromRoute] string id, CancellationToken ct) =>
+        Guid.TryParse(id, out var g) ? AccessResults.From(this, await _holidays.RemoveAsync(this.Caller(), g, AccessResults.TraceId(this), ct))
+            : AccessResults.Problem(this, 404, "Not found", "holiday_not_found", "Holiday not found.");
+}

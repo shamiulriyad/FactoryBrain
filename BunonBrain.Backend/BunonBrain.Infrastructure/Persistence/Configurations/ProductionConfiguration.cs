@@ -61,6 +61,12 @@ public class ProductionStyleConfiguration : IEntityTypeConfiguration<ProductionS
         b.Property(x => x.Code).HasMaxLength(40).IsRequired();
         b.Property(x => x.Name).HasMaxLength(120).IsRequired();
         b.Property(x => x.ProductType).HasMaxLength(64);
+        b.Property(x => x.GarmentCategory).HasMaxLength(64);
+        b.Property(x => x.Description).HasMaxLength(1000);
+        b.Property(x => x.Complexity).HasMaxLength(10);
+        b.Property(x => x.SizeRange).HasColumnType("text[]");
+        b.Property(x => x.ColorVariants).HasColumnType("text[]");
+        b.Property(x => x.QualityCheckpoints).HasColumnType("text[]");
         b.Property(x => x.CreatedAt).HasColumnType("timestamptz");
         b.Property(x => x.UpdatedAt).HasColumnType("timestamptz");
         b.Property(x => x.Version).IsRowVersion();
@@ -90,18 +96,30 @@ public class ProductionOrderConfiguration : IEntityTypeConfiguration<ProductionO
 {
     public void Configure(EntityTypeBuilder<ProductionOrder> b)
     {
-        b.ToTable("production_orders", t => t.HasCheckConstraint("CK_production_orders_quantity", "\"Quantity\" > 0 AND \"Quantity\" <= 10000000"));
+        b.ToTable("production_orders", t =>
+        {
+            t.HasCheckConstraint("CK_production_orders_quantity", "\"Quantity\" > 0 AND \"Quantity\" <= 10000000");
+            t.HasCheckConstraint("CK_production_orders_priority", "\"Priority\" IN ('LOW','NORMAL','HIGH','URGENT')");
+            t.HasCheckConstraint("CK_production_orders_dates", "\"PlannedCompletionDate\" IS NULL OR \"StartDate\" IS NULL OR \"PlannedCompletionDate\" >= \"StartDate\"");
+        });
         b.HasKey(x => x.Id);
         b.Property(x => x.OrderNumber).HasMaxLength(64).IsRequired();
         b.Property(x => x.Buyer).HasMaxLength(120);
         b.Property(x => x.Status).HasConversion<string>().HasMaxLength(16);
         b.Property(x => x.Notes).HasMaxLength(1000);
+        b.Property(x => x.OrderReference).HasMaxLength(80);
+        b.Property(x => x.ProductDescription).HasMaxLength(500);
+        b.Property(x => x.ProductCategory).HasMaxLength(64);
+        b.Property(x => x.Priority).HasMaxLength(8).IsRequired();
+        b.Property(x => x.StatusReason).HasMaxLength(500);
         b.Property(x => x.CreatedAt).HasColumnType("timestamptz");
         b.Property(x => x.UpdatedAt).HasColumnType("timestamptz");
         b.Property(x => x.CreatedByEmail).HasMaxLength(256).IsRequired();
         b.Property(x => x.Version).IsRowVersion();
         b.HasIndex(x => x.OrderNumber).IsUnique();
         b.HasIndex(x => new { x.Status, x.DueDate });
+        b.HasIndex(x => new { x.FactoryId, x.Status, x.DueDate });
+        b.HasOne<Factory>().WithMany().HasForeignKey(x => x.FactoryId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<ProductionStyle>().WithMany().HasForeignKey(x => x.StyleId).OnDelete(DeleteBehavior.Restrict);
     }
 }

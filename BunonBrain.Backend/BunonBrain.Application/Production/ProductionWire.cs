@@ -9,7 +9,7 @@ public static partial class ProductionWire
 {
     public static readonly string[] Stages = { "cutting", "sewing_input", "sewing_output", "finishing", "packing" };
     public static readonly string[] PlanStatuses = { "draft", "pending_approval", "active", "completed", "cancelled" };
-    public static readonly string[] OrderStatuses = { "open", "closed", "cancelled" };
+    public static readonly string[] OrderStatuses = { "draft", "planned", "in_progress", "on_hold", "completed", "cancelled" };
     public static readonly string[] Sources = { "manual", "import", "integration" };
     public static readonly string[] ProposalStatuses = { "proposed", "pending_approval", "applied", "rejected", "superseded" };
     public static readonly string[] DayNames = { "sun", "mon", "tue", "wed", "thu", "fri", "sat" };
@@ -41,9 +41,12 @@ public static partial class ProductionWire
 
     public static string OrderStatus(ProductionOrderStatus s) => OrderStatuses[(int)s];
 
+    /// <summary>Accepts the wire names, the upper-case forms (<c>IN_PROGRESS</c>) and the two names used before the lifecycle existed: <c>open</c> (in progress) and <c>closed</c> (completed).</summary>
     public static bool TryParseOrderStatus(string? raw, out ProductionOrderStatus status)
     {
-        var i = Array.IndexOf(OrderStatuses, raw?.Trim().ToLowerInvariant());
+        var key = raw?.Trim().ToLowerInvariant().Replace('-', '_').Replace(' ', '_');
+        key = key switch { "open" => "in_progress", "closed" => "completed", _ => key };
+        var i = Array.IndexOf(OrderStatuses, key);
         status = i < 0 ? default : (ProductionOrderStatus)i;
         return i >= 0;
     }

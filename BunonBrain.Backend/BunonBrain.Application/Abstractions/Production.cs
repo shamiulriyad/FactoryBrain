@@ -1,3 +1,6 @@
+using BunonBrain.Application.Access;
+using BunonBrain.Application.Dtos.Access;
+using BunonBrain.Application.Dtos.Planning;
 using BunonBrain.Application.Dtos.Production;
 
 namespace BunonBrain.Application.Abstractions.Interfaces;
@@ -44,14 +47,23 @@ public interface IProductionSetupService
 }
 
 /// <param name="IncludeRisk">Compute each row's delivery risk (several queries per order); off for pickers.</param>
-public sealed record OrderQuery(string? Q, string? Status, Guid? StyleId, int Page, int PageSize, string? Sort, bool IncludeRisk = true);
+public sealed record OrderQuery(string? Q, string? Status, Guid? StyleId, int Page, int PageSize, string? Sort, bool IncludeRisk = true, Guid? FactoryId = null, string? Priority = null);
 
+/// <summary>
+/// Production orders. Orders belong to a factory: reads are limited to the
+/// caller's factories (an order recorded before factories existed has none and
+/// is visible to everyone who can read production), writes need the caller to
+/// reach the order's factory.
+/// </summary>
 public interface IProductionOrderService
 {
-    Task<ProductionResult<Paged<OrderListItem>>> ListAsync(OrderQuery query, CancellationToken ct);
-    Task<OrderDetail?> GetAsync(Guid id, CancellationToken ct);
-    Task<ProductionResult<OrderDto>> CreateAsync(OrderWrite body, AuditActor actor, string? traceId, CancellationToken ct);
-    Task<ProductionResult<OrderDto>> UpdateAsync(Guid id, OrderWrite body, AuditActor actor, string? traceId, CancellationToken ct);
+    Task<ProductionResult<Paged<OrderListItem>>> ListAsync(OrderQuery query, AccessContext caller, CancellationToken ct);
+    Task<OrderDetail?> GetAsync(Guid id, AccessContext caller, CancellationToken ct);
+    Task<ProductionResult<OrderDto>> CreateAsync(OrderWrite body, AccessContext caller, string? traceId, CancellationToken ct);
+    Task<ProductionResult<OrderDto>> UpdateAsync(Guid id, OrderWrite body, AccessContext caller, string? traceId, CancellationToken ct);
+    /// <summary>Moves the order along its lifecycle (draft → planned → in progress ⇄ on hold → completed; cancelled), with a reason where one is required.</summary>
+    Task<ProductionResult<OrderDto>> ChangeStatusAsync(Guid id, OrderStatusRequest body, AccessContext caller, string? traceId, CancellationToken ct);
+    Task<ProductionResult<OrderTransitionsDto>> TransitionsAsync(Guid id, AccessContext caller, CancellationToken ct);
 }
 
 public sealed record PlanQuery(string? Status, string? LineId, Guid? OrderId, DateOnly? From, DateOnly? To, int Page, int PageSize);

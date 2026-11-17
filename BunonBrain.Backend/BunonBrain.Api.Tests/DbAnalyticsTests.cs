@@ -119,7 +119,7 @@ public sealed class DbAnalyticsTests
             db.DeviceIotConfigurations.Add(new DeviceIotConfiguration { DeviceId = sensor, FactoryId = factory, DeviceType = "SEWING_MACHINE_SENSOR", Protocol = "HTTP", UpdatedByEmail = "test" });
             db.DeviceIotConfigurations.Add(new DeviceIotConfiguration { DeviceId = counter, FactoryId = factory, DeviceType = "PIECE_COUNTER", Protocol = "HTTP", UpdatedByEmail = "test" });
             foreach (var (w, line) in new[] { (w1, l1), (w2, l1), (w3, l2) })
-                db.Workers.Add(new WorkerProfile { Id = w, FactoryId = factory, WorkerCode = $"W-{t}-{w.ToString()[..4]}", FullName = "Worker", LineId = line, DepartmentId = dept });
+                db.Workers.Add(new WorkerProfile { Id = w, WorkerNumber = await TestWorkers.NextNumberAsync(db), FactoryId = factory, WorkerCode = $"W-{t}-{w.ToString()[..4]}", FullName = "Worker", LineId = line, DepartmentId = dept });
             await db.SaveChangesAsync();
             foreach (var w in new[] { w1, w2, w3 })
                 db.ShiftAssignments.Add(new WorkerShiftAssignment { WorkerId = w, FactoryId = factory, ShiftId = shift, EffectiveFrom = Today.AddDays(-30), AssignedByEmail = "test" });

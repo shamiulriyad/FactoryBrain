@@ -62,6 +62,19 @@ public class ProductionStyle
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public uint Version { get; set; }
     public List<StyleOperation> Operations { get; set; } = new();
+
+    // Production-planning specification (all optional: styles differ, and
+    // nothing here is assumed when it is left empty).
+    /// <summary>Garment category, e.g. <c>Knit tops</c>, <c>Denim bottoms</c>.</summary>
+    public string? GarmentCategory { get; set; }
+    public string? Description { get; set; }
+    /// <summary>Size range as the buyer names it, e.g. <c>["S","M","L","XL"]</c>.</summary>
+    public string[] SizeRange { get; set; } = Array.Empty<string>();
+    public string[] ColorVariants { get; set; } = Array.Empty<string>();
+    /// <summary><c>LOW</c>, <c>MEDIUM</c>, <c>HIGH</c> or <c>VERY_HIGH</c>: the planner's estimate, null when not assessed.</summary>
+    public string? Complexity { get; set; }
+    /// <summary>Quality checkpoints, in the order they apply, e.g. <c>["After collar attach", "Final measurement"]</c>.</summary>
+    public string[] QualityCheckpoints { get; set; } = Array.Empty<string>();
 }
 
 /// <summary>One operation of a style's operation bulletin.</summary>
@@ -80,7 +93,12 @@ public class StyleOperation
     public int[] Predecessors { get; set; } = Array.Empty<int>();
 }
 
-public enum ProductionOrderStatus { Open, Closed, Cancelled }
+/// <summary>
+/// Order lifecycle: <c>Draft</c> → <c>Planned</c> → <c>InProgress</c> ⇄ <c>OnHold</c> → <c>Completed</c>;
+/// <c>Cancelled</c> from any state before completion. Orders created before
+/// this lifecycle existed were <c>Open</c> (now <c>InProgress</c>) or <c>Closed</c> (now <c>Completed</c>).
+/// </summary>
+public enum ProductionOrderStatus { Draft, Planned, InProgress, OnHold, Completed, Cancelled }
 
 /// <summary>A production order: a quantity of one style due by a date. Not a sales order and not an ERP replacement.</summary>
 public class ProductionOrder
@@ -92,8 +110,23 @@ public class ProductionOrder
     public int Quantity { get; set; }
     /// <summary>Ex-factory due date (plant-local). Due at the end of this day.</summary>
     public DateOnly DueDate { get; set; }
-    public ProductionOrderStatus Status { get; set; } = ProductionOrderStatus.Open;
+    public ProductionOrderStatus Status { get; set; } = ProductionOrderStatus.Planned;
     public string? Notes { get; set; }
+
+    // Production planning fields.
+    /// <summary>The factory that produces the order. Null only for orders recorded before factories were attached.</summary>
+    public Guid? FactoryId { get; set; }
+    /// <summary>The buyer's / client's own reference (PO number, contract, …).</summary>
+    public string? OrderReference { get; set; }
+    public string? ProductDescription { get; set; }
+    public string? ProductCategory { get; set; }
+    /// <summary>When production is due to start (plant-local date).</summary>
+    public DateOnly? StartDate { get; set; }
+    /// <summary>When production is planned to finish; <see cref="DueDate"/> stays the delivery deadline.</summary>
+    public DateOnly? PlannedCompletionDate { get; set; }
+    /// <summary><c>LOW</c>, <c>NORMAL</c>, <c>HIGH</c> or <c>URGENT</c>.</summary>
+    public string Priority { get; set; } = "NORMAL";
+    public string? StatusReason { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public Guid? CreatedByUserId { get; set; }

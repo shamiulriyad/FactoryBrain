@@ -159,7 +159,7 @@ public static class InsightEngine
                         },
                         new[] { "attendance_sessions", "worker_shift_assignments", "shifts" },
                         "Check approved leave and missing punches (attendance review) before planning cover.",
-                        "Leave and holidays are not modelled yet, so some absences may be approved leave."));
+                        "Leave not yet approved still counts as absence; approved leave and holidays are excluded."));
             }
             // Fewer present than planned operators.
             if (l.PlannedOperators > 0 && l.PresentWorkers < l.PlannedOperators * InsightThresholds.StaffingShortagePct / 100)

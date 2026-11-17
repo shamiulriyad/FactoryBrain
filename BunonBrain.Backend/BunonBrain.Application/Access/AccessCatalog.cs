@@ -105,11 +105,46 @@ public static class Permissions
     public const string ApprovalsDecide        = "approvals.decide";
     public const string ApprovalsDecideHigh    = "approvals.decide_high";
 
+    // Production planning & target management
+    public const string PlanningView             = "planning.view";
+    public const string PlanningOrdersManage     = "planning.orders.manage";
+    public const string PlanningStylesManage     = "planning.styles.manage";
+    public const string PlanningAllocationsManage = "planning.allocations.manage";
+    public const string PlanningTargetsManage    = "planning.targets.manage";
+    public const string PlanningPlansManage      = "planning.plans.manage";
+    public const string PlanningPlansApprove     = "planning.plans.approve";
+    public const string PlanningPlansPublish     = "planning.plans.publish";
+    public const string PlanningExceptionsReview = "planning.exceptions.review";
+    public const string PlanningSetup            = "planning.setup";
+    public const string PlanningReportsExport    = "planning.reports.export";
+
     // Devices
     public const string DevicesView     = "devices.view";
     public const string DevicesManage   = "devices.manage";
     public const string DevicesLogsView = "devices.logs.view";
     public const string DevicesSimulate = "devices.simulate";
+
+    // Factory documents (automation engine). An action permission works only
+    // inside the document categories (departments) the caller also holds.
+    public const string DocumentsView        = "documents.view";
+    public const string DocumentsCreate      = "documents.create";
+    public const string DocumentsReview      = "documents.review";
+    public const string DocumentsApprove     = "documents.approve";
+    public const string DocumentsApproveHigh = "documents.approve_high";
+    public const string DocumentsControl     = "documents.control";
+    public const string DocumentsMonitor     = "documents.monitor";
+    public const string DocCatProduction    = "documents.cat.production";
+    public const string DocCatHr            = "documents.cat.hr";
+    public const string DocCatStore         = "documents.cat.store";
+    public const string DocCatQuality       = "documents.cat.quality";
+    public const string DocCatMerchandising = "documents.cat.merchandising";
+    public const string DocCatCompliance    = "documents.cat.compliance";
+    public const string DocCatCommercial    = "documents.cat.commercial";
+    public const string DocCatDevices       = "documents.cat.devices";
+
+    // Store / inventory
+    public const string InventoryView   = "inventory.view";
+    public const string InventoryManage = "inventory.manage";
 
     // Reports, knowledge & AI
     public const string ReportsView   = "reports.view";
@@ -132,6 +167,14 @@ public static class SystemRoles
     public const string HrOfficer            = "HrOfficer";
     public const string DeviceAdmin          = "DeviceAdmin";
     public const string Worker               = "Worker";
+
+    // Documentation roles (factory scope). A person may hold several roles.
+    public const string DocumentController = "DocumentController";
+    public const string Merchandiser       = "Merchandiser";
+    public const string StoreOfficer       = "StoreOfficer";
+    public const string QcOfficer          = "QcOfficer";
+    public const string ComplianceOfficer  = "ComplianceOfficer";
+    public const string CommercialOfficer  = "CommercialOfficer";
 }
 
 /// <summary>
@@ -207,17 +250,55 @@ public static class AccessCatalog
         P(Permissions.ApprovalsDecide,        "Production", "Decide approvals", "Approve or reject low- and medium-risk recommendations."),
         P(Permissions.ApprovalsDecideHigh,    "Production", "Decide high-risk approvals", "Approve or reject high-risk recommendations."),
 
+        P(Permissions.PlanningView,              "Production planning", "View production planning", "Orders, allocations, targets, capacity, exceptions and plan-versus-actual performance in your scope. Daily plans are visible once published."),
+        P(Permissions.PlanningOrdersManage,      "Production planning", "Manage production orders", "Create and edit production orders and change their status."),
+        P(Permissions.PlanningStylesManage,      "Production planning", "Manage garment styles", "Garment styles, size and colour ranges, operation sequences, required machine types and quality checkpoints."),
+        P(Permissions.PlanningAllocationsManage, "Production planning", "Allocate orders to lines", "Split orders across production lines (supervisors: only their own lines)."),
+        P(Permissions.PlanningTargetsManage,     "Production planning", "Manage production targets", "Create and revise daily, shift and hourly targets (supervisors: only their own lines)."),
+        P(Permissions.PlanningPlansManage,       "Production planning", "Prepare daily plans", "Create, edit, submit and revise daily production plans."),
+        P(Permissions.PlanningPlansApprove,      "Production planning", "Approve plans and targets", "Approve or return daily plans and factory-, department- or floor-level targets."),
+        P(Permissions.PlanningPlansPublish,      "Production planning", "Publish daily plans", "Publish approved plans so supervisors and monitoring operators see them."),
+        P(Permissions.PlanningExceptionsReview,  "Production planning", "Handle production exceptions", "Run the exception check, acknowledge and resolve delay and capacity exceptions (supervisors: only their own lines)."),
+        P(Permissions.PlanningSetup,             "Production planning", "Configure planning inputs", "Which counters measure finished garments for a line, and each line's efficiency and operator assumptions."),
+        P(Permissions.PlanningReportsExport,     "Production planning", "Export planning reports", "Download plan-versus-actual reports as CSV or PDF."),
+
         P(Permissions.DevicesView,     "Devices", "View devices", "Sensors, RFID readers, gateways, cameras' health devices and the device health overview."),
         P(Permissions.DevicesManage,   "Devices", "Manage devices", "Register and configure devices, change their status, and send device heartbeats, events and readings."),
         P(Permissions.DevicesLogsView, "Devices", "View device logs", "Device heartbeats and event history (connections, errors, status changes)."),
         P(Permissions.DevicesSimulate, "Devices", "Use the device simulator", "Make simulated devices come online, go offline, send heartbeats and report errors. Only simulated devices; always marked SIMULATED."),
+
+        P(Permissions.DocumentsView,        "Documents", "View documents", "Factory documents of your document categories: list, search, open, download, versions and history."),
+        P(Permissions.DocumentsCreate,      "Documents", "Prepare documents", "Create, generate from operational data, upload, edit drafts, resubmit rejected documents and submit them (your categories)."),
+        P(Permissions.DocumentsReview,      "Documents", "Review documents", "Take submitted documents under review, verify them and return them with a reason (your categories)."),
+        P(Permissions.DocumentsApprove,     "Documents", "Approve documents", "Approve or reject normal-risk documents of your categories. Never your own."),
+        P(Permissions.DocumentsApproveHigh, "Documents", "Approve high-risk documents", "Approve or reject high-risk (financial, compliance, shipment) documents of your categories."),
+        P(Permissions.DocumentsControl,     "Documents", "Control documents", "Central document control: every category, archiving, verification and the approval / schedule settings of each document type."),
+        P(Permissions.DocumentsMonitor,     "Documents", "Monitor documents", "The document status board: missing, pending and overdue documents of every category (titles and status only, not content)."),
+        P(Permissions.DocCatProduction,     "Documents", "Production documents", "Daily, line-wise, cutting, sewing, finishing, WIP and downtime reports."),
+        P(Permissions.DocCatHr,             "Documents", "HR documents", "Attendance, late / absent, overtime, leave, employee information and payroll input reports."),
+        P(Permissions.DocCatStore,          "Documents", "Store documents", "GRN, material requisition, material issue, stock register and stock balance."),
+        P(Permissions.DocCatQuality,        "Documents", "Quality documents", "Inline, end-line and final inspections, defect, rework, AQL and CAPA reports."),
+        P(Permissions.DocCatMerchandising,  "Documents", "Merchandising documents", "Purchase orders, order sheets, BOM, costing sheets and buyer instructions."),
+        P(Permissions.DocCatCompliance,     "Documents", "Compliance documents", "Compliance audits, safety inspections and training records."),
+        P(Permissions.DocCatCommercial,     "Documents", "Commercial documents", "Commercial invoices, packing lists and shipment documents."),
+        P(Permissions.DocCatDevices,        "Documents", "Device documents", "Device log reports and maintenance records."),
+
+        P(Permissions.InventoryView,   "Store", "View inventory", "Store items, stock balances and the stock ledger of your factories."),
+        P(Permissions.InventoryManage, "Store", "Manage inventory items", "Create and edit store items (stock moves only through approved GRN and material issue documents)."),
 
         P(Permissions.ReportsView,   "Reports & AI", "View reports", "Morning brief and operational reports."),
         P(Permissions.KnowledgeView, "Reports & AI", "Use the assistant", "Ask questions, browse the knowledge base and see AI agents."),
         P(Permissions.AgentsRun,     "Reports & AI", "Run AI agents", "Start AI agent runs."),
 
         P(Permissions.SelfView,          "Self-service", "View own records", "Own worker profile, workstation, attendance and activity."),
-        P(Permissions.NotificationsView, "Self-service", "View notifications", "Notifications addressed to you.", reserved: true),
+        P(Permissions.NotificationsView, "Self-service", "View notifications", "Notifications addressed to you."),
+    };
+
+    /// <summary>Every document-category permission (a Document Controller and Factory Manager hold all of them).</summary>
+    public static readonly string[] DocumentCategoryPermissions =
+    {
+        Permissions.DocCatProduction, Permissions.DocCatHr, Permissions.DocCatStore, Permissions.DocCatQuality,
+        Permissions.DocCatMerchandising, Permissions.DocCatCompliance, Permissions.DocCatCommercial, Permissions.DocCatDevices,
     };
 
     private static readonly string[] SuperOnly = { SystemRoles.SuperAdmin };
@@ -248,8 +329,16 @@ public static class AccessCatalog
                 Permissions.ProductionView, Permissions.ProductionManage, Permissions.QcView,
                 Permissions.MerchandisingView, Permissions.MerchandisingManage,
                 Permissions.ApprovalsView, Permissions.ApprovalsDecide,
+                Permissions.PlanningView, Permissions.PlanningOrdersManage, Permissions.PlanningStylesManage, Permissions.PlanningAllocationsManage,
+                Permissions.PlanningTargetsManage, Permissions.PlanningPlansManage, Permissions.PlanningPlansApprove, Permissions.PlanningPlansPublish,
+                Permissions.PlanningExceptionsReview, Permissions.PlanningSetup, Permissions.PlanningReportsExport,
                 Permissions.DevicesView, Permissions.CamerasView, Permissions.ReportsView, Permissions.KnowledgeView, Permissions.AgentsRun,
                 Permissions.NotificationsView,
+                // Reviews and approves factory reports and important documents of every department.
+                Permissions.DocumentsView, Permissions.DocumentsReview, Permissions.DocumentsApprove, Permissions.DocumentsApproveHigh, Permissions.DocumentsMonitor,
+                Permissions.DocCatProduction, Permissions.DocCatHr, Permissions.DocCatStore, Permissions.DocCatQuality,
+                Permissions.DocCatMerchandising, Permissions.DocCatCompliance, Permissions.DocCatCommercial, Permissions.DocCatDevices,
+                Permissions.InventoryView,
             }),
 
         new RoleDefinition(SystemRoles.ProductionSupervisor, "Production Supervisor",
@@ -262,7 +351,10 @@ public static class AccessCatalog
                 Permissions.MonitoringView, Permissions.MonitoringAlertsReview, Permissions.MonitoringAlertsEscalate, Permissions.MonitoringEventsReview,
                 Permissions.ProductionView, Permissions.ProductionAlertsReview,
                 Permissions.QcView, Permissions.QcManage, Permissions.ApprovalsView, Permissions.MerchandisingView,
+                Permissions.PlanningView, Permissions.PlanningTargetsManage, Permissions.PlanningExceptionsReview, Permissions.PlanningReportsExport,
                 Permissions.CamerasView, Permissions.KnowledgeView, Permissions.NotificationsView,
+                // Daily production, line output, WIP and downtime reports of their lines.
+                Permissions.DocumentsView, Permissions.DocumentsCreate, Permissions.DocCatProduction,
             }),
 
         new RoleDefinition(SystemRoles.MonitoringOperator, "Monitoring Operator",
@@ -272,7 +364,10 @@ public static class AccessCatalog
                 Permissions.LinesView, Permissions.WorkersView, Permissions.AttendanceView,
                 Permissions.MonitoringView, Permissions.MonitoringAlertsReview, Permissions.MonitoringAlertsEscalate,
                 Permissions.MonitoringEventsReview, Permissions.MonitoringSimulate,
+                Permissions.PlanningView,
                 Permissions.CamerasView, Permissions.DevicesView, Permissions.NotificationsView,
+                // Watches for missing reports, pending documents and operational exceptions (status only).
+                Permissions.DocumentsMonitor,
             }),
 
         new RoleDefinition(SystemRoles.HrOfficer, "HR / Attendance Officer",
@@ -284,6 +379,8 @@ public static class AccessCatalog
                 Permissions.ShiftsManage, Permissions.ShiftsAssign,
                 Permissions.LeaveManage, Permissions.OvertimeView, Permissions.OvertimeManage, Permissions.OvertimeApprove,
                 Permissions.ReportsView, Permissions.NotificationsView,
+                // Attendance, late / absent, overtime, leave, employee and payroll input documents.
+                Permissions.DocumentsView, Permissions.DocumentsCreate, Permissions.DocumentsReview, Permissions.DocCatHr,
             }),
 
         new RoleDefinition(SystemRoles.DeviceAdmin, "IT / Device Administrator",
@@ -293,6 +390,8 @@ public static class AccessCatalog
                 Permissions.LinesView,
                 Permissions.DevicesView, Permissions.DevicesManage, Permissions.DevicesLogsView, Permissions.DevicesSimulate,
                 Permissions.CamerasView, Permissions.CamerasManage, Permissions.MonitoringEventsIngest, Permissions.NotificationsView,
+                // Device logs, maintenance records and system-generated logs.
+                Permissions.DocumentsView, Permissions.DocumentsCreate, Permissions.DocCatDevices,
             }),
 
         new RoleDefinition(SystemRoles.Worker, "Worker",
@@ -300,6 +399,62 @@ public static class AccessCatalog
             RoleScope.Self, 10, AdminTier, new[]
             {
                 Permissions.SelfView, Permissions.NotificationsView,
+            }),
+
+        new RoleDefinition(SystemRoles.DocumentController, "Document Controller",
+            "Central document control for every department: tracking, verification, versioning, archiving, missing-document follow-up and the approval settings of each document type. Approves nothing by default.",
+            RoleScope.Factory, 45, AdminTier, new[]
+            {
+                Permissions.FactoriesView, Permissions.LinesView,
+                Permissions.DocumentsView, Permissions.DocumentsCreate, Permissions.DocumentsReview, Permissions.DocumentsControl, Permissions.DocumentsMonitor,
+                Permissions.DocCatProduction, Permissions.DocCatHr, Permissions.DocCatStore, Permissions.DocCatQuality,
+                Permissions.DocCatMerchandising, Permissions.DocCatCompliance, Permissions.DocCatCommercial, Permissions.DocCatDevices,
+                Permissions.InventoryView, Permissions.NotificationsView,
+            }),
+
+        new RoleDefinition(SystemRoles.Merchandiser, "Merchandiser",
+            "Buyer orders and their documents: purchase orders, order sheets, bills of materials, costing sheets and buyer instructions.",
+            RoleScope.Factory, 40, AdminTier, new[]
+            {
+                Permissions.LinesView, Permissions.MerchandisingView, Permissions.MerchandisingManage, Permissions.PlanningView,
+                Permissions.DocumentsView, Permissions.DocumentsCreate, Permissions.DocCatMerchandising,
+                Permissions.InventoryView, Permissions.NotificationsView,
+            }),
+
+        new RoleDefinition(SystemRoles.StoreOfficer, "Store / Inventory Officer",
+            "Store items and stock: goods received notes, material requisitions, material issue notes, the stock register and stock balance.",
+            RoleScope.Factory, 40, AdminTier, new[]
+            {
+                Permissions.LinesView, Permissions.InventoryView, Permissions.InventoryManage,
+                Permissions.DocumentsView, Permissions.DocumentsCreate, Permissions.DocCatStore,
+                Permissions.NotificationsView,
+            }),
+
+        new RoleDefinition(SystemRoles.QcOfficer, "QC / QA Officer",
+            "Quality inspections and their documents: inline, end-line and final inspections, defect, rework, AQL and CAPA reports.",
+            RoleScope.Factory, 40, AdminTier, new[]
+            {
+                Permissions.LinesView, Permissions.QcView, Permissions.QcManage, Permissions.ProductionView,
+                Permissions.DocumentsView, Permissions.DocumentsCreate, Permissions.DocumentsReview, Permissions.DocCatQuality,
+                Permissions.NotificationsView,
+            }),
+
+        new RoleDefinition(SystemRoles.ComplianceOfficer, "Compliance Officer",
+            "Compliance audits, safety inspections and training records.",
+            RoleScope.Factory, 40, AdminTier, new[]
+            {
+                Permissions.LinesView, Permissions.WorkersView,
+                Permissions.DocumentsView, Permissions.DocumentsCreate, Permissions.DocumentsReview, Permissions.DocCatCompliance,
+                Permissions.NotificationsView,
+            }),
+
+        new RoleDefinition(SystemRoles.CommercialOfficer, "Commercial / Shipping Officer",
+            "Commercial invoices, packing lists and shipment documents, checked against the buyer's order.",
+            RoleScope.Factory, 40, AdminTier, new[]
+            {
+                Permissions.MerchandisingView,
+                Permissions.DocumentsView, Permissions.DocumentsCreate, Permissions.DocCatCommercial,
+                Permissions.NotificationsView,
             }),
     };
 

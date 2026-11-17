@@ -1,3 +1,5 @@
+using BunonBrain.Infrastructure.Attendance;
+using BunonBrain.Application.Attendance;
 using BunonBrain.Application.Access;
 using BunonBrain.Application.Abstractions.Interfaces;
 using BunonBrain.Application.Analytics;
@@ -48,7 +50,7 @@ public sealed class WorkforceAnalyticsService : IWorkforceAnalytics
 
         var workersQ = ctx.Workers();
         var workers = canAttendance || canAssign
-            ? await workersQ.Select(w => new { w.Id, w.DepartmentId, w.LineId }).ToListAsync(ct)
+            ? await workersQ.Select(w => new { w.Id, w.DepartmentId, w.LineId, w.FactoryId }).ToListAsync(ct)
             : new();
         var workerIds = workers.Select(w => w.Id).ToList();
 
@@ -56,6 +58,7 @@ public sealed class WorkforceAnalyticsService : IWorkforceAnalytics
         IReadOnlyList<AttendanceDayStats> days = Array.Empty<AttendanceDayStats>();
         List<ScheduledDay> schedule = new();
         List<SessionFact> sessions = new();
+        List<ExcusedDay> excusedDays = new();
         List<(Guid WorkerId, DateOnly Date, Guid? ShiftId, string? LineId)> sessionKeys = new();
         if (canAttendance)
         {
@@ -64,6 +67,10 @@ public sealed class WorkforceAnalyticsService : IWorkforceAnalytics
                                      select new ShiftAssignmentFact(a.WorkerId, a.ShiftId, a.EffectiveFrom, a.EffectiveTo, s.StartLocal, s.LateGraceMinutes, s.WorkingDays))
                 .ToListAsync(ct);
             schedule = AttendanceAggregation.Schedule(ctx.Period.Dates(), assignments, ctx.Zone).ToList();
+            // Factory holidays and approved leave are not expected days: never absence, not in the rate.
+            var factoryOf = workers.ToDictionary(w => w.Id, w => w.FactoryId);
+            var calendar = await AttendanceCalendarLoader.LoadAsync(_db, workers.Select(w => w.FactoryId).Distinct().ToList(), ctx.Period.From, ctx.Period.To, ct);
+            (schedule, excusedDays) = calendar.Apply(schedule, x => x.WorkerId, x => x.Date, w => factoryOf.TryGetValue(w, out var f) ? f : null);
             var rows = await ctx.Sessions().Take(MaxSessions + 1).Select(s => new
             {
                 s.WorkerId, s.WorkDate, s.ShiftId, s.LineId, CheckedIn = s.CheckInAt != null, s.IsLate, s.IsEarlyDeparture, s.AttendanceMinutes, s.BreakMinutes,
@@ -79,7 +86,11 @@ public sealed class WorkforceAnalyticsService : IWorkforceAnalytics
             kpis.Add(schedule.Count == 0 ? Kpi.Missing("workers.scheduled") : Kpi.Count("workers.scheduled", t.Scheduled, "worker-days in the period"));
             kpis.Add(Kpi.Count("attendance.present", t.Present, t.Unscheduled > 0 ? $"{t.Unscheduled} without a schedule" : null));
             kpis.Add(schedule.Count == 0 ? Kpi.Missing("attendance.rate") : Kpi.Ratio("attendance.rate", t.ScheduledPresent, t.ScheduledStarted));
-            kpis.Add(schedule.Count == 0 ? Kpi.Missing("attendance.absent") : Kpi.Count("attendance.absent", t.Absent, "Leave is not modelled yet"));
+            var checkedInDays = sessions.Where(s => s.CheckedIn).Select(s => (s.WorkerId, s.Date)).ToHashSet();
+            var leaveDays = excusedDays.Count(e => e.Kind == ExcusalKinds.Leave && !checkedInDays.Contains((e.WorkerId, e.Date)));
+            var holidayDays = excusedDays.Count(e => e.Kind == ExcusalKinds.Holiday);
+            kpis.Add(schedule.Count == 0 && excusedDays.Count == 0 ? Kpi.Missing("attendance.absent")
+                : Kpi.Count("attendance.absent", t.Absent, $"{leaveDays} worker-day(s) on approved leave and {holidayDays} on holidays not counted"));
             kpis.Add(Kpi.Count("attendance.late", t.Late));
             kpis.Add(Kpi.Count("attendance.early_departure", t.EarlyDeparture));
             kpis.Add(Kpi.Count("attendance.break_minutes", t.BreakMinutes, t.OverBreakMinutes > 0 ? $"{t.OverBreakMinutes} min over the allowed breaks" : null));
@@ -191,6 +202,10 @@ public sealed class WorkforceAnalyticsService : IWorkforceAnalytics
             var t = AttendanceAggregation.Total(days.ToList());
             concepts.Add(new("scheduled", "Scheduled worker-days", t.Scheduled, MetricKinds.Derived, "From shift assignments; not proof of presence."));
             concepts.Add(new("checked_in", "Worker-days with a check-in", t.Present, MetricKinds.Measured, "From attendance punches (RFID / manual)."));
+            concepts.Add(new("on_leave", "Scheduled worker-days on approved leave", excusedDays.Count(e => e.Kind == ExcusalKinds.Leave), MetricKinds.Derived,
+                "From approved Leave Record documents; not expected, never absence."));
+            concepts.Add(new("holiday", "Scheduled worker-days on factory holidays", excusedDays.Count(e => e.Kind == ExcusalKinds.Holiday), MetricKinds.Derived,
+                "From the factory holiday calendar; nobody is expected."));
         }
         if (canAssign)
             concepts.Add(new("assigned", "Workers assigned to a workstation now", assignedIds.Count, MetricKinds.Derived, "A placement, not proof of presence or work."));

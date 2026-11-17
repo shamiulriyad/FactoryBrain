@@ -270,13 +270,18 @@ public sealed class AnalyticsUnitTests
     }
 
     [Fact]
-    public void Pdf_reports_are_valid_pdfs_and_replace_characters_the_standard_fonts_cannot_show()
+    public void Pdf_reports_are_valid_pdfs_and_keep_bangla_text()
     {
-        var bytes = PdfReportWriter.Write(Doc("SIMULATED"));
+        var bytes = PdfReportWriter.Write(Doc("SIMULATED") with { Title = "Workforce report কারখানা" });
         Assert.True(bytes.Length > 1000);
         Assert.Equal("%PDF", Encoding.ASCII.GetString(bytes, 0, 4));
-        Assert.Equal("a - b -> c >= 2 x 3", PdfReportWriter.Clean("a — b → c ≥ 2 × 3"));
-        Assert.Equal("?????", PdfReportWriter.Clean("বাংলা"));
+        using (var pdf = UglyToad.PdfPig.PdfDocument.Open(bytes))
+        {
+            var page = pdf.GetPage(1);
+            Assert.Contains("Workforce report", page.Text);
+            Assert.Contains("কারখানা", page.Text);   // no reordering or conjuncts: extractable even by visual-order readers
+            Assert.Contains(page.Letters, l => l.FontName.Contains("NotoSansBengali", StringComparison.Ordinal));
+        }
         // A long report spans pages without failing.
         var rows = Enumerable.Range(0, 400).Select(i => (IReadOnlyList<object?>)new object?[] { $"Machine {i}", i * 1.5, "a fairly long note that wraps over the column width" }).ToList();
         var big = Doc() with { Sections = new[] { new ReportSection("Big", Array.Empty<Kpi>(), new[] { new ReportTable("Rows", new[] { "Name", "Hours", "Note" }, rows) }) } };

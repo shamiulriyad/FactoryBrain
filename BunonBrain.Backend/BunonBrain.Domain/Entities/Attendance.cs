@@ -315,3 +315,20 @@ public class AttendancePolicy
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public string? UpdatedByEmail { get; set; }
 }
+
+/// <summary>
+/// A day the factory is closed (public holiday, festival closure, factory holiday).
+/// Scheduled workers are not expected on it, so nobody is absent; anyone who works is present.
+/// Past holidays can't be removed (attendance history stays as it was reported).
+/// </summary>
+public class FactoryHoliday
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid FactoryId { get; set; }
+    public DateOnly Date { get; set; }
+    public string Name { get; set; } = default!;
+    /// <summary>PUBLIC (government / festival) or FACTORY (the factory's own closure).</summary>
+    public string Kind { get; set; } = "PUBLIC";
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public string CreatedByEmail { get; set; } = default!;
+}

@@ -29,13 +29,17 @@ public sealed record StyleOperationDto(Guid Id, int Sequence, string Name, doubl
 public sealed record StyleDto(
     Guid Id, string Code, string Name, string? ProductType, double? ApprovedSmv, double? EffectiveSmv,
     /// <summary><c>approved</c>, <c>operation_bulletin</c> or <c>missing</c>.</summary>
-    string SmvBasis, double OperationSmvTotal, bool IsActive, uint Version, IReadOnlyList<StyleOperationDto> Operations);
+    string SmvBasis, double OperationSmvTotal, bool IsActive, uint Version, IReadOnlyList<StyleOperationDto> Operations,
+    string? GarmentCategory = null, string? Description = null, IReadOnlyList<string>? SizeRange = null, IReadOnlyList<string>? ColorVariants = null,
+    string? Complexity = null, IReadOnlyList<string>? QualityCheckpoints = null, IReadOnlyList<string>? RequiredMachineTypes = null);
 
 public sealed record StyleOperationWrite(Guid? Id, int Sequence, string? Name, double Smv, string? MachineType, IReadOnlyList<int>? Predecessors);
 
 public sealed record StyleWrite(
     string? Code, string? Name, string? ProductType, double? ApprovedSmv, bool? ClearApprovedSmv, bool? IsActive,
-    IReadOnlyList<StyleOperationWrite>? Operations, uint? ExpectedVersion);
+    IReadOnlyList<StyleOperationWrite>? Operations, uint? ExpectedVersion,
+    string? GarmentCategory = null, string? Description = null, IReadOnlyList<string>? SizeRange = null, IReadOnlyList<string>? ColorVariants = null,
+    string? Complexity = null, IReadOnlyList<string>? QualityCheckpoints = null);
 
 public sealed record DataSourceStatus(string Source, string Status, string Description, int RecordsLast24h);
 
@@ -47,16 +51,24 @@ public sealed record ProductionConfigDto(
 
 // ── Orders ──────────────────────────────────────────────────────────────────
 
+/// <param name="DueDate">The delivery deadline.</param>
 public sealed record OrderWrite(
-    string? OrderNumber, Guid? StyleId, string? Buyer, int? Quantity, string? DueDate, string? Status, string? Notes, uint? ExpectedVersion);
+    string? OrderNumber, Guid? StyleId, string? Buyer, int? Quantity, string? DueDate, string? Status, string? Notes, uint? ExpectedVersion,
+    Guid? FactoryId = null, string? OrderReference = null, string? ProductDescription = null, string? ProductCategory = null, string? StartDate = null,
+    string? PlannedCompletionDate = null, string? Priority = null, string? StatusReason = null);
 
 public sealed record OrderListItem(
     Guid Id, string OrderNumber, Guid StyleId, string StyleCode, string StyleName, string? Buyer, int Quantity, string DueDate,
-    string Status, int ProducedGood, double ProgressPct, int ActivePlans, string RiskLevel, DateTime? ProjectedCompletion, uint Version);
+    string Status, int ProducedGood, double ProgressPct, int ActivePlans, string RiskLevel, DateTime? ProjectedCompletion, uint Version,
+    Guid? FactoryId = null, string? OrderReference = null, string? ProductCategory = null, string? Priority = null, string? StartDate = null,
+    string? PlannedCompletionDate = null);
 
 public sealed record OrderDto(
     Guid Id, string OrderNumber, Guid StyleId, string? Buyer, int Quantity, string DueDate, DateTime DueAt, string Status, string? Notes,
-    DateTime CreatedAt, string CreatedByEmail, uint Version);
+    DateTime CreatedAt, string CreatedByEmail, uint Version,
+    Guid? FactoryId = null, string? FactoryCode = null, string? OrderReference = null, string? ProductDescription = null, string? ProductCategory = null,
+    string? StartDate = null, string? PlannedCompletionDate = null, string? Priority = null, string? StatusReason = null,
+    IReadOnlyList<string>? AllowedStatuses = null);
 
 public sealed record StageProgressDto(string Stage, int Good, int Reject, int Rework, int Records);
 

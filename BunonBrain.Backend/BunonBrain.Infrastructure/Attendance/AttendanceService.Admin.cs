@@ -247,10 +247,16 @@ public sealed partial class AttendanceService
                               join s in _db.Shifts.AsNoTracking() on a.ShiftId equals s.Id
                               where a.EffectiveFrom <= day && (a.EffectiveTo == null || a.EffectiveTo >= day)
                               select new { a.WorkerId, s.StartLocal, s.EndLocal, s.LateGraceMinutes, s.WorkingDays, a.FactoryId }).ToListAsync(ct);
-        var scheduled = assigned.Where(a => AttendanceRules.WorksOn(a.WorkingDays, day.DayOfWeek)).ToList();
+        var rostered = assigned.Where(a => AttendanceRules.WorksOn(a.WorkingDays, day.DayOfWeek)).ToList();
+        // Holidays and approved leave: not expected, never absent.
+        var calendar = await AttendanceCalendarLoader.LoadAsync(_db, rostered.Select(a => a.FactoryId).Distinct().ToList(), day, day, ct);
+        var factoryOf = rostered.GroupBy(a => a.WorkerId).ToDictionary(g => g.Key, g => g.First().FactoryId);
+        var (scheduled, excused) = calendar.Apply(rostered, a => a.WorkerId, _ => day, w => factoryOf.GetValueOrDefault(w));
         var withSession = (await today.Select(s => s.WorkerId).Distinct().ToListAsync(ct)).ToHashSet();
         var absent = scheduled.Count(a => !withSession.Contains(a.WorkerId)
                                           && now > AttendanceCalculator.ToUtc(day, a.StartLocal, tz).AddMinutes(a.LateGraceMinutes));
+        var onLeave = excused.Where(e => e.Kind == ExcusalKinds.Leave && !withSession.Contains(e.WorkerId)).Select(e => e.WorkerId).Distinct().Count();
+        var holidayName = factoryId is { } hf ? calendar.HolidayOn(hf, day)?.Name : calendar.Holidays.Count == 1 ? calendar.Holidays.First().Name : null;
 
         var ot = Filter(allowed || caller.Has(Permissions.OvertimeView)
                 ? AttendanceSupport.Scoped(_db.OvertimeRequests.AsNoTracking(), caller, (q, f) => q.Where(o => f.Contains(o.FactoryId)),
@@ -270,7 +276,7 @@ public sealed partial class AttendanceService
 
         return new AttendanceStatisticsDto(day, factoryId, scheduled.Count, present, absent, late, checkedIn, missing, onBreakRows.Count, overdue.Count,
             pendingOt, completedOt, pendingCorrections, bySource.GetValueOrDefault(AttendanceSources.Simulator), bySource.GetValueOrDefault(AttendanceSources.Device),
-            bySource.GetValueOrDefault(AttendanceSources.Manual), await _support.BreakDtosAsync(overdue, now, ct));
+            bySource.GetValueOrDefault(AttendanceSources.Manual), await _support.BreakDtosAsync(overdue, now, ct), onLeave, holidayName);
     }
 
     // ─── Reports ───────────────────────────────────────────────────────────

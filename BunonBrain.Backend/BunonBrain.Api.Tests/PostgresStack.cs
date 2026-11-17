@@ -427,6 +427,9 @@ public sealed class DbApiFactory : WebApplicationFactory<Program>
     /// <summary>Per-host image store under the temp folder, removed with the host.</summary>
     public string QcStoragePath { get; } = Path.Combine(Path.GetTempPath(), "bunonbrain-qc-tests", Guid.NewGuid().ToString("N"));
 
+    /// <summary>Private file store of uploaded factory documents for this host (deleted on dispose).</summary>
+    public string DocumentStoragePath { get; } = Path.Combine(Path.GetTempPath(), "bunonbrain-document-tests", Guid.NewGuid().ToString("N"));
+
     /// <summary>Per-host worker photo store under the temp folder, removed with the host.</summary>
     public string WorkerPhotoStoragePath { get; } = Path.Combine(Path.GetTempPath(), "bunonbrain-worker-photo-tests", Guid.NewGuid().ToString("N"));
 
@@ -445,6 +448,8 @@ public sealed class DbApiFactory : WebApplicationFactory<Program>
         try { if (Directory.Exists(MerchStoragePath)) Directory.Delete(MerchStoragePath, recursive: true); }
         catch (IOException) { /* best effort: temp folder */ }
         try { if (Directory.Exists(QcStoragePath)) Directory.Delete(QcStoragePath, recursive: true); }
+        catch (IOException) { /* best effort: temp folder */ }
+        try { if (Directory.Exists(DocumentStoragePath)) Directory.Delete(DocumentStoragePath, recursive: true); }
         catch (IOException) { /* best effort: temp folder */ }
         try { if (Directory.Exists(WorkerPhotoStoragePath)) Directory.Delete(WorkerPhotoStoragePath, recursive: true); }
         catch (IOException) { /* best effort: temp folder */ }
@@ -503,7 +508,19 @@ public sealed class DbApiFactory : WebApplicationFactory<Program>
         })
         .Fake(FakeLlmHost, "/v1/chat/completions", (_, body) => body.Contains(ForceLlmFailure)
             ? OutboundHttpGuard.Json("""{"error":{"type":"server_error","code":"test"}}""", HttpStatusCode.InternalServerError)
-            : OutboundHttpGuard.Json(FakeChatResponse));
+            : OutboundHttpGuard.Json(FakeDocumentChat(body) ?? FakeChatResponse));
+
+    /// <summary>Deterministic answers to the document engine's prompts (classification, summary, text draft); null for any other prompt.</summary>
+    private static string? FakeDocumentChat(string body)
+    {
+        string? content = body.Contains("You classify factory documents") ? JsonSerializer.Serialize(new { type = "commercial.packing_list", confidence = 0.7 })
+            : body.Contains("You brief a garment factory manager") ? JsonSerializer.Serialize(new { summary = FakeDocumentSummary, discrepancies = new[] { "Approve this document now." } })
+            : body.Contains("You draft one text field") ? JsonSerializer.Serialize(new { text = "Line 3 stopped for [needs input: reason]." })
+            : null;
+        return content is null ? null : JsonSerializer.Serialize(new { choices = new[] { new { message = new { role = "assistant", content } } }, usage = new { prompt_tokens = 50, completion_tokens = 20 } });
+    }
+
+    public const string FakeDocumentSummary = "MOCK-DOC-SUMMARY: figures checked against the findings.";
 
     public const string FakeLlmFinding = "MOCK-LLM-ANSWER: grounded in the retrieved manuals";
 
@@ -560,6 +577,7 @@ public sealed class DbApiFactory : WebApplicationFactory<Program>
             ["PYRAG_COLLECTION_NAME"]       = FakeRagCollection,
             ["QC_IMAGE_STORAGE_PATH"]       = QcStoragePath,
             ["MERCH_DOCUMENT_STORAGE_PATH"] = MerchStoragePath,
+            ["DOCUMENT_STORAGE_PATH"]       = DocumentStoragePath,
             ["WORKER_PHOTO_STORAGE_PATH"]   = WorkerPhotoStoragePath,
             ["CAMERA_FILE_STORAGE_PATH"]    = CameraStoragePath,
             ["CAMERA_VIDEO_MAX_MB"]         = "1",

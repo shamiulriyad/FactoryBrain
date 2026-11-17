@@ -510,6 +510,29 @@ public static class MonitoringRules
         return null;
     }
 
+    /// <summary>
+    /// The payload with the validated, canonical activity labels (e.g. <c>walking</c> → <c>WALKING</c>)
+    /// in place of what the producer sent, so stored events match the label filters and views.
+    /// Only properties already present are rewritten (matched case-insensitively, like <see cref="PayloadString(JsonElement?, string)"/>).
+    /// </summary>
+    public static string WithCanonicalLabels(string json, string? activity, string? previousActivity)
+    {
+        System.Text.Json.Nodes.JsonObject? o;
+        try { o = System.Text.Json.Nodes.JsonNode.Parse(json) as System.Text.Json.Nodes.JsonObject; }
+        catch (JsonException) { return json; }
+        if (o is null) return json;
+        var changed = false;
+        foreach (var (name, value) in new[] { ("activity", activity), ("previousActivity", previousActivity) })
+        {
+            if (value is null) continue;
+            var key = o.Select(kv => kv.Key).FirstOrDefault(k => string.Equals(k, name, StringComparison.OrdinalIgnoreCase));
+            if (key is null || o[key] is not System.Text.Json.Nodes.JsonValue v || !v.TryGetValue<string>(out var current) || current == value) continue;
+            o[key] = value;
+            changed = true;
+        }
+        return changed ? o.ToJsonString() : json;
+    }
+
     public static string? PayloadString(string json, string name)
     {
         try

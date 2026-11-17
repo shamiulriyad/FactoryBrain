@@ -220,7 +220,7 @@ public sealed class ProductionAnalysisService : IProductionAnalysisService
     {
         var q = from e in _db.ProductionOutputEvents.AsNoTracking()
                 join o in _db.ProductionOrders.AsNoTracking() on e.OrderId equals o.Id
-                where !e.IsSuperseded && o.Status == ProductionOrderStatus.Open
+                where !e.IsSuperseded && (o.Status == ProductionOrderStatus.InProgress || o.Status == ProductionOrderStatus.Planned)
                 select e;
         if (lineId is not null) q = q.Where(e => e.LineId == lineId);
         if (orderId is { } oid) q = q.Where(e => e.OrderId == oid);
@@ -247,7 +247,7 @@ public sealed class ProductionAnalysisService : IProductionAnalysisService
 
     private async Task<IReadOnlyList<DelayedOrderDto>> RisksAsync(string? lineId, Guid? orderId, DateTime now, CancellationToken ct)
     {
-        var q = _db.ProductionOrders.AsNoTracking().Where(o => o.Status == ProductionOrderStatus.Open
+        var q = _db.ProductionOrders.AsNoTracking().Where(o => (o.Status == ProductionOrderStatus.InProgress || o.Status == ProductionOrderStatus.Planned)
             && _db.ProductionPlans.Any(p => p.OrderId == o.Id && p.Status == ProductionPlanStatus.Active && (lineId == null || p.LineId == lineId)));
         if (orderId is { } oid) q = q.Where(o => o.Id == oid);
         var orders = await q.OrderBy(o => o.DueDate).Take(MaxRiskOrders).ToListAsync(ct);

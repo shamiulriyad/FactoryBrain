@@ -41,7 +41,12 @@ export const PLAN_STATUS_TONE: Record<PlanStatus, Tone> = {
   cancelled: "neutral"
 };
 
-export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = { open: "Open", closed: "Closed", cancelled: "Cancelled" };
+export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
+  draft: "Draft", planned: "Planned", in_progress: "In progress", on_hold: "On hold", completed: "Completed", cancelled: "Cancelled"
+};
+
+/** Orders that can be allocated, planned and produced (the old "open"). */
+export const isLiveOrder = (s: OrderStatus): boolean => s === "planned" || s === "in_progress";
 
 export const RISK_LABEL: Record<RiskLevel, string> = {
   complete: "Complete",

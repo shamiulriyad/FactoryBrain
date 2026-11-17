@@ -33,7 +33,13 @@ const SHORT: Record<string, string> = {
   MonitoringOperator: "Monitor",
   HrOfficer: "HR",
   DeviceAdmin: "IT / Dev.",
-  Worker: "Worker"
+  Worker: "Worker",
+  DocumentController: "Doc. ctrl",
+  Merchandiser: "Merch.",
+  StoreOfficer: "Store",
+  QcOfficer: "QC",
+  ComplianceOfficer: "Compl.",
+  CommercialOfficer: "Comm."
 };
 
 function Matrix() {

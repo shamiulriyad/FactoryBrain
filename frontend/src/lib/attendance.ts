@@ -234,6 +234,10 @@ export type Overtime = {
 
 export type AttendanceStatistics = {
   date: string;
+  /** Scheduled workers on approved leave that day (not absent). */
+  onLeave?: number;
+  /** Name of the factory holiday, when the day is one (nobody is absent). */
+  holiday?: string | null;
   factoryId?: string | null;
   scheduledWorkers: number;
   present: number;

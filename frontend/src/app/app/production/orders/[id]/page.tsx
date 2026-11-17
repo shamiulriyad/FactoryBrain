@@ -18,7 +18,7 @@ import { useOnDataChanged, useResource } from "@/lib/useResource";
 import { errorMessage } from "@/lib/api";
 import { useCan } from "@/lib/auth";
 import { P } from "@/lib/access";
-import { ORDER_STATUS_LABEL, STAGE_LABEL, fmt, fmtHours, plantDateTime } from "@/lib/production";
+import { ORDER_STATUS_LABEL, STAGE_LABEL, fmt, fmtHours, isLiveOrder, plantDateTime } from "@/lib/production";
 import { productionPaths } from "@/services/production.api";
 import type { OrderDetail } from "@/services/contracts";
 import { OrderFormModal, PlanFormModal } from "@/components/production/forms";
@@ -47,11 +47,11 @@ export default function OrderPage() {
       <Link href="/app/production?tab=orders" className="inline-flex items-center gap-1 text-caption text-fg-tertiary hover:text-fg-primary"><ArrowLeft size={13} /> Orders</Link>
       <PageHeader className="mt-2" eyebrow="Production order" title={o.orderNumber}
         description={`${d.style.code} · ${d.style.name}${o.buyer ? ` · ${o.buyer}` : ""}`}
-        meta={<><Badge>{ORDER_STATUS_LABEL[o.status]}</Badge>{o.status === "open" && <RiskLevelBadge level={r.level} testId="order-risk-level" />}</>}
+        meta={<><Badge>{ORDER_STATUS_LABEL[o.status]}</Badge>{isLiveOrder(o.status) && <RiskLevelBadge level={r.level} testId="order-risk-level" />}</>}
         actions={operator && (
           <>
             <Button variant="secondary" iconLeft={<Pencil size={14} />} onClick={() => setEditing(true)} data-testid="order-edit">Edit</Button>
-            {o.status === "open" && <Button variant="primary" iconLeft={<Plus size={14} />} onClick={() => setPlanning(true)} data-testid="order-plan">Plan this order</Button>}
+            {isLiveOrder(o.status) && <Button variant="primary" iconLeft={<Plus size={14} />} onClick={() => setPlanning(true)} data-testid="order-plan">Plan this order</Button>}
           </>
         )}
       />
@@ -64,7 +64,7 @@ export default function OrderPage() {
         <div className="surface p-4"><KeyValue label="SMV">{d.style.effectiveSmv == null ? "missing" : `${fmt(d.style.effectiveSmv, 3)} min`}</KeyValue></div>
       </div>
 
-      {o.status === "open" && (
+      {isLiveOrder(o.status) && (
         <Panel className="mt-4" title="Delivery risk" testId="order-risk"
           subtitle={`Evaluated ${plantDateTime(r.evaluatedAt, config.offset)} (plant time) for line${r.lineIds.length === 1 ? "" : "s"} ${r.lineIds.join(", ") || "— (no active plan)"}. ${r.method}`}>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

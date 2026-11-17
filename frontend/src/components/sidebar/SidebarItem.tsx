@@ -15,7 +15,9 @@ export const rowBase =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sb-accent";
 
 export function rowState(active: boolean) {
-  return active ? "bg-sb-active font-semibold text-sb-text" : "text-sb-dim hover:bg-sb-hover hover:text-sb-text";
+  return active
+    ? "bg-sb-active font-semibold text-sb-text before:absolute before:left-0 before:top-2.5 before:bottom-2.5 before:w-[3px] before:rounded-full before:bg-sb-text"
+    : "text-sb-dim hover:bg-sb-hover hover:text-sb-text";
 }
 
 export function rowLayout(collapsed: boolean) {
@@ -106,7 +108,7 @@ export function SidebarItem({
               "inline-flex shrink-0 items-center justify-center rounded-full font-plexmono font-semibold leading-none",
               BADGE_STYLE[item.badge],
               collapsed
-                ? "absolute right-0.5 top-0.5 h-4 min-w-4 px-1 text-[10px] shadow-[0_0_0_2px_#0d1218]"
+                ? "absolute right-0.5 top-0.5 h-4 min-w-4 px-1 text-[10px] shadow-[0_0_0_2px_rgb(var(--sb-bg))]"
                 : "h-5 min-w-5 px-1.5 text-[11px]",
             )}
           >

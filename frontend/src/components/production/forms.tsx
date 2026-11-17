@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
 import { announceDataChanged, useResource } from "@/lib/useResource";
 import { errorMessage, isApiError } from "@/lib/api";
-import { IMPORT_TEMPLATE, STAGE_LABEL, addDays, csvToImportRows, fmt, plantDateTime, plantIso, plantTime, plantToday } from "@/lib/production";
+import { IMPORT_TEMPLATE, ORDER_STATUS_LABEL, STAGE_LABEL, addDays, csvToImportRows, fmt, plantDateTime, plantIso, plantTime, plantToday } from "@/lib/production";
 import {
   correctOutput,
   createOrder,
@@ -26,7 +26,6 @@ import {
   updatePlan
 } from "@/services/production.api";
 import {
-  ORDER_STATUSES,
   PRODUCTION_STAGES,
   type OutputEvent,
   type OutputImportResult,
@@ -103,13 +102,13 @@ export function OrderFormModal({ open, onClose, styles, order, onSaved }: {
 }) {
   const toast = useToast();
   const s = useSubmit();
-  const [f, setF] = useState({ orderNumber: "", styleId: "", buyer: "", quantity: "", dueDate: "", notes: "", status: "open" });
+  const [f, setF] = useState({ orderNumber: "", styleId: "", buyer: "", quantity: "", dueDate: "", notes: "", status: "" });
   useEffect(() => {
     if (!open) return;
     s.reset();
     setF(order
       ? { orderNumber: order.orderNumber, styleId: order.styleId, buyer: order.buyer ?? "", quantity: String(order.quantity), dueDate: order.dueDate, notes: order.notes ?? "", status: order.status }
-      : { orderNumber: "", styleId: styles.find((x) => x.isActive)?.id ?? "", buyer: "", quantity: "", dueDate: "", notes: "", status: "open" });
+      : { orderNumber: "", styleId: styles.find((x) => x.isActive)?.id ?? "", buyer: "", quantity: "", dueDate: "", notes: "", status: "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, order]);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
@@ -117,7 +116,7 @@ export function OrderFormModal({ open, onClose, styles, order, onSaved }: {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const saved = await s.run(() => order
-      ? updateOrder(order.id, { quantity: num(f.quantity), dueDate: f.dueDate, buyer: f.buyer, notes: f.notes, status: f.status, styleId: f.styleId, expectedVersion: order.version })
+      ? updateOrder(order.id, { quantity: num(f.quantity), dueDate: f.dueDate, buyer: f.buyer, notes: f.notes, styleId: f.styleId, expectedVersion: order.version })
       : createOrder({ orderNumber: f.orderNumber.trim(), styleId: f.styleId, buyer: f.buyer.trim() || undefined, quantity: num(f.quantity), dueDate: f.dueDate, notes: f.notes.trim() || undefined }));
     if (!saved) return;
     toast.push({ title: order ? "Order updated" : `Order ${saved.orderNumber} created` });
@@ -159,13 +158,9 @@ export function OrderFormModal({ open, onClose, styles, order, onSaved }: {
           {(a) => <Input id={a.id} value={f.buyer} onChange={set("buyer")} maxLength={120} />}
         </Field>
         {order && (
-          <Field label="Status" error={s.fe("status")}>
-            {(a) => (
-              <Select id={a.id} value={f.status} onChange={set("status")}>
-                {ORDER_STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
-              </Select>
-            )}
-          </Field>
+          <p className="text-caption text-fg-tertiary" data-testid="order-status-note">
+            Status: {ORDER_STATUS_LABEL[order.status]}. An order moves through draft, planned, in progress, on hold and completed on its production planning page, with the reason kept on record.
+          </p>
         )}
         <Field label="Notes (optional)" error={s.fe("notes")}>
           {(a) => <TextArea id={a.id} rows={2} value={f.notes} onChange={set("notes")} maxLength={1000} />}

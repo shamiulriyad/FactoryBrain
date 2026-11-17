@@ -54,6 +54,7 @@ const SECTIONS: { href: string; label: string; perms: string[]; exact?: boolean 
   { href: "/app/attendance/corrections", label: "Corrections", perms: [P.AttendanceManage, P.AttendanceApprove] },
   { href: "/app/attendance/shifts", label: "Shifts", perms: [P.AttendanceView, P.ShiftsManage, P.ShiftsAssign] },
   { href: "/app/attendance/shift-assignments", label: "Shift assignments", perms: [P.AttendanceView, P.ShiftsAssign] },
+  { href: "/app/attendance/holidays", label: "Holidays", perms: [P.AttendanceView] },
   { href: "/app/attendance/overtime", label: "Overtime", perms: [P.OvertimeView, P.OvertimeApprove], exact: true },
   { href: "/app/attendance/overtime/approvals", label: "OT approvals", perms: [P.OvertimeApprove] },
   { href: "/app/attendance/simulator", label: "RFID simulator", perms: [P.AttendanceManage] },

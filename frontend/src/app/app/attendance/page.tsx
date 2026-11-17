@@ -7,7 +7,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { AlertTriangle, Clock, Coffee, FlaskConical, LogIn, LogOut, RefreshCw, Timer, UserCheck, UserX, Users } from "lucide-react";
+import { AlertTriangle, CalendarOff, Clock, Coffee, FlaskConical, LogIn, LogOut, RefreshCw, Timer, UserCheck, UserX, Users } from "lucide-react";
 import { RequirePermission } from "@/components/auth/RequireRole";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
@@ -120,7 +120,8 @@ function Dashboard() {
       <div className="mt-4 grid gap-3 grid-cols-2 md:grid-cols-4 xl:grid-cols-6" data-testid="attendance-stats">
         <StatCard label="Scheduled" value={s?.scheduledWorkers ?? "—"} hint="Workers with a shift that day" icon={<Users size={14} />} loading={stats.loading} testId="stat-scheduled" />
         <StatCard label="Present" value={s?.present ?? "—"} tone="good" icon={<UserCheck size={14} />} loading={stats.loading} href="/app/attendance/records" testId="stat-present" />
-        <StatCard label="Absent" value={s?.absent ?? "—"} hint="Scheduled, no attendance" tone={s && s.absent > 0 ? "warn" : "neutral"} icon={<UserX size={14} />} loading={stats.loading} testId="stat-absent" />
+        <StatCard label="Absent" value={s?.absent ?? "—"} hint="Scheduled, no attendance, not on leave" tone={s && s.absent > 0 ? "warn" : "neutral"} icon={<UserX size={14} />} loading={stats.loading} testId="stat-absent" />
+        <StatCard label="On leave" value={s?.onLeave ?? "—"} hint="Approved leave records" icon={<CalendarOff size={14} />} loading={stats.loading} href="/app/documents/list?type=hr.leave&status=APPROVED" testId="stat-on-leave" />
         <StatCard label="Late" value={s?.late ?? "—"} tone={s && s.late > 0 ? "warn" : "neutral"} icon={<Clock size={14} />} loading={stats.loading} href={`/app/attendance/records?late=true${day ? `&from=${day}&to=${day}` : ""}`} testId="stat-late" />
         <StatCard label="Checked in now" value={s?.checkedIn ?? "—"} icon={<LogIn size={14} />} loading={stats.loading} testId="stat-checked-in" />
         <StatCard label="Missing punches" value={s?.missingPunches ?? "—"} hint="Flagged for review" tone={s && s.missingPunches > 0 ? "bad" : "neutral"} icon={<AlertTriangle size={14} />} loading={stats.loading} href="/app/attendance/records?needsReview=true" testId="stat-missing" />
@@ -134,6 +135,7 @@ function Dashboard() {
           icon={<FlaskConical size={14} />} loading={stats.loading} testId="stat-sources" />
       </div>
 
+      {s?.holiday && <Callout className="mt-4" tone="info" title={`Holiday: ${s.holiday}`}>Nobody is expected on a holiday, so nobody is counted absent. Anyone who works is still counted present.</Callout>}
       {s && s.simulatedEvents > 0 && <Callout className="mt-4" tone="warning" title="Simulated events in this view">{SIMULATED_NOTE}</Callout>}
 
       <div className="mt-6 grid gap-6 xl:grid-cols-2">

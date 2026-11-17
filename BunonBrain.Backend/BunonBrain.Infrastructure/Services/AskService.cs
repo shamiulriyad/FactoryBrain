@@ -25,7 +25,7 @@ public sealed class AskService : IAskService
         if (req.Filter is not null)
             _log.LogInformation("Ask filter ignored: the RAG service does not support metadata filters.");
 
-        var result = await _rag.QueryAsync(req.Query, ct);
+        var result = await _rag.QueryAsync(req.Query, ct, useCache: req.Fresh != true);
         var citations = BuildCitations(result.Sources, _rag.Options.Collection);
 
         // The service only returns sources the answer actually cited; an
@@ -46,7 +46,10 @@ public sealed class AskService : IAskService
             Confidence: cited ? citations.Max(c => c.Confidence) : 0.0,
             RagHits: Array.Empty<AskRagHit>(),
             Mode: cited ? AskModes.Live : AskModes.NoSource,
-            Warning: null);
+            Warning: null,
+            Cached: result.Cached,
+            CachedQuestion: result.Cached ? result.CachedQuestion : null,
+            CachedAt: result.Cached ? result.CachedAt : null);
     }
 
     /// <summary>

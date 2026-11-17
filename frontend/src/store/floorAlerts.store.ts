@@ -1,5 +1,5 @@
 // Floor alerts store — WhatsApp-sim notifications pushed to a floor supervisor.
-// Same shape as ask.store.ts / sensors.store.ts (Zustand + persist), but starts
+// Same shape as sensors.store.ts (Zustand + persist), but starts
 // empty: alerts are produced by agent activity, not by the demo seed.
 
 "use client";

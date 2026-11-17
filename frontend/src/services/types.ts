@@ -209,4 +209,11 @@ export type AskAnswer = {
   /** Why the answer isn't live although a model is configured. */
   warning?: string | null;
   citations?: Array<{ id: string; title: string; snippet: string; confidence: number; source: string; url: string }>;
+  /** True when this is the stored answer to an earlier, equivalent question: no AI call was made. */
+  cached?: boolean;
+  cachedQuestion?: string | null;
+  cachedAt?: string | null;
+  /** The saved chat this question was added to (null when history could not be saved). */
+  conversationId?: string | null;
+  messageId?: string | null;
 };

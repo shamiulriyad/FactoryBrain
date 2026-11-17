@@ -698,6 +698,7 @@ builder.Services.AddSingleton<IPyRagClient, PyRagClient>();
 // Scoped: each request gets a fresh instance with its own DbContext.
 builder.Services.AddScoped<IRagService,        RagService>();
 builder.Services.AddScoped<IAskService,        AskService>();
+builder.Services.AddScoped<IAskHistoryService, AskHistoryService>();
 builder.Services.AddScoped<IFloorAlertService, FloorAlertService>();
 builder.Services.AddScoped<ILineBoardService,  LineBoardService>();
 builder.Services.AddScoped<IQcService,         QcService>();

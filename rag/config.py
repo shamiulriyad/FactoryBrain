@@ -122,6 +122,15 @@ _temperature = _env("TEMPERATURE", "0.2" if LLM_PROVIDER == "google" else "").st
 TEMPERATURE = float(_temperature) if _temperature else None
 
 
+# --- Answer cache (rag/answer_cache.py) -------------------------------------
+# Reuse the answer to a question asked before instead of calling the LLM again.
+ANSWER_CACHE_ENABLED = _env("ANSWER_CACHE", "true").strip().lower() not in ("0", "false", "no", "off")
+# Similarity needed when the wording differs (same language and numbers are always required).
+ANSWER_CACHE_MIN_SIMILARITY = float(_env("ANSWER_CACHE_MIN_SIMILARITY", "0.97"))
+# Cached answers older than this are not reused (they are also dropped when documents change).
+ANSWER_CACHE_MAX_AGE_DAYS = int(_env("ANSWER_CACHE_MAX_AGE_DAYS", "30"))
+
+
 def require_llm_api_key() -> None:
     """Fail early, with a clear message, on a bad answering-LLM setup."""
     if LLM_PROVIDER not in KNOWN_LLM_PROVIDERS:

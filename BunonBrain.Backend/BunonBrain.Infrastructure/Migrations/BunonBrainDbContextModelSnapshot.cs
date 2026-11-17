@@ -308,6 +308,84 @@ namespace BunonBrain.Infrastructure.Migrations
                     b.ToTable("approvals", (string)null);
                 });
 
+            modelBuilder.Entity("BunonBrain.Domain.Entities.AskConversation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "UpdatedAt");
+
+                    b.ToTable("ask_conversations", (string)null);
+                });
+
+            modelBuilder.Entity("BunonBrain.Domain.Entities.AskMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Answer")
+                        .IsRequired()
+                        .HasMaxLength(20000)
+                        .HasColumnType("character varying(20000)");
+
+                    b.Property<bool>("Cached")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("CachedQuestion")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("CitationsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<double>("Confidence")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Question")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId", "CreatedAt");
+
+                    b.ToTable("ask_messages", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ask_messages_citations", "jsonb_typeof(\"CitationsJson\") = 'array'");
+                        });
+                });
+
             modelBuilder.Entity("BunonBrain.Domain.Entities.AttendanceCorrection", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8908,6 +8986,24 @@ namespace BunonBrain.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("BunonBrain.Domain.Entities.AskConversation", b =>
+                {
+                    b.HasOne("BunonBrain.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BunonBrain.Domain.Entities.AskMessage", b =>
+                {
+                    b.HasOne("BunonBrain.Domain.Entities.AskConversation", null)
+                        .WithMany("Messages")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("BunonBrain.Domain.Entities.AttendanceCorrection", b =>
                 {
                     b.HasOne("BunonBrain.Domain.Entities.Factory", null)
@@ -10717,6 +10813,11 @@ namespace BunonBrain.Infrastructure.Migrations
                         .HasForeignKey("WorkstationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("BunonBrain.Domain.Entities.AskConversation", b =>
+                {
+                    b.Navigation("Messages");
                 });
 
             modelBuilder.Entity("BunonBrain.Domain.Entities.DailyProductionPlan", b =>

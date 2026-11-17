@@ -12,7 +12,8 @@ public interface IPyRagClient
     /// POST /api/kb/{collection}/query. Throws <see cref="PyRagUnavailableException"/>
     /// when the service can't be reached or returns an error.
     /// </summary>
-    Task<PyRagAnswer> QueryAsync(string question, CancellationToken ct);
+    /// <param name="useCache">False: never reuse an earlier answer (the service asks its model again).</param>
+    Task<PyRagAnswer> QueryAsync(string question, CancellationToken ct, bool useCache = true);
 
     /// <summary>GET /health. Never throws.</summary>
     Task<PyRagHealth> HealthAsync(CancellationToken ct);
@@ -24,7 +25,9 @@ public interface IPyRagClient
 /// <c>Answer</c> is the model's text with the [S1] markers stripped;
 /// <c>Sources</c> holds only the chunks the model actually cited.
 /// </summary>
-public sealed record PyRagAnswer(string Answer, IReadOnlyList<PyRagSource> Sources);
+/// <param name="Cached">The service reused its stored answer to an earlier, equivalent question.</param>
+public sealed record PyRagAnswer(string Answer, IReadOnlyList<PyRagSource> Sources,
+    bool Cached = false, string? CachedQuestion = null, DateTimeOffset? CachedAt = null);
 
 public sealed record PyRagSource(
     string? DocumentId, string? ChunkId, int? Page, string Source, double Score, string Excerpt);

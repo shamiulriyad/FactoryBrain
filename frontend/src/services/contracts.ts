@@ -478,6 +478,43 @@ export const RAG_CATEGORIES = ["manuals", "compliance", "qc", "policy", "sop"] a
 export type AskRequest = {
   query: string;
   filter?: { department?: (typeof RAG_DEPARTMENTS)[number]; category?: (typeof RAG_CATEGORIES)[number] };
+  /** Saved chat to add this question to; omitted starts a new chat. */
+  conversationId?: string;
+  /** True: don't reuse an earlier answer, ask the model again. */
+  fresh?: boolean;
+};
+
+
+/** A saved chat in the signed-in user's chat list (GET /api/ask/conversations). */
+export type AskConversationSummary = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  lastQuestion?: string | null;
+};
+
+/** One question and the answer it got (GET /api/ask/conversations/{id}). */
+export type AskMessage = {
+  id: string;
+  question: string;
+  answer: string;
+  mode: "live" | "demo" | "no_source";
+  confidence: number;
+  citations: AskCitation[];
+  /** True when the answer was reused from an earlier, equivalent question (no AI call). */
+  cached: boolean;
+  cachedQuestion?: string | null;
+  createdAt: string;
+};
+
+export type AskConversationDetail = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: AskMessage[];
 };
 
 export type AskRagHit = {

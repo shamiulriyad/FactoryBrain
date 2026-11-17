@@ -1,0 +1,176 @@
+# Render Blueprint for BunonBrain. Step-by-step guide: DEPLOY_RENDER.md
+#
+#   bunonbrain-web  Next.js frontend           public  https://bunonbrain-web.onrender.com
+#   bunonbrain-api  .NET 10 API (Docker)        public  https://bunonbrain-api.onrender.com
+#   bunonbrain-rag  Python PDF RAG (Docker)     private (only the API can reach it)
+#
+# Not on Render: the database (Supabase), the vector store (Qdrant Cloud) and the
+# computer-vision service (a PC inside the factory, next to the cameras).
+#
+# Every "sync: false" value is asked for once, when the Blueprint is created in
+# the Render dashboard. Secrets are never written in this file.
+#
+# All services sit in one region so they share Render's private network.
+# Singapore is the closest Render region to Supabase ap-south-1 (Mumbai).
+
+services:
+  # ───────────────────────────── .NET API ─────────────────────────────
+  - type: web
+    name: bunonbrain-api
+    runtime: docker
+    region: singapore
+    plan: starter            # 512 MB. Move to "standard" (2 GB) if logs show out-of-memory restarts.
+    dockerContext: .
+    dockerfilePath: ./BunonBrain.Backend/BunonBrain.Api/Dockerfile
+    healthCheckPath: /health
+    buildFilter:
+      paths:
+        - BunonBrain.Backend/**
+    # Uploaded QC images, documents, worker photos and camera files. Without a
+    # disk they are lost on every deploy/restart. (A disk means one instance
+    # and a short downtime on each deploy.)
+    disk:
+      name: app-data
+      mountPath: /app/App_Data
+      sizeGB: 5
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+
+      # Database: Supabase "Session pooler" string (port 5432, never 6543),
+      # ending with ;Maximum Pool Size=10 (the pooler allows only 15 clients).
+      - key: BUNONBRAIN_DB
+        sync: false
+
+      # Auth
+      - key: JWT_SIGNING_KEY
+        generateValue: true
+      - key: Jwt__Issuer
+        value: bunonbrain
+      - key: Jwt__Audience
+        value: bunonbrain
+      - key: SEED_ADMIN_EMAIL
+        sync: false
+      - key: SEED_ADMIN_PASSWORD
+        sync: false
+      # Must be the SAME value as your local .env when Render uses the same
+      # database: AI keys / camera passwords saved in the DB were encrypted with it.
+      - key: AI_SETTINGS_ENCRYPTION_KEY
+        sync: false
+
+      # Browser → frontend → (private network) → API. Render's proxy appends the
+      # real client IP to X-Forwarded-For; the API takes the last hop, so the
+      # login rate limit works per user.
+      - key: FORWARDED_HEADERS_ENABLED
+        value: "true"
+      - key: CORS_ORIGINS          # e.g. https://bunonbrain-web.onrender.com
+        sync: false
+      - key: PUBLIC_APP_URL        # same frontend URL, used in password-reset emails
+        sync: false
+
+      # LLM (Ask BunonBrain, QC vision)
+      - key: LLM_PROVIDER
+        value: openai
+      - key: LLM_MODEL
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: QC_VISION_PROVIDER
+        value: llm
+
+      # Backend pgvector RAG: keep 384 (local embedder) to match vectors already in the DB.
+      - key: Rag__EmbeddingDimensions
+        value: "384"
+
+      # Python RAG service over Render's private network.
+      # Check the exact internal address in Dashboard → bunonbrain-rag → Connect → Internal.
+      - key: PYRAG_SERVICE_URL
+        value: http://bunonbrain-rag:8000
+      - key: PYRAG_API_KEY
+        fromService:
+          type: pserv
+          name: bunonbrain-rag
+          envVarKey: PYRAG_API_KEY
+      - key: PYRAG_COLLECTION_NAME
+        value: pdf_rag
+      - key: PYRAG_TIMEOUT_SECONDS
+        value: "90"
+
+      # Computer-vision service (runs in the factory). Copy this generated value
+      # into computer-vision/.env as CV_BACKEND_SERVICE_KEY.
+      - key: CV_SERVICE_KEY
+        generateValue: true
+      - key: CV_SERVICE_FACTORIES
+        value: MAIN
+
+      # Plant settings
+      - key: PRODUCTION_TIME_ZONE
+        value: Asia/Dhaka
+      - key: SIMULATOR_ENABLED
+        value: "false"
+      - key: DOCUMENT_AUTOMATION_ENABLED
+        value: "false"
+
+  # ───────────────────────────── Next.js frontend ─────────────────────────────
+  - type: web
+    name: bunonbrain-web
+    runtime: node
+    region: singapore
+    plan: starter
+    rootDir: frontend
+    # Lint is run separately (see build-environment notes); a lint crash must not block a deploy.
+    buildCommand: npm ci && npx next build --no-lint
+    startCommand: npx next start      # next start listens on $PORT
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      - key: NEXT_PUBLIC_SHOW_ARCHITECTURE
+        value: "false"
+      # /api/* and /hubs/* are proxied server-side to the API over the private
+      # network. These are read at BUILD time (rewrites are baked in), so
+      # redeploy the frontend after changing them.
+      - key: NEXT_PUBLIC_API_URL
+        value: http://bunonbrain-api:8080
+      - key: DOTNET_API_URL
+        value: http://bunonbrain-api:8080
+
+  # ───────────────────────────── Python PDF RAG ─────────────────────────────
+  - type: pserv
+    name: bunonbrain-rag
+    runtime: docker
+    region: singapore
+    plan: starter
+    dockerContext: ./rag
+    dockerfilePath: ./rag/Dockerfile
+    buildFilter:
+      paths:
+        - rag/**
+    envVars:
+      - key: PYRAG_API_KEY
+        generateValue: true
+      # Gemini embeddings: no torch in the image, fits in 512 MB.
+      # (huggingface embeddings need requirements-local.txt and the "standard" plan.)
+      - key: PYRAG_EMBEDDING_PROVIDER
+        value: google
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: PYRAG_LLM_MODEL
+        value: gemini-2.5-flash
+      - key: PYRAG_TEMPERATURE
+        value: "0.2"
+      - key: PYRAG_TOP_K
+        value: "4"
+      # Qdrant Cloud cluster URL (https://...:6333) and API key.
+      - key: PYRAG_QDRANT_URL
+        sync: false
+      - key: PYRAG_QDRANT_API_KEY
+        sync: false
+      - key: PYRAG_COLLECTION_NAME
+        value: pdf_rag
+      - key: PYRAG_MAX_UPLOAD_MB
+        value: "50"

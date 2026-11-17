@@ -119,6 +119,17 @@ public class QcInspectionFinding
     public QcDefectSeverity Severity { get; set; }
     public string? Description { get; set; }
 
+    // Model explanation for the line (advisory; null for inspector findings
+    // and providers that don't explain).
+    /// <summary>Specific defect type named by the model, e.g. "Broken yarn".</summary>
+    public string? DefectType { get; set; }
+    /// <summary>What the defect is and why it matters.</summary>
+    public string? Meaning { get; set; }
+    /// <summary>Typical causes of this defect type (not a verified root cause).</summary>
+    public string? ProbableCauses { get; set; }
+    /// <summary>What the line should do about it.</summary>
+    public string? RecommendedAction { get; set; }
+
     public QcFindingDecision Decision { get; set; } = QcFindingDecision.Unreviewed;
     public string? CorrectedCategoryCode { get; set; }
     public QcDefectSeverity? CorrectedSeverity { get; set; }

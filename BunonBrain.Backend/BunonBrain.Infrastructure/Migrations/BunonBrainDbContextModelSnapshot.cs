@@ -7388,6 +7388,10 @@ namespace BunonBrain.Infrastructure.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
 
+                    b.Property<string>("DefectType")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -7395,12 +7399,24 @@ namespace BunonBrain.Infrastructure.Migrations
                     b.Property<Guid>("InspectionId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Meaning")
+                        .HasMaxLength(600)
+                        .HasColumnType("character varying(600)");
+
                     b.PrimitiveCollection<double[]>("Polygon")
                         .HasColumnType("double precision[]");
+
+                    b.Property<string>("ProbableCauses")
+                        .HasMaxLength(600)
+                        .HasColumnType("character varying(600)");
 
                     b.Property<string>("RawLabel")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<string>("RecommendedAction")
+                        .HasMaxLength(600)
+                        .HasColumnType("character varying(600)");
 
                     b.Property<DateTime?>("ReviewedAt")
                         .HasColumnType("timestamptz");

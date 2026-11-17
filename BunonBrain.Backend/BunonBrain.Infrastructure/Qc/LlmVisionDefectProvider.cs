@@ -118,8 +118,17 @@ public sealed class LlmVisionDefectProvider : IDefectDetectionProvider
         sb.AppendLine("If you see a defect that fits none of them, use a short snake_case label of your own.");
         sb.AppendLine();
         sb.AppendLine("Respond with JSON only, exactly this shape:");
-        sb.AppendLine("{\"defects\":[{\"label\":\"<code>\",\"confidence\":<0..1>,\"box_2d\":[ymin,xmin,ymax,xmax],\"severity\":\"minor|major|critical\",\"description\":\"<what you see, max 25 words>\"}]}");
-        sb.AppendLine("box_2d uses integers 0-1000 relative to the image height (y) and width (x). Omit box_2d if you cannot locate the defect.");
+        sb.AppendLine("{\"defects\":[{\"label\":\"<code>\",\"confidence\":<0..1>,\"box_2d\":[ymin,xmin,ymax,xmax],\"severity\":\"minor|major|critical\"," +
+                      "\"defect_type\":\"<specific defect name, e.g. Broken yarn, Slub, Oil stain, Skipped stitch; max 5 words>\"," +
+                      "\"description\":\"<what you see in this image and where, max 30 words>\"," +
+                      "\"meaning\":\"<what this defect is and how it affects the garment or buyer acceptance, max 40 words>\"," +
+                      "\"probable_causes\":\"<the usual causes of this defect in garment/textile production, most likely first, max 40 words>\"," +
+                      "\"recommended_action\":\"<what the line should do now: repair, reject, check machine/material, max 35 words>\"}]}");
+        sb.AppendLine("box_2d uses integers 0-1000 relative to the image height (y) and width (x). " +
+                      "The box must enclose the WHOLE visible defect area (every affected yarn, thread, stain or hole), not a single point inside it; " +
+                      "if unsure where the defect ends, make the box slightly larger. Omit box_2d if you cannot locate the defect.");
+        sb.AppendLine("Write the text fields in plain English that a line supervisor understands. " +
+                      "probable_causes are typical causes for this defect type, not a verified root cause.");
         sb.AppendLine("confidence is your own estimate that the defect is really there.");
         sb.AppendLine("Report only defects you can actually see. If the piece has no visible defect, return {\"defects\":[]}.");
         return sb.ToString();
@@ -169,7 +178,7 @@ public sealed class LlmVisionDefectProvider : IDefectDetectionProvider
                 body = new
                 {
                     model,
-                    max_tokens = 2048,
+                    max_tokens = 4096, // each defect now carries a short explanation
                     system = SystemPrompt,
                     messages = new object[]
                     {

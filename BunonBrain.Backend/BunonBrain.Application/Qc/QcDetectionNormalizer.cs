@@ -11,7 +11,8 @@ public sealed record MappedDefect(
     NormalizedBox? Box,
     double[]? Polygon,
     string? Severity,
-    string? Description);
+    string? Description,
+    DefectInsight? Insight = null);
 
 /// <summary>
 /// Turns provider output into the internal contract. Parsing is strict about
@@ -67,7 +68,10 @@ public static class QcDetectionNormalizer
                     // [ymin, xmin, ymax, xmax] on a 0–1000 grid.
                     box = new NormalizedBox(v[1] / 1000, v[0] / 1000, (v[3] - v[1]) / 1000, (v[2] - v[0]) / 1000);
                 }
-                list.Add(new DetectedDefect(label.Trim(), confidence, box, null, String(d, "severity"), String(d, "description")));
+                var insight = new DefectInsight(
+                    String(d, "defect_type"), String(d, "meaning"), String(d, "probable_causes"), String(d, "recommended_action"));
+                list.Add(new DetectedDefect(label.Trim(), confidence, box, null, String(d, "severity"), String(d, "description"),
+                    insight is { DefectType: null, Meaning: null, ProbableCauses: null, RecommendedAction: null } ? null : insight));
             }
             return list;
         }
@@ -103,10 +107,24 @@ public static class QcDetectionNormalizer
                 ValidBox(d.Box),
                 ValidPolygon(d.Polygon),
                 NormalizeSeverity(d.Severity),
-                d.Description is null ? null : Truncate(d.Description.Trim(), 500)));
+                d.Description is null ? null : Truncate(d.Description.Trim(), 500),
+                CleanInsight(d.Insight)));
             if (result.Count == QcLimits.MaxFindingsPerInspection) break;
         }
         return result;
+    }
+
+    /// <summary>Trim and length-limit the explanation; null when nothing is left.</summary>
+    public static DefectInsight? CleanInsight(DefectInsight? i)
+    {
+        if (i is null) return null;
+        static string? Clean(string? s, int max) => string.IsNullOrWhiteSpace(s) ? null : Truncate(s.Trim(), max);
+        var cleaned = new DefectInsight(
+            Clean(i.DefectType, QcLimits.MaxDefectTypeLength),
+            Clean(i.Meaning, QcLimits.MaxInsightLength),
+            Clean(i.ProbableCauses, QcLimits.MaxInsightLength),
+            Clean(i.RecommendedAction, QcLimits.MaxInsightLength));
+        return cleaned is { DefectType: null, Meaning: null, ProbableCauses: null, RecommendedAction: null } ? null : cleaned;
     }
 
     public static NormalizedBox? ValidBox(NormalizedBox? b)

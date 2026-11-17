@@ -157,6 +157,10 @@ public sealed class QcInspectionProcessor : IQcInspectionProcessor
                 Polygon = m.Polygon,
                 Severity = severity,
                 Description = m.Description,
+                DefectType = m.Insight?.DefectType,
+                Meaning = m.Insight?.Meaning,
+                ProbableCauses = m.Insight?.ProbableCauses,
+                RecommendedAction = m.Insight?.RecommendedAction,
                 CreatedAt = now,
             });
         }

@@ -93,6 +93,9 @@ public static class QcLimits
     public const int FileNameMax = 255;
     public const int MaxCategoriesPerRequest = 50;
     public const int MaxFindingsPerInspection = 100;
+    /// <summary>Model explanation of a finding: defect type, meaning, causes, action.</summary>
+    public const int MaxDefectTypeLength = 100;
+    public const int MaxInsightLength = 600;
     public const int MaxAdditionsPerReview = 50;
     public const int ReviewNoteMax = 500;
     public const int MaxPageSize = 100;

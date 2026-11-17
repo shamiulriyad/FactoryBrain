@@ -286,6 +286,41 @@ public sealed class QcProviderTests
         Assert.Contains("- stain: Stain — oil marks", prompt);
         Assert.Contains("box_2d", prompt);
         Assert.Contains("t-shirt", prompt);
+        // The explanation fields and the "whole defect" box rule.
+        foreach (var field in new[] { "defect_type", "meaning", "probable_causes", "recommended_action" })
+            Assert.Contains($"\"{field}\"", prompt);
+        Assert.Contains("WHOLE visible defect area", prompt);
+    }
+
+    [Fact]
+    public void Vision_model_explanation_is_parsed_trimmed_and_length_limited()
+    {
+        var longText = new string('x', QcLimits.MaxInsightLength + 50);
+        var parsed = QcDetectionNormalizer.ParseVisionModelJson($$"""
+            {"defects":[
+              {"label":"fabric_flaw","confidence":0.9,"defect_type":"  Broken yarn  ","meaning":"A weft yarn is broken.",
+               "probable_causes":"{{longText}}","recommended_action":"Reject the panel; check the loom."},
+              {"label":"stain","confidence":0.8,"meaning":"   "}
+            ]}
+            """);
+        Assert.Equal(2, parsed.Count);
+        Assert.Null(parsed[1].Insight is { } blank ? QcDetectionNormalizer.CleanInsight(blank) : null); // whitespace only → no insight
+
+        var mapped = QcDetectionNormalizer.Map(parsed, Array.Empty<DetectionCategory>(), 0.25);
+        var insight = mapped[0].Insight;
+        Assert.NotNull(insight);
+        Assert.Equal("Broken yarn", insight!.DefectType);
+        Assert.Equal("A weft yarn is broken.", insight.Meaning);
+        Assert.Equal(QcLimits.MaxInsightLength, insight.ProbableCauses!.Length);
+        Assert.Equal("Reject the panel; check the loom.", insight.RecommendedAction);
+        Assert.Null(mapped[1].Insight);
+    }
+
+    [Fact]
+    public void Vision_model_without_explanation_fields_still_parses()
+    {
+        var d = Assert.Single(QcDetectionNormalizer.ParseVisionModelJson("""{"defects":[{"label":"hole","confidence":0.7}]}"""));
+        Assert.Null(d.Insight);
     }
 
     private sealed class StubHttp : IHttpClientFactory

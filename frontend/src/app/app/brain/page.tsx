@@ -18,8 +18,6 @@ import ReactFlow, {
   useReactFlow,
   ReactFlowProvider
 } from "reactflow";
-// React Flow's stylesheet has no TypeScript declaration.
-// @ts-expect-error -- side-effect CSS import provided by React Flow
 import "reactflow/dist/style.css";
 import { motion, AnimatePresence } from "framer-motion";
 import {

@@ -1,7 +1,7 @@
 # Render Blueprint for BunonBrain — FREE plan. Step-by-step guide: DEPLOY_RENDER.md
 #
 #   bunonbrain-web  Next.js frontend         free  https://bunonbrain-web.onrender.com
-#   bunonbrain-api  .NET 10 API (Docker)     free  https://bunonbrain-api.onrender.com
+#   bunonbrain-api  .NET 10 API (Docker)     free  https://factorybrain-akvk.onrender.com (live service name: factorybrain)
 #   bunonbrain-rag  Python PDF RAG (Docker)  free  https://bunonbrain-rag.onrender.com (every route but /health needs PYRAG_API_KEY)
 #
 # Not on Render: the database (Supabase), the vector store (Qdrant Cloud) and the
@@ -155,9 +155,9 @@ services:
       # time (rewrites are baked in): after changing them use
       # Manual Deploy → Clear build cache & deploy.
       - key: NEXT_PUBLIC_API_URL
-        value: https://bunonbrain-api.onrender.com
+        value: https://factorybrain-akvk.onrender.com
       - key: DOTNET_API_URL
-        value: https://bunonbrain-api.onrender.com
+        value: https://factorybrain-akvk.onrender.com
 
   # ───────────────────────────── Python PDF RAG ─────────────────────────────
   - type: web

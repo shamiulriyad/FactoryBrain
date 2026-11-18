@@ -25,7 +25,8 @@ public sealed class MonitoringUnitTests
     [Fact]
     public void Event_types_parse_and_split_into_vision_and_system()
     {
-        Assert.Equal(17, MonitoringEventTypes.All.Length);
+        // 17 + the camera AI's ACTIVITY_CHANGED, PPE_VIOLATION and DETECTION_UNAVAILABLE.
+        Assert.Equal(20, MonitoringEventTypes.All.Length);
         // Machine monitoring adds two SYSTEM types, derived by the IoT pipeline.
         Assert.All(MonitoringEventTypes.Machine, t => Assert.Contains(t, MonitoringEventTypes.System));
         Assert.Equal(MonitoringEventTypes.PersonDetected, MonitoringEventTypes.Parse("person_detected"));

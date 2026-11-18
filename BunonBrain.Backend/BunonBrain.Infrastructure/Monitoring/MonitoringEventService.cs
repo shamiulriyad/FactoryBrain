@@ -41,6 +41,7 @@ public sealed class MonitoringEventService : IMonitoringEventService
         MonitoringProducers.CameraService => "system:camera-service",
         MonitoringProducers.Simulator => "system:monitoring-simulator",
         MonitoringProducers.CvService => "service:computer-vision",
+        MonitoringProducers.CameraAi => "service:camera-ai",
         _ => "system",
     };
 
@@ -60,6 +61,17 @@ public sealed class MonitoringEventService : IMonitoringEventService
         if (producer == MonitoringProducers.CvService && (input.WorkerId is not null || input.Identity is not null))
             return Invalid("cv_cannot_identify",
                 "The computer-vision service never names a worker: a track id is a temporary camera number, and appearance is not an identity.");
+        if (producer == MonitoringProducers.CameraAi)
+        {
+            if (source != MonitoringSourceTypes.Real)
+                return Invalid("source_type_not_allowed", "Camera AI analyses real webcam frames: its events are REAL only.");
+            if (!MonitoringEventTypes.CameraAi.Contains(type))
+                return Invalid("event_type_not_allowed_for_camera_ai", $"The camera AI reports {string.Join(", ", MonitoringEventTypes.CameraAi)} only.");
+            if (input.WorkerId is not null || input.Identity is not null)
+                return Invalid("camera_ai_cannot_identify", "The camera AI never names a worker: its results are estimates about a frame, not identities.");
+        }
+        else if (type is MonitoringEventTypes.ActivityChanged or MonitoringEventTypes.PpeViolation or MonitoringEventTypes.DetectionUnavailable)
+            return Invalid("event_type_reserved_for_camera_ai", $"{type} is produced only by the camera AI (browser webcam analysis).");
         if (producer == MonitoringProducers.Simulator && source != MonitoringSourceTypes.Simulated)
             return Invalid("source_type_not_allowed", "The simulator only produces SIMULATED events.");
         if (MonitoringEventTypes.Machine.Contains(type) != (producer == MonitoringProducers.IotPipeline))
@@ -250,7 +262,8 @@ public sealed class MonitoringEventService : IMonitoringEventService
         var recovery = spec is null ? MonitoringRules.RecoveryDedupKey(ctx) : null;
         var summary = MonitoringRules.Summary(type, simulated, cam?.Code, dev?.Code, zone?.Name, trackId, input.Confidence, toStatus, activity, modelName,
             workerId is not null, previousActivity,
-            type is MonitoringEventTypes.ActivityUncertain or MonitoringEventTypes.GarmentActivityUncertain or MonitoringEventTypes.MachineCondition ? detail : null,
+            type is MonitoringEventTypes.ActivityUncertain or MonitoringEventTypes.GarmentActivityUncertain or MonitoringEventTypes.MachineCondition
+                or MonitoringEventTypes.PpeViolation or MonitoringEventTypes.DetectionUnavailable ? detail : null,
             machine?.Code, condition, fromStatus);
         var severity = MonitoringRules.EventSeverity(type, toStatus, zone?.ZoneType);
         var actorEmail = caller?.Email ?? SystemEmail(producer);

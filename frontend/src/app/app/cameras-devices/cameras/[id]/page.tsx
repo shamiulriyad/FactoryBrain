@@ -24,6 +24,7 @@ import { ErrorState, SkeletonRows } from "@/components/ui/Status";
 import { useToast } from "@/components/ui/Toast";
 import { Fact, Val } from "@/components/workers/shared";
 import { CoveragePicker } from "@/components/cameras/CameraForm";
+import { LiveAiCamera } from "@/components/cameras/LiveAiCamera";
 import { AuthVideo, BASE, CameraDeviceTabs, CameraHealthBadge, CameraStatusBadge, SourceTypeBadge, useMediaUrl } from "@/components/cameras/shared";
 import { useResource } from "@/lib/useResource";
 import { apiJson, errorMessage } from "@/lib/api";
@@ -103,6 +104,15 @@ function Detail() {
       <CameraDeviceTabs className="mt-4" />
       {c.status !== "Active" && <Callout className="mt-4" tone="warning" title={`Camera ${c.status.toLowerCase()}`}>{c.statusReason ?? "No reason recorded."}</Callout>}
 
+      {c.source?.sourceType === "LocalWebcam" && (
+        <div id="live-ai" className="mt-6 scroll-mt-20">
+          <Panel title="Live AI camera" icon={<BrainCircuit size={14} />} testId="camera-live-ai"
+            subtitle="This browser's webcam; sampled frames analysed by OpenAI vision on the server. Results are AI estimates.">
+            <LiveAiCamera cameraId={c.id} cameraCode={c.code} cameraActive={c.status === "Active"} browserSource />
+          </Panel>
+        </div>
+      )}
+
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2 space-y-6">
           <Panel title="Camera" icon={<Cctv size={14} />}>
@@ -171,7 +181,7 @@ function Detail() {
           </Panel>
 
           <Panel title="AI integration" icon={<BrainCircuit size={14} />} testId="camera-ai-status">
-            <Badge tone="neutral">Not connected</Badge>
+            {c.source?.sourceType === "LocalWebcam" ? <Badge tone="success">Live AI available (OpenAI vision)</Badge> : <Badge tone="neutral">Not connected</Badge>}
             <p className="mt-2 text-caption text-fg-secondary">{AI_NOT_CONNECTED_NOTE}</p>
             <ul className="mt-3 space-y-1 text-caption">
               <Ready ok={c.ai.videoSourceReady} label="Video source configured" />
@@ -224,7 +234,7 @@ function SourcePanel({ camera: c, manage, videoKey, onChange }: { camera: Camera
         </dl>
       )}
       {s?.sourceType === "RecordedVideo" && s.hasVideo && <div className="mt-4"><AuthVideo path={`/api/cameras/${c.id}/source/video`} refreshKey={videoKey} /></div>}
-      {s?.sourceType === "LocalWebcam" && <div className="mt-4"><WebcamPreview /></div>}
+      {s?.sourceType === "LocalWebcam" && <p className="mt-4 text-caption text-fg-secondary">The live preview and AI analysis are in “Live AI camera” at the top of this page.</p>}
       <button type="button" className="mt-4 inline-flex items-center gap-1.5 text-caption text-fg-secondary hover:underline" onClick={() => setHistory((h) => !h)}>
         <History size={12} /> {history ? "Hide" : "Show"} source history
       </button>

@@ -30,11 +30,21 @@ public static class MonitoringEventTypes
     public const string MachineStateChanged = "MACHINE_STATE_CHANGED";
     /// <summary>A machine alert condition was raised or cleared (IoT pipeline only).</summary>
     public const string MachineCondition = "MACHINE_CONDITION";
+    /// <summary>Camera AI (OpenAI vision): the confirmed main activity of the frame changed (scene level, no track).</summary>
+    public const string ActivityChanged = "ACTIVITY_CHANGED";
+    /// <summary>Camera AI (OpenAI vision): a required PPE item was confirmed missing over several frames.</summary>
+    public const string PpeViolation = "PPE_VIOLATION";
+    /// <summary>Camera AI (OpenAI vision): several analyses in a row failed; AI results are not available for the camera.</summary>
+    public const string DetectionUnavailable = "DETECTION_UNAVAILABLE";
 
     /// <summary>People, tracks, zones and activity: what a camera AI service would report.</summary>
     public static readonly string[] Vision =
         { PersonDetected, TrackUpdated, PersonLost, ZoneEntered, ZoneExited, ActivityClassified, ActivityStateChanged, ActivityUncertain,
-          GarmentActivityClassified, GarmentActivityChanged, GarmentActivityUncertain, UncertainDetection };
+          GarmentActivityClassified, GarmentActivityChanged, GarmentActivityUncertain, UncertainDetection, ActivityChanged, PpeViolation };
+
+    /// <summary>What the camera AI (OpenAI vision on browser webcam frames) reports.</summary>
+    public static readonly string[] CameraAi =
+        { PersonDetected, PersonLost, ActivityChanged, PpeViolation, DetectionUnavailable, CameraStatusChanged, ModelStatusChanged };
 
     /// <summary>Predicted physical activity of a temporary track: a periodic confirmation, an accepted change, or "can't tell".</summary>
     public static readonly string[] Activity = { ActivityClassified, ActivityStateChanged, ActivityUncertain };
@@ -46,7 +56,7 @@ public static class MonitoringEventTypes
     public static readonly string[] Machine = { MachineStateChanged, MachineCondition };
 
     /// <summary>Camera, device, model and machine status.</summary>
-    public static readonly string[] System = { CameraStatusChanged, DeviceStatusChanged, ModelStatusChanged, MachineStateChanged, MachineCondition };
+    public static readonly string[] System = { CameraStatusChanged, DeviceStatusChanged, ModelStatusChanged, MachineStateChanged, MachineCondition, DetectionUnavailable };
 
     public static readonly string[] All = Vision.Concat(System).ToArray();
 
@@ -78,6 +88,9 @@ public static class MonitoringEventTypes
         ModelStatusChanged => "Model status changed",
         MachineStateChanged => "Machine state changed",
         MachineCondition => "Machine condition",
+        ActivityChanged => "Activity changed (AI)",
+        PpeViolation => "PPE violation (AI)",
+        DetectionUnavailable => "AI detection unavailable",
         _ => type,
     };
 }
@@ -213,7 +226,9 @@ public static class MonitoringProducers
     public const string CvService = "CV_SERVICE";
     /// <summary>Machine state and condition changes derived from machine sensors (real or simulated devices).</summary>
     public const string IotPipeline = "IOT_PIPELINE";
-    public static readonly string[] All = { Api, Simulator, DevicePipeline, CameraService, CvService, IotPipeline };
+    /// <summary>Camera AI: browser webcam frames analysed by the OpenAI vision API on the server. REAL only; never a worker identity.</summary>
+    public const string CameraAi = "CAMERA_AI";
+    public static readonly string[] All = { Api, Simulator, DevicePipeline, CameraService, CvService, IotPipeline, CameraAi };
 
     /// <summary>Producers that send events through the HTTP ingestion API: REAL only, idempotency key required.</summary>
     public static bool IsExternal(string producer) => producer is Api or CvService;
@@ -296,16 +311,18 @@ public static class AlertTypes
     public const string MachineVibration = "MACHINE_HIGH_VIBRATION";
     public const string CounterDisconnected = "PRODUCTION_COUNTER_DISCONNECTED";
     public const string MachineUnusualTransition = "MACHINE_UNUSUAL_TRANSITION";
+    /// <summary>Camera AI estimated, over several frames, that required PPE is not worn.</summary>
+    public const string PpeViolation = "PPE_VIOLATION";
 
     /// <summary>Alerts about machines (machine monitoring).</summary>
     public static readonly string[] Machine =
         { MachineOffline, MachineError, MachineUnexpectedStop, MachineLongIdle, MachineTemperature, MachineVibration, CounterDisconnected, MachineUnusualTransition };
 
     public static readonly string[] All =
-        new[] { CameraOffline, DeviceOffline, DeviceError, ModelUnavailable, UncertainDetection, RestrictedZoneEntry }.Concat(Machine).ToArray();
+        new[] { CameraOffline, DeviceOffline, DeviceError, ModelUnavailable, UncertainDetection, RestrictedZoneEntry, PpeViolation }.Concat(Machine).ToArray();
 
     public static string CategoryOf(string type) =>
-        type is UncertainDetection or RestrictedZoneEntry ? MonitoringCategories.Vision : MonitoringCategories.System;
+        type is UncertainDetection or RestrictedZoneEntry or PpeViolation ? MonitoringCategories.Vision : MonitoringCategories.System;
 }
 
 /// <summary>History entries of an alert.</summary>
@@ -364,6 +381,8 @@ public static class StatusValues
     public static readonly string[] Machine = { "RUNNING", "STOPPED", "IDLE", "MAINTENANCE", "ERROR", "OFFLINE", "UNKNOWN" };
     /// <summary>MACHINE_CONDITION: the condition was raised or has cleared.</summary>
     public static readonly string[] Condition = { "ACTIVE", "CLEARED" };
+    /// <summary>DETECTION_UNAVAILABLE: AI analysis for a camera stopped working.</summary>
+    public static readonly string[] Detection = { "UNAVAILABLE" };
 
     public static string[] For(string type) => type switch
     {
@@ -372,6 +391,7 @@ public static class StatusValues
         MonitoringEventTypes.ModelStatusChanged => Model,
         MonitoringEventTypes.MachineStateChanged => Machine,
         MonitoringEventTypes.MachineCondition => Condition,
+        MonitoringEventTypes.DetectionUnavailable => Detection,
         _ => Array.Empty<string>(),
     };
 }
@@ -443,6 +463,10 @@ public static class MonitoringRules
         // Machine events are about equipment: never a worker, never a camera track.
         MonitoringEventTypes.MachineStateChanged => new(false, false, false, false, false, true, false, false, false, Machine: true),
         MonitoringEventTypes.MachineCondition => new(false, false, false, false, false, true, false, false, false, Machine: true),
+        // Camera AI: scene-level estimates of one camera; no track, no numeric confidence (the model's answer has none), never a worker.
+        MonitoringEventTypes.ActivityChanged => new(true, false, false, false, false, false, false, true, false),
+        MonitoringEventTypes.PpeViolation => new(true, false, false, false, false, false, false, false, false),
+        MonitoringEventTypes.DetectionUnavailable => new(true, false, false, false, false, true, true, false, false),
         _ => new(false, false, false, false, false, false, false, false, false),
     };
 
@@ -548,6 +572,7 @@ public static class MonitoringRules
     public static string EventSeverity(string type, string? toStatus, string? zoneType) => type switch
     {
         MonitoringEventTypes.UncertainDetection => MonitoringEventSeverities.Warning,
+        MonitoringEventTypes.PpeViolation or MonitoringEventTypes.DetectionUnavailable => MonitoringEventSeverities.Warning,
         MonitoringEventTypes.ZoneEntered when zoneType == "Restricted" => MonitoringEventSeverities.Critical,
         MonitoringEventTypes.CameraStatusChanged or MonitoringEventTypes.DeviceStatusChanged or MonitoringEventTypes.ModelStatusChanged
             or MonitoringEventTypes.MachineStateChanged
@@ -581,6 +606,10 @@ public static class MonitoringRules
             MonitoringEventTypes.ActivityUncertain =>
                 $"Activity uncertain{(previousActivity is null ? "" : $" (was {previousActivity})")}{where}{track}{(reason is null ? "" : $": {reason.ToLowerInvariant().Replace('_', ' ')}")}",
             MonitoringEventTypes.UncertainDetection => $"Uncertain detection{where}{conf} (needs human review)",
+            MonitoringEventTypes.ActivityChanged =>
+                $"AI estimate: activity changed to {activity}{(previousActivity is null ? "" : $" from {previousActivity}")}{where}",
+            MonitoringEventTypes.PpeViolation => $"AI estimate: PPE missing{where}{(reason is null ? "" : $" ({reason})")}",
+            MonitoringEventTypes.DetectionUnavailable => $"AI detection unavailable{where}{(reason is null ? "" : $": {reason}")}",
             MonitoringEventTypes.CameraStatusChanged => $"Camera {cameraCode} is now {toStatus}",
             MonitoringEventTypes.DeviceStatusChanged => $"Device {deviceCode} is now {toStatus}",
             MonitoringEventTypes.ModelStatusChanged => $"Model {modelName} is now {toStatus}",
@@ -653,6 +682,16 @@ public static class MonitoringRules
                 return new AlertSpec(AlertTypes.ModelUnavailable, c.ToStatus == "DEGRADED" ? AlertSeverities.Low : AlertSeverities.Medium,
                     $"{sim}Model {c.ModelName} is {c.ToStatus}",
                     $"The {c.ModelName} model reported {c.ToStatus}{(c.Detail is null ? "" : $": {c.Detail}")}. Its events may be missing or unreliable.{simNote}",
+                    $"{AlertTypes.ModelUnavailable}:{c.ModelName}");
+            case MonitoringEventTypes.PpeViolation:
+                return new AlertSpec(AlertTypes.PpeViolation, AlertSeverities.Medium, $"{sim}PPE missing on {c.CameraCode} (AI estimate)",
+                    $"The camera AI estimated over several consecutive frames on {c.CameraCode}: {c.Detail ?? "required PPE not worn"}. " +
+                    $"This is an AI estimate from still frames, not a confirmed fact: check the area in person. It does not identify anyone.{simNote}",
+                    $"{AlertTypes.PpeViolation}:{c.CameraId}");
+            case MonitoringEventTypes.DetectionUnavailable:
+                return new AlertSpec(AlertTypes.ModelUnavailable, AlertSeverities.Medium, $"{sim}AI detection unavailable on {c.CameraCode}",
+                    $"AI analysis of {c.CameraCode} with {c.ModelName} failed several times in a row{(c.Detail is null ? "" : $": {c.Detail}")}. " +
+                    $"No AI results are produced for this camera until it recovers.{simNote}",
                     $"{AlertTypes.ModelUnavailable}:{c.ModelName}");
             case MonitoringEventTypes.UncertainDetection:
                 return new AlertSpec(AlertTypes.UncertainDetection, AlertSeverities.Low, $"{sim}Uncertain detection on {c.CameraCode} needs review",

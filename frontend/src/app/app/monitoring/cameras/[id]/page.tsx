@@ -10,7 +10,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Bell, Bot, Cctv, Fingerprint, PersonStanding, Radio, Scissors, Settings2, Shapes, Video, Webcam } from "lucide-react";
+import { ArrowLeft, Bell, Bot, Cctv, Fingerprint, PersonStanding, Radio, Scissors, Settings2, Shapes, Video } from "lucide-react";
 import { RequirePermission } from "@/components/auth/RequireRole";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
@@ -20,6 +20,7 @@ import { FilterSelect } from "@/components/ui/Field";
 import { Badge } from "@/components/ui/Badge";
 import { ErrorState, SkeletonRows } from "@/components/ui/Status";
 import { AuthVideo, useMediaUrl } from "@/components/cameras/shared";
+import { LiveAiCamera } from "@/components/cameras/LiveAiCamera";
 import {
   AlertActionButtons, AlertActionDialog, AlertRow, ConnectionBadge, EventList, LiveIndicator, MonitoringTabs, mergeEvents, type AlertAction
 } from "@/components/monitoring/shared";
@@ -235,7 +236,13 @@ function Viewer({ c }: { c: MonitoringCamera }) {
         <p className="text-caption text-fg-secondary inline-flex items-center gap-1.5"><Video size={12} aria-hidden /> Recorded video{c.feed.videoFileName ? ` (${c.feed.videoFileName})` : ""}: playback of a recording, not a live feed.</p>
       </div>
     );
-  if (c.feed.kind === "LOCAL_WEBCAM") return <WebcamPreview label={c.feed.webcamLabel} note={c.feed.note} />;
+  if (c.feed.kind === "LOCAL_WEBCAM")
+    return (
+      <div className="space-y-3">
+        <Callout tone="info" title="Browser webcam">{c.feed.note}{c.feed.webcamLabel ? ` Configured device: ${c.feed.webcamLabel}.` : ""}</Callout>
+        <LiveAiCamera cameraId={c.id} cameraCode={c.code} cameraActive={c.adminStatus === "Active"} browserSource />
+      </div>
+    );
   return (
     <div className="space-y-3" data-testid={c.feed.kind === "LIVE_STREAM" ? "viewer-stream" : "viewer-none"}>
       <div className="relative aspect-video rounded-[var(--radius-control)] bg-[#0b0f14] grid place-items-center overflow-hidden">
@@ -249,44 +256,6 @@ function Viewer({ c }: { c: MonitoringCamera }) {
           {frame.url && <p className="text-white/50 text-[11px] mt-2">Background: the configured reference still, not a live picture.</p>}
         </div>
       </div>
-    </div>
-  );
-}
-
-/** The viewer's own browser camera, only after they ask for it, stopped when they leave. */
-function WebcamPreview({ label, note }: { label?: string | null; note: string }) {
-  const video = useRef<HTMLVideoElement>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const supported = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
-
-  useEffect(() => {
-    if (video.current) video.current.srcObject = stream;
-    return () => stream?.getTracks().forEach((t) => t.stop());
-  }, [stream]);
-
-  async function start() {
-    setError(null);
-    try {
-      setStream(await navigator.mediaDevices.getUserMedia({ video: true, audio: false }));
-    } catch (e) {
-      setError(e instanceof Error && e.name === "NotAllowedError" ? "Camera permission was refused in this browser." : "No camera is available in this browser.");
-    }
-  }
-
-  return (
-    <div className="space-y-3" data-testid="viewer-webcam">
-      <Callout tone="info" title="Local webcam preview">{note}{label ? ` Configured device: ${label}.` : ""}</Callout>
-      <div className="relative aspect-video rounded-[var(--radius-control)] bg-[#0b0f14] grid place-items-center overflow-hidden">
-        {stream ? <video ref={video} autoPlay muted playsInline className="absolute inset-0 h-full w-full object-contain" /> : (
-          <span className="text-white/70 text-caption inline-flex items-center gap-1.5"><Webcam size={14} aria-hidden /> Preview off</span>
-        )}
-        {stream && <span className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white">This browser&apos;s camera · not a factory feed · nothing is recorded</span>}
-      </div>
-      {!supported ? <p className="text-caption text-fg-tertiary">This browser can&apos;t open a camera.</p>
-        : stream ? <Button size="sm" variant="secondary" onClick={() => setStream(null)}>Stop preview</Button>
-        : <Button size="sm" variant="primary" iconLeft={<Webcam size={13} />} onClick={() => void start()} data-testid="webcam-start">Start local preview</Button>}
-      {error && <Callout tone="warning">{error}</Callout>}
     </div>
   );
 }

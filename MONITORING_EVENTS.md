@@ -155,6 +155,17 @@ mirrored here automatically (`producer: DEVICE_PIPELINE`), and a camera's
 health device going online / offline also produces `CAMERA_STATUS_CHANGED`.
 A producer doesn't need to send those.
 
+### Camera AI events (producer `CAMERA_AI`)
+
+The camera AI (browser webcam frames analysed by the OpenAI vision API, see [CAMERA_AI.md](CAMERA_AI.md))
+adds three event types that only it may send: `ACTIVITY_CHANGED` (scene-level, no track, VISION),
+`PPE_VIOLATION` (VISION; raises a `PPE_VIOLATION` alert) and `DETECTION_UNAVAILABLE` (SYSTEM,
+`toStatus` UNAVAILABLE; raises `MODEL_UNAVAILABLE`). It also sends `PERSON_DETECTED`,
+`PERSON_LOST`, `CAMERA_STATUS_CHANGED` (OFFLINE / ONLINE) and `MODEL_STATUS_CHANGED` (READY).
+Its events are REAL, carry no confidence and no worker, and are raised only after several
+consecutive frames agree. Anyone else sending the three new types gets
+`event_type_reserved_for_camera_ai`.
+
 ## 3. Identity rules
 
 - A `trackId` is a number a camera's tracker gave a moving person. It is

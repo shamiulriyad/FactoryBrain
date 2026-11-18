@@ -111,6 +111,20 @@ services:
       - key: CV_SERVICE_FACTORIES
         value: MAIN
 
+      # Camera AI: browser webcam frames analysed by OpenAI vision inside this
+      # API (no extra service, no GPU). Uses CAMERA_AI_OPENAI_API_KEY, or the
+      # OpenAI key saved under Settings → AI when that is empty. See CAMERA_AI.md.
+      - key: CAMERA_AI_MODEL
+        value: gpt-5.4-mini
+      - key: CAMERA_AI_OPENAI_API_KEY
+        sync: false
+      - key: CAMERA_AI_INTERVAL_MS        # 1 frame per second by default
+        value: "1000"
+      - key: CAMERA_AI_DAILY_CALL_LIMIT   # ≈ $0.002 per call with gpt-5.4-mini
+        value: "5000"
+      - key: CAMERA_AI_MAX_SESSIONS
+        value: "10"
+
       # Plant settings
       - key: PRODUCTION_TIME_ZONE
         value: Asia/Dhaka

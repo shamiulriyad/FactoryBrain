@@ -170,7 +170,7 @@ export type ZoneRevision = {
 };
 
 export const AI_NOT_CONNECTED_NOTE =
-  "Computer-vision processing is not part of this phase. No detection, tracking or recognition runs, and no AI results are shown anywhere on these pages.";
+  "Cameras are configured here; no AI runs on them by itself. A camera whose source is “Local webcam” can be analysed live with OpenAI vision (Start camera on its page); every other result comes from the computer-vision service or the monitoring simulator, labelled as such.";
 
 // ─── Devices ──────────────────────────────────────────────────────────────
 

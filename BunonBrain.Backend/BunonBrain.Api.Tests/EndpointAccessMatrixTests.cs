@@ -324,6 +324,12 @@ public static class EndpointMatrix
         ("POST",  "/api/monitoring/alerts/{id}/escalate",     G(P.MonitoringAlertsEscalate)),
         ("POST",  "/api/monitoring/alerts/{id}/resolve",      G(P.MonitoringAlertsReview)),
         ("POST",  "/api/monitoring/alerts/{id}/dismiss",      G(P.MonitoringAlertsDismiss)),
+        // Camera AI (browser webcam + OpenAI vision): anyone who may see the camera may analyse it; the service checks scope and ownership.
+        ("GET",   "/api/monitoring/sessions",                 G(P.MonitoringView, P.CamerasView)),
+        ("POST",  "/api/monitoring/sessions",                 G(P.CamerasView, P.CamerasManage)),
+        ("GET",   "/api/monitoring/sessions/{id}",            G(P.MonitoringView, P.CamerasView)),
+        ("POST",  "/api/monitoring/sessions/{id}/frames",     G(P.CamerasView, P.CamerasManage)),
+        ("POST",  "/api/monitoring/sessions/{id}/stop",       G(P.CamerasView, P.CamerasManage)),
         ("GET",   "/api/monitoring/simulator",                G(P.MonitoringSimulate)),
         ("POST",  "/api/monitoring/simulator/start",          G(P.MonitoringSimulate)),
         ("POST",  "/api/monitoring/simulator/{runId}/stop",   G(P.MonitoringSimulate)),

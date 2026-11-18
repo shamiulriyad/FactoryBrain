@@ -6,7 +6,7 @@
 // Nothing here is an AI result: computer vision is not connected yet.
 
 import Link from "next/link";
-import { Activity, AlertTriangle, Cctv, FlaskConical, Image as ImageIcon, Plus, RefreshCw, Shapes, Video, Wifi, WifiOff } from "lucide-react";
+import { Activity, AlertTriangle, BrainCircuit, Cctv, FlaskConical, Image as ImageIcon, Plus, RefreshCw, Shapes, Video, Webcam, Wifi, WifiOff } from "lucide-react";
 import { RequirePermission } from "@/components/auth/RequireRole";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
@@ -25,7 +25,8 @@ import { errorMessage } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
 import { P } from "@/lib/access";
-import { AI_NOT_CONNECTED_NOTE, CAMERA_TYPE_LABEL, DEVICE_CATEGORY_LABEL, SIMULATED_DEVICE_NOTE, SOURCE_TYPE_LABEL, type CameraOverview, type DeviceHealthOverview } from "@/lib/cameras";
+import { AI_NOT_CONNECTED_NOTE, CAMERA_TYPE_LABEL, DEVICE_CATEGORY_LABEL, SIMULATED_DEVICE_NOTE, SOURCE_TYPE_LABEL, type Camera, type CameraOverview, type DeviceHealthOverview } from "@/lib/cameras";
+import type { PagedResult } from "@/lib/access";
 
 export default function CameraDeviceOverviewPage() {
   return (
@@ -98,7 +99,8 @@ function Overview() {
             </div>
           )}
           {c && c.total === 0 && <EmptyState className="mt-4" icon={<Cctv size={18} />} title="No cameras registered" body={canAddCamera ? "Register a camera (a recorded video works for the prototype) to map coverage and draw zones." : "Cameras appear here once an administrator registers them."} />}
-          <Callout className="mt-4" tone="info" title="AI processing is not connected">{AI_NOT_CONNECTED_NOTE}</Callout>
+          <LiveAiCameras factory={factory} canAdd={canAddCamera} />
+          <Callout className="mt-4" tone="info" title="AI processing">{AI_NOT_CONNECTED_NOTE}</Callout>
         </section>
       )}
 
@@ -157,6 +159,35 @@ function Breakdown({ title, rows, foot }: { title: string; rows: [string, number
         ))}
       </ul>
       {foot && <p className="mt-3 text-caption text-[var(--risk-medium)]">{foot}</p>}
+    </Panel>
+  );
+}
+
+/** Browser-webcam cameras: open one and press Start camera to analyse it live with OpenAI vision. */
+function LiveAiCameras({ factory, canAdd }: { factory: string; canAdd: boolean }) {
+  const list = useResource<PagedResult<Camera>>(`/api/cameras?source=LocalWebcam&sort=code&pageSize=12${factory ? `&factoryId=${factory}` : ""}`);
+  const cams = list.data?.items ?? [];
+  return (
+    <Panel className="mt-4" title="Live AI camera" icon={<BrainCircuit size={14} />} testId="live-ai-cameras"
+      subtitle="Your browser's webcam, sampled frames analysed by OpenAI vision on the server: people, activity, helmet and safety vest. Nothing to install.">
+      {list.loading ? <SkeletonRows rows={2} rowHeight="h-8" /> : cams.length === 0 ? (
+        <p className="text-caption text-fg-tertiary">
+          No camera uses a browser webcam yet.{canAdd ? " Register a camera (type Webcam) and set its video source to “Local webcam”." : " Ask a camera administrator to set one up."}
+        </p>
+      ) : (
+        <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {cams.map((cam) => (
+            <li key={cam.id}>
+              <Link href={`${BASE}/cameras/${cam.id}#live-ai`} className="surface flex items-center gap-2 px-3 py-2 hover:bg-bg-subtle" data-testid="live-ai-camera-link">
+                <Webcam size={14} aria-hidden />
+                <span className="font-mono text-body">{cam.code}</span>
+                <span className="text-caption text-fg-secondary truncate">{cam.name}</span>
+                <span className="ml-auto text-caption text-[var(--accent)]">{cam.status === "Active" ? "Start camera →" : cam.status}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </Panel>
   );
 }

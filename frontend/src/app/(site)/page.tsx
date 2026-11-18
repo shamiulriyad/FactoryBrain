@@ -2,9 +2,9 @@ import Link from "next/link";
 import { ArrowRight, BadgeCheck, Box, Clock3, FileSpreadsheet, Languages, ScrollText, ShieldCheck, Users2, Workflow } from "lucide-react";
 import { ButtonLink, Card, CheckList, Container, CtaBand, Eyebrow, IconTile, Section, SectionHeader, StatusBadge } from "@/components/site/ui";
 import { FaqList, PlatformDiagram, ScreenFrame, Steps } from "@/components/site/visuals";
-import { HeroVisual } from "@/components/site/HeroVisual";
-import { resolveHero } from "@/content/site/heroMedia";
-import { getHeroSettings } from "@/lib/site/heroSettings";
+import { HeroProduct } from "@/components/site/HeroProduct";
+import { DemoVideo } from "@/components/site/DemoVideo";
+import { getDemoVideo } from "@/lib/site/demoVideo";
 import { FAQS } from "@/content/site/faqs";
 import { MODULES, type IconName } from "@/content/site/modules";
 import { SOLUTIONS } from "@/content/site/solutions";
@@ -52,8 +52,8 @@ const LOCAL = [
 ];
 
 export default async function HomePage() {
-  // Which photo(s) the hero shows is a setting (Administration → Website), not code.
-  const hero = resolveHero(await getHeroSettings());
+  // The demo video is a setting (Administration → Website), not code.
+  const video = await getDemoVideo();
   const available = MODULES.filter((m) => m.status === "available");
   const stats = [
     { value: String(available.length), label: "modules in production", note: "each with its status on its page" },
@@ -67,44 +67,35 @@ export default async function HomePage() {
       {/* 1 · Hero */}
       <section aria-labelledby="hero-title" className="site-hero relative overflow-hidden border-b border-brand-border">
         <div aria-hidden className="site-grid pointer-events-none absolute inset-0" />
-        <Container wide className="relative grid items-center gap-14 pb-20 pt-14 md:pt-20 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:pb-24">
+        <Container wide className="relative grid items-center gap-16 pb-20 pt-16 md:pt-24 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-12 lg:pb-28">
           <div className="site-rise">
-            <p className="inline-flex items-center gap-2 rounded-full border border-brand-marigold/30 bg-white/85 px-3 py-1 font-plexmono text-[0.7rem] uppercase tracking-[0.14em] text-brand-marigold-ink shadow-[0_1px_2px_rgba(16,38,61,0.06)]">
-              <span className="size-1.5 rounded-full bg-brand-marigold" aria-hidden /> Bangladesh RMG Workforce OS
-            </p>
-            <h1 id="hero-title" className="mt-6 font-heading text-[2.7rem] font-semibold leading-[1.03] tracking-[-0.03em] text-brand-text sm:text-[3.4rem] xl:text-[4.1rem]">
-              One operating system for the whole{" "}
-              <span className="relative inline-block text-brand-emerald-ink">
-                garment floor.
-                <svg aria-hidden viewBox="0 0 300 14" preserveAspectRatio="none" className="absolute -bottom-2 left-0 h-3 w-full text-brand-marigold">
-                  <path d="M2 9 Q 40 2 78 8 T 154 8 T 230 7 T 298 6" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
-                </svg>
-              </span>
+            <h1 id="hero-title" className="font-heading text-[2.6rem] font-semibold leading-[1.04] tracking-[-0.03em] text-brand-text sm:text-[3.3rem] xl:text-[3.9rem]">
+              One operating system for the whole <span className="text-brand-emerald-ink">garment floor.</span>
             </h1>
-            <p className="mt-7 max-w-[34rem] text-[1.1rem] leading-[1.7] text-brand-body md:text-[1.2rem]">
-              BunonBrain connects production plans, live floor and machine status, quality inspections, buyer documents and
-              the people who run them, so every decision on the floor is made on the same, current information.
+            <p className="mt-6 max-w-[33rem] text-[1.08rem] leading-[1.7] text-brand-body md:text-[1.18rem]">
+              Production planning, live floor and machine status, quality inspection, buyer documents, attendance and
+              approvals in one ERP built for Bangladesh&apos;s garment factories.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <ButtonLink href="/demo" size="lg" arrow>
                 Request a demo
               </ButtonLink>
-              <ButtonLink href="/product" size="lg" variant="secondary">
-                Explore the product
+              <ButtonLink href="#demo-video" size="lg" variant="secondary">
+                Watch the demo
               </ButtonLink>
             </div>
-            <ul className="mt-9 flex flex-wrap gap-x-6 gap-y-2 text-[0.9rem] text-brand-body">
-              {["Built for Bangladesh RMG", "English and বাংলা", "Every decision audited"].map((t) => (
-                <li key={t} className="inline-flex items-center gap-2">
-                  <span aria-hidden className="size-1.5 rotate-45 bg-brand-marigold" />
+            <ul className="mt-10 flex max-w-[34rem] flex-wrap gap-x-6 gap-y-3 border-t border-brand-border pt-6 text-[0.9rem] text-brand-body">
+              {["Role-based access", "English and বাংলা", "Every decision audited"].map((t) => (
+                <li key={t} className="inline-flex items-center gap-2 whitespace-nowrap">
+                  <BadgeCheck size={16} aria-hidden className="shrink-0 text-brand-emerald" />
                   {t}
                 </li>
               ))}
             </ul>
           </div>
-          <div className="site-rise site-rise-2 relative">
-            <div aria-hidden className="absolute -inset-6 -z-0 rounded-[2rem] bg-gradient-to-br from-brand-emerald-light/70 via-white/0 to-brand-marigold-light/80 blur-2xl" />
-            <HeroVisual {...hero} />
+          <div className="site-rise site-rise-2 relative lg:pl-4 xl:pl-8">
+            <div aria-hidden className="absolute -inset-8 -z-0 rounded-[2.5rem] bg-gradient-to-br from-brand-emerald-light/70 via-white/0 to-brand-marigold-light/80 blur-2xl" />
+            <HeroProduct />
           </div>
         </Container>
       </section>
@@ -127,7 +118,35 @@ export default async function HomePage() {
         </Container>
       </section>
 
-      {/* 3 · Introduction */}
+      {/* 3 · Demo video (set under Administration → Website) */}
+      <section id="demo-video" aria-labelledby="video-title" className="relative overflow-hidden border-b border-brand-border bg-brand-offwhite py-20 md:py-24">
+        <div aria-hidden className="site-grid pointer-events-none absolute inset-0 opacity-70" />
+        <Container wide className="relative">
+          <SectionHeader
+            id="video-title"
+            eyebrow="Product demo"
+            title="See BunonBrain at work."
+            lead="A short walkthrough of BunonBrain on a running garment plant: planning, the floor, quality and the people who run them, in one system."
+            align="center"
+          />
+          <div className="relative mx-auto mt-12 max-w-[60rem]">
+            <div aria-hidden className="absolute -inset-4 -z-0 rounded-[1.75rem] bg-gradient-to-br from-brand-emerald-light/80 via-transparent to-brand-marigold-light blur-xl" />
+            <div className="relative rounded-[1.25rem] border border-brand-border bg-white p-2 shadow-[0_30px_80px_-30px_rgba(16,38,61,0.45)] sm:p-3">
+              <DemoVideo videoId={video?.videoId} title={video?.title} />
+            </div>
+          </div>
+          <div className="mt-10 flex flex-wrap justify-center gap-3">
+            <ButtonLink href="/demo" arrow>
+              Request a live demo
+            </ButtonLink>
+            <ButtonLink href="/how-it-works" variant="secondary">
+              How it works
+            </ButtonLink>
+          </div>
+        </Container>
+      </section>
+
+      {/* 4 · Introduction */}
       <section aria-labelledby="intro-title" className="border-b border-brand-border bg-white py-16 md:py-20">
         <Container wide className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
           <div>

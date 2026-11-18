@@ -51,6 +51,7 @@ public static class EndpointMatrix
         ("POST",  "/api/auth/reset-password",   Anon),
         ("POST",  "/api/inquiries",             Anon),
         ("GET",   "/api/site-settings/hero",    Anon),
+        ("GET",   "/api/site-settings/demo-video", Anon),
         // A device posting with its own key (X-Device-Id + X-Device-Key, checked by the endpoint; rate-limited).
         ("POST",  "/api/iot/device/{channel}",  Anon),
 
@@ -223,6 +224,8 @@ public static class EndpointMatrix
         ("GET",   "/api/inquiries",                   G(P.InquiriesManage)),
         ("PATCH", "/api/inquiries/{id}",              G(P.InquiriesManage)),
         ("PUT",   "/api/site-settings/hero",          G(P.PlatformSettingsManage)),
+        ("PUT",   "/api/site-settings/demo-video",    G(P.PlatformSettingsManage)),
+        ("DELETE", "/api/site-settings/demo-video",   G(P.PlatformSettingsManage)),
 
         // Knowledge & AI.
         ("POST",  "/api/ask",                   G(P.KnowledgeView)),

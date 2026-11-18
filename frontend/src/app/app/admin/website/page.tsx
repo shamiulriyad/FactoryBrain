@@ -1,188 +1,160 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState } from "react";
-import { ArrowUp, Check, ExternalLink, Save } from "lucide-react";
+import { ExternalLink, Save, Trash2, Youtube } from "lucide-react";
 import { RequirePermission } from "@/components/auth/RequireRole";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 import { Callout } from "@/components/ui/Callout";
-import { FilterSelect } from "@/components/ui/Field";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
 import { SkeletonRows } from "@/components/ui/Status";
-import { HERO_DEFAULTS, HERO_IMAGES, resolveHero, type HeroSettings } from "@/content/site/heroMedia";
 import { useResource } from "@/lib/useResource";
 import { apiJson, errorMessage } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { P } from "@/lib/access";
-import { cn } from "@/lib/cn";
 
-interface Stored {
-  configured: boolean;
-  value?: HeroSettings;
-  updatedAt?: string;
-}
-
-const INTERVALS = [2, 3, 4, 5, 6, 9, 12, 15, 20, 30];
-
-/** Choose the homepage hero photos (from the assets in heroMedia.ts) and whether they rotate. */
+/** Public-website settings. Today: the homepage demo video. */
 function WebsiteSettingsInner() {
-  const res = useResource<Stored>("/api/site-settings/hero");
-  const [ids, setIds] = useState<string[]>(HERO_DEFAULTS.imageIds);
-  const [rotate, setRotate] = useState(false);
-  const [interval, setIntervalSec] = useState(HERO_DEFAULTS.intervalSeconds);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ tone: "success" | "danger"; text: string } | null>(null);
-
-  // Load what is saved (unknown ids are dropped, as on the website).
-  useEffect(() => {
-    if (!res.data) return;
-    const r = resolveHero(res.data.configured ? res.data.value : null);
-    setIds(r.images.map((i) => i.id));
-    setRotate(Boolean(res.data.value?.rotate) && r.images.length > 1);
-    setIntervalSec(r.intervalSeconds);
-  }, [res.data]);
-
-  const toggle = (id: string) => {
-    setMessage(null);
-    setIds((cur) => (cur.includes(id) ? (cur.length > 1 ? cur.filter((x) => x !== id) : cur) : [...cur, id]));
-  };
-  const makeFirst = (id: string) => setIds((cur) => [id, ...cur.filter((x) => x !== id)]);
-
-  const save = async () => {
-    setSaving(true);
-    setMessage(null);
-    try {
-      await apiJson("/api/site-settings/hero", { method: "PUT", body: { imageIds: ids, rotate: rotate && ids.length > 1, intervalSeconds: interval } });
-      await res.reload();
-      setMessage({ tone: "success", text: "Saved. The homepage shows the change within about a minute." });
-    } catch (e) {
-      setMessage({ tone: "danger", text: errorMessage(e) });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
     <div className="mx-auto w-full max-w-[1200px] px-4 py-8 md:px-8">
       <PageHeader
         eyebrow="Administration"
         title="Website"
-        description="Choose the photographs shown in the homepage hero and whether they rotate. Changes are recorded in the audit log."
+        description="Settings for the public website. Changes are recorded in the audit log."
         actions={
           <a href="/" target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 text-body text-accent hover:underline">
             Open homepage <ExternalLink size={14} aria-hidden />
           </a>
         }
       />
-
-      {res.error && !res.data && (
-        <Callout tone="danger" className="mt-6">
-          {errorMessage(res.error)}
-        </Callout>
-      )}
-      {!res.data && !res.error ? (
-        <Panel className="mt-6">
-          <SkeletonRows rows={4} />
-        </Panel>
-      ) : (
-        <>
-          <Panel className="mt-6 p-5">
-            <h2 className="text-body font-semibold text-fg-primary">Hero photographs</h2>
-            <p className="mt-1 text-caption text-fg-secondary">
-              Select one or more. The first selected photo is shown first (and is the only one shown when rotation is off). New photos are added to
-              the website&apos;s photo library by a developer (frontend/src/content/site/heroMedia.ts).
-            </p>
-            <ul className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {HERO_IMAGES.map((img) => {
-                const pos = ids.indexOf(img.id);
-                const selected = pos >= 0;
-                return (
-                  <li key={img.id}>
-                    <div className={cn("overflow-hidden rounded-xl border-2 transition-colors", selected ? "border-[var(--accent)]" : "border-border-subtle")}>
-                      <button type="button" onClick={() => toggle(img.id)} aria-pressed={selected} className="relative block aspect-[3/2] w-full">
-                        <Image src={img.src} alt={img.alt} fill sizes="280px" className="object-cover" style={{ objectPosition: img.focus }} />
-                        {selected && (
-                          <span className="absolute left-2 top-2 inline-flex size-7 items-center justify-center rounded-full bg-[var(--accent)] text-caption font-semibold text-white">
-                            {pos + 1}
-                          </span>
-                        )}
-                        <span className="sr-only">{selected ? "Selected. Press to remove." : "Press to select."}</span>
-                      </button>
-                      <div className="p-3">
-                        <p className="text-caption font-medium text-fg-primary">{img.caption}</p>
-                        <p className="text-caption text-fg-tertiary">
-                          {img.credit.name} / {img.credit.source}
-                        </p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <Button size="sm" variant={selected ? "secondary" : "primary"} onClick={() => toggle(img.id)} disabled={selected && ids.length === 1}>
-                            {selected ? "Remove" : (
-                              <>
-                                <Check size={14} aria-hidden /> Select
-                              </>
-                            )}
-                          </Button>
-                          {selected && pos > 0 && (
-                            <Button size="sm" variant="secondary" onClick={() => makeFirst(img.id)}>
-                              <ArrowUp size={14} aria-hidden /> Show first
-                            </Button>
-                          )}
-                          {pos === 0 && <Badge tone="success">Shown first</Badge>}
-                        </div>
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </Panel>
-
-          <Panel className="mt-4 p-5">
-            <h2 className="text-body font-semibold text-fg-primary">Rotation</h2>
-            <label className="mt-3 flex items-start gap-3">
-              <input
-                type="checkbox"
-                className="mt-1 size-4 accent-[var(--accent)]"
-                checked={rotate && ids.length > 1}
-                disabled={ids.length < 2}
-                onChange={(e) => setRotate(e.target.checked)}
-              />
-              <span>
-                <span className="block text-body text-fg-primary">Rotate between the selected photos</span>
-                <span className="block text-caption text-fg-secondary">
-                  A slow crossfade that pauses while a visitor hovers over the photo. Visitors who ask for reduced motion always see the first photo.
-                  {ids.length < 2 && " Select at least two photos to enable rotation."}
-                </span>
-              </span>
-            </label>
-            <div className="mt-4 max-w-xs">
-              <FilterSelect label="Each photo stays for" value={String(interval)} onChange={(v) => setIntervalSec(Number(v))}>
-                {INTERVALS.map((s) => (
-                  <option key={s} value={s}>
-                    {s} seconds
-                  </option>
-                ))}
-              </FilterSelect>
-            </div>
-          </Panel>
-
-          {message && (
-            <Callout tone={message.tone} className="mt-4">
-              {message.text}
-            </Callout>
-          )}
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-caption text-fg-tertiary">
-              {res.data?.configured && res.data.updatedAt ? `Last saved ${formatDateTime(res.data.updatedAt)}` : "Using the default photo (nothing saved yet)."}
-            </p>
-            <Button onClick={save} disabled={saving}>
-              <Save size={15} aria-hidden /> {saving ? "Saving…" : "Save"}
-            </Button>
-          </div>
-        </>
-      )}
+      <DemoVideoPanel />
     </div>
+  );
+}
+
+interface StoredVideo {
+  configured: boolean;
+  value?: { videoId: string; title?: string | null };
+  updatedAt?: string;
+}
+
+/** Same rules as the API: watch, youtu.be, embed, shorts or live links, or a bare 11-character id. */
+function youTubeId(input: string): string | null {
+  const url = input.trim();
+  const m = url.match(/^(?:https?:\/\/)?(?:(?:www\.|m\.|music\.)?youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})(?:[?&#/].*)?$/i);
+  return m ? m[1] : /^[A-Za-z0-9_-]{11}$/.test(url) ? url : null;
+}
+
+/** The YouTube demo video on the homepage. */
+function DemoVideoPanel() {
+  const res = useResource<StoredVideo>("/api/site-settings/demo-video");
+  const [url, setUrl] = useState("");
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ tone: "success" | "danger"; text: string } | null>(null);
+
+  useEffect(() => {
+    const v = res.data?.configured ? res.data.value : null;
+    setUrl(v ? `https://www.youtube.com/watch?v=${v.videoId}` : "");
+    setTitle(v?.title ?? "");
+  }, [res.data]);
+
+  const id = youTubeId(url);
+  const saved = res.data?.configured ? res.data.value : null;
+  const dirty = (id ?? "") !== (saved?.videoId ?? "") || title.trim() !== (saved?.title ?? "");
+
+  const save = async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      await apiJson("/api/site-settings/demo-video", { method: "PUT", body: { url, title: title.trim() || null } });
+      await res.reload();
+      setMessage({ tone: "success", text: "Saved. The homepage shows the video within about a minute." });
+    } catch (e) {
+      setMessage({ tone: "danger", text: errorMessage(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      await apiJson("/api/site-settings/demo-video", { method: "DELETE" });
+      await res.reload();
+      setMessage({ tone: "success", text: "Removed. The homepage shows the placeholder again." });
+    } catch (e) {
+      setMessage({ tone: "danger", text: errorMessage(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Panel className="mt-6 p-5" testId="demo-video-panel">
+      <h2 className="flex items-center gap-2 text-body font-semibold text-fg-primary">
+        <Youtube size={16} aria-hidden /> Demo video
+      </h2>
+      <p className="mt-1 text-caption text-fg-secondary">
+        Paste a YouTube link (watch, youtu.be, shorts or embed). It plays in the &quot;Product demo&quot; section of the homepage; until a video is set,
+        that section offers a live demo instead. Unlisted videos work too.
+      </p>
+      {!res.data && !res.error ? (
+        <SkeletonRows rows={2} />
+      ) : (
+        <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+          <div className="space-y-4">
+            <Field label="YouTube link" error={url.trim() && !id ? "That isn't a YouTube video link." : undefined}>
+              {(f) => (
+                <Input id={f.id} aria-describedby={f.describedBy} aria-invalid={f.invalid} value={url} placeholder="https://www.youtube.com/watch?v=…" onChange={(e) => { setUrl(e.target.value); setMessage(null); }} />
+              )}
+            </Field>
+            <Field label="Title (optional)">
+              {(f) => (
+                <Input id={f.id} value={title} maxLength={120} placeholder="BunonBrain product demo" onChange={(e) => { setTitle(e.target.value); setMessage(null); }} />
+              )}
+            </Field>
+            {message && <Callout tone={message.tone}>{message.text}</Callout>}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-caption text-fg-tertiary">
+                {res.data?.configured && res.data.updatedAt ? `Last saved ${formatDateTime(res.data.updatedAt)}` : "No video set yet."}
+              </p>
+              <div className="flex gap-2">
+                {saved && (
+                  <Button variant="secondary" onClick={remove} disabled={busy}>
+                    <Trash2 size={15} aria-hidden /> Remove
+                  </Button>
+                )}
+                <Button onClick={save} disabled={busy || !id || !dirty}>
+                  <Save size={15} aria-hidden /> {busy ? "Saving…" : "Save"}
+                </Button>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-caption text-fg-tertiary">Preview</p>
+            {id ? (
+              <div className="relative aspect-video overflow-hidden rounded-lg border border-border-subtle bg-black">
+                <iframe
+                  className="absolute inset-0 size-full"
+                  src={`https://www.youtube-nocookie.com/embed/${id}?rel=0`}
+                  title={title || "Demo video preview"}
+                  allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            ) : (
+              <div className="flex aspect-video items-center justify-center rounded-lg border border-dashed border-border-subtle text-caption text-fg-tertiary">
+                Paste a link to preview it here.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </Panel>
   );
 }
 

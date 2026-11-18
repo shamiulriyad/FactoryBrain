@@ -26,7 +26,7 @@ export const DOCS: Doc[] = [
       { t: "h2", text: "Finding your way" },
       { t: "ul", items: ["The sidebar lists the modules your role can open; items you can't use are not shown.", "Use the factory switcher at the top of the sidebar if you belong to more than one factory.", "Search lines, orders and alerts with **Ctrl K**.", "Switch between English and বাংলা, and between light and dark themes, from the top bar."] },
       { t: "h2", text: "Simulated and demo data" },
-      { t: "p", text: "Screens that show simulated or demo data say so with a label. The Workforce module's HR, attendance and wellbeing screens run on browser-only sample data and do not save to the server." },
+      { t: "p", text: "Screens that show simulated data say so with a label: simulated alerts, events, machine readings and attendance punches are marked wherever they appear, and real data alone sets a floor's status." },
     ],
   },
   {
@@ -43,7 +43,7 @@ export const DOCS: Doc[] = [
         ["Factory Manager", "Assigned factories", "Operations oversight, production, approvals, reports"],
         ["Production Supervisor", "Assigned lines", "Workers and workstations on their lines, production, line alerts"],
         ["Monitoring Operator", "Assigned factories", "Monitoring dashboard, acknowledging and escalating alerts"],
-        ["HR / Attendance Officer", "Assigned factories", "Worker records; attendance, shifts, leave and overtime (planned)"],
+        ["HR / Attendance Officer", "Assigned factories", "Worker records; attendance, shifts, leave and overtime"],
         ["IT / Device Administrator", "Assigned factories", "Devices, integrations, technical logs"],
         ["Worker", "Own records", "Own profile and workstation"],
       ] },

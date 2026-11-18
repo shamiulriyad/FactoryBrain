@@ -31,7 +31,10 @@ export default function AboutPage() {
 
       <Section label="what-title">
         <Container wide className="grid gap-12 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-          <SectionHeader id="what-title" eyebrow="What BunonBrain is" title="One record of how the plant runs." />
+          <div>
+            <SectionHeader id="what-title" eyebrow="What BunonBrain is" title="One record of how the plant runs." />
+            <div aria-hidden className="site-thread mt-7 w-20" />
+          </div>
           <div className="space-y-5 text-[1.08rem] leading-[1.8] text-brand-body">
             <p>
               BunonBrain is a single web application that brings production planning, line status, quality inspection,
@@ -57,7 +60,8 @@ export default function AboutPage() {
               still moves on paper, in spreadsheets and by word of mouth.
             </p>
           </div>
-          <div className="rounded-2xl border border-brand-border bg-white p-8">
+          <div className="relative overflow-hidden rounded-2xl border border-brand-border bg-white p-8">
+            <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-brand-marigold to-brand-marigold/0" />
             <Eyebrow>The problem we want to solve</Eyebrow>
             <CheckList
               className="mt-5"
@@ -81,13 +85,13 @@ export default function AboutPage() {
           <div className="grid gap-6 md:grid-cols-2">
             <div className="site-cta relative overflow-hidden rounded-3xl p-10 text-white">
               <div aria-hidden className="site-weave pointer-events-none absolute inset-0" />
-              <p className="relative font-plexmono text-[0.72rem] uppercase tracking-[0.16em] text-[rgb(var(--brand-emerald-on-dark))]">Our mission</p>
+              <p className="site-eyebrow relative font-plexmono text-[0.72rem] uppercase tracking-[0.16em] text-brand-marigold-on-dark">Our mission</p>
               <p className="relative mt-4 font-heading text-[1.6rem] font-semibold leading-snug">
                 Give every garment factory one trustworthy view of its operations, and the tools to act on it responsibly.
               </p>
             </div>
             <div className="rounded-3xl border border-brand-border bg-brand-emerald-light/40 p-10">
-              <p className="font-plexmono text-[0.72rem] uppercase tracking-[0.16em] text-brand-emerald-ink">Our vision</p>
+              <p className="site-eyebrow font-plexmono text-[0.72rem] uppercase tracking-[0.16em] text-brand-marigold-ink">Our vision</p>
               <p className="mt-4 font-heading text-[1.6rem] font-semibold leading-snug text-brand-text">
                 A Bangladeshi garment industry where decisions on every floor are made on current, shared and verifiable information.
               </p>
@@ -101,13 +105,15 @@ export default function AboutPage() {
         </Container>
       </Section>
 
-      <Section tone="off" label="values-title">
+      <Section tone="warm" label="values-title">
         <Container wide>
           <SectionHeader id="values-title" eyebrow="Our core values" title="What we hold ourselves to" />
           <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {VALUES.map((v) => (
-              <div key={v.title} className="rounded-2xl border border-brand-border bg-white p-7">
-                <h3 className="font-heading text-[1.2rem] font-semibold text-brand-text">{v.title}</h3>
+            {VALUES.map((v, i) => (
+              <div key={v.title} className="relative overflow-hidden rounded-2xl border border-brand-marigold/20 bg-white/90 p-7">
+                <span aria-hidden className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-marigold to-brand-emerald/60" />
+                <span className="font-heading text-[1.4rem] font-semibold leading-none text-brand-marigold-ink">{String(i + 1).padStart(2, "0")}</span>
+                <h3 className="mt-4 font-heading text-[1.2rem] font-semibold text-brand-text">{v.title}</h3>
                 <p className="mt-2 leading-relaxed text-brand-body">{v.body}</p>
               </div>
             ))}
@@ -138,16 +144,18 @@ export default function AboutPage() {
       <Section tone="navy" label="dir-title">
         <Container wide className="grid gap-12 lg:grid-cols-2">
           <div>
-            <h2 id="dir-title" className="font-heading text-[2rem] font-semibold tracking-[-0.02em]">
+            <Eyebrow>Where we are going</Eyebrow>
+            <h2 id="dir-title" className="mt-3 font-heading text-[2rem] font-semibold tracking-[-0.02em]">
               Our long-term direction
             </h2>
             <p className="mt-5 text-[1.05rem] leading-relaxed text-white/75">
-              The foundation is in place: planning, line monitoring, quality, merchandising, approvals and access control.
-              Next is a complete workforce layer, with attendance, shifts, leave and overtime on the server, alongside wider
-              data connections, so labour and production can be planned together.
+              The foundation is in place: planning, line and machine monitoring, camera AI, quality, merchandising,
+              document automation, approvals, access control, and a workforce layer with attendance, shifts, leave and
+              overtime on the server. Next are wider data connections, such as direct PLC and Modbus links, so labour,
+              machines and production are planned together from one record.
             </p>
           </div>
-          <div className="flex flex-col justify-end gap-3 sm:flex-row lg:justify-end">
+          <div className="flex flex-col items-start justify-end gap-3 sm:flex-row sm:items-end lg:justify-end">
             <ButtonLink href="/product" size="lg" arrow>
               Explore the product
             </ButtonLink>

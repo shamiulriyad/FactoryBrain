@@ -74,7 +74,7 @@ export function ResourceExplorer({ items, placeholder = "Search articles, guides
                 href={r.href}
                 className="group flex h-full flex-col rounded-2xl border border-brand-border bg-white p-6 transition-[border-color,box-shadow] hover:border-brand-navy/25 hover:shadow-[0_12px_32px_-16px_rgba(16,38,61,0.2)]"
               >
-                <span className="font-plexmono text-[0.68rem] uppercase tracking-[0.14em] text-brand-emerald-ink">{r.type}</span>
+                <span className="font-plexmono text-[0.68rem] uppercase tracking-[0.14em] text-brand-marigold-ink">{r.type}</span>
                 <span className="mt-2 font-heading text-[1.1rem] font-semibold leading-snug text-brand-text">{r.title}</span>
                 <span className="mt-2 flex-1 text-[0.93rem] leading-relaxed text-brand-body">{r.summary}</span>
                 <span className="mt-4 inline-flex items-center gap-1 text-[0.88rem] font-medium text-brand-emerald-ink">

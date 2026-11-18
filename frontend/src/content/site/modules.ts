@@ -34,7 +34,8 @@ export interface ProductModule {
 }
 
 export type IconName =
-  | "factory" | "gauge" | "scan" | "file" | "check" | "message" | "bot" | "chart" | "shield" | "users" | "clock" | "plug" | "layers" | "brain" | "bell";
+  | "factory" | "gauge" | "scan" | "file" | "check" | "message" | "bot" | "chart" | "shield" | "users" | "clock" | "plug" | "layers" | "brain" | "bell"
+  | "camera" | "cpu";
 
 export const MODULES: ProductModule[] = [
   {
@@ -306,66 +307,179 @@ export const MODULES: ProductModule[] = [
   {
     slug: "workforce",
     name: "Workforce Management",
-    short: "Worker profiles and workstation assignment; HR modules in demo.",
+    short: "Worker register, assignments, and a workforce hub on live records.",
     icon: "users",
     status: "available",
     group: "Workforce",
     summary:
-      "Keep worker profiles in the same system as the lines they work on. Assign people to lines and workstations, link a worker to a login account, and preview the HR and wellbeing modules on demo data.",
+      "Keep worker profiles in the same system as the lines they work on. Assign people to lines and workstations, link a worker to a login account, and see headcount, attendance, leave, overtime and performance for the factory in one Workforce hub.",
     problem:
       "Worker records, line assignments and skills usually sit in separate registers, so planners cannot see who is available or trained for an operation.",
     how: [
-      { title: "Profiles", body: "HR and administrators create worker profiles with employment details, visible according to role." },
-      { title: "Assignment", body: "Supervisors and managers assign workers to lines and workstations within their scope." },
-      { title: "Self-service", body: "A worker linked to a login sees their own profile." },
+      { title: "Profiles", body: "HR and administrators create worker profiles one by one or by import, with employment details visible according to role." },
+      { title: "Assignment", body: "Supervisors and managers assign workers to lines and workstations within their scope, with a full history." },
+      { title: "One hub", body: "The Workforce hub shows headcount by department and line, today's attendance, leave, overtime and performance from the server's records." },
     ],
     beneficiaries: [
       { role: "HR / Attendance Officer", benefit: "One directory linked to the production structure." },
-      { role: "Supervisors", benefit: "Know who is assigned to each workstation." },
-      { role: "Workers", benefit: "See their own record." },
+      { role: "Supervisors", benefit: "Know who is assigned to each workstation and who is in today." },
+      { role: "Workers", benefit: "See their own record through a linked account." },
     ],
     capabilities: [
-      { title: "Worker profiles", body: "Create and edit profiles, with employment details visible only to permitted roles." },
-      { title: "Workstation assignment", body: "Move workers between lines and workstations in scope." },
+      { title: "Worker profiles", body: "Create, import and edit profiles, with employment details visible only to permitted roles." },
+      { title: "Workstation assignment", body: "Move workers between lines and workstations in scope; every change is kept." },
       { title: "Account linking", body: "Connect a worker profile to a sign-in account." },
-      { title: "Roll-call, leave, overtime, skills and wellbeing", body: "Shown as an interactive demonstration on sample data stored only in the browser.", status: "demo" },
+      { title: "Workforce hub", body: "Headcount, attendance today, leave records, overtime requests and workforce analytics together." },
     ],
-    screenshot: { src: "/site/screens/workforce.jpg", alt: "Workforce, HR and wellbeing demo in BunonBrain, running on browser-only sample data" },
-    notes: ["The HR, attendance and wellbeing screens currently run on demo data in the browser and do not save to the server."],
+    screenshot: { src: "/site/screens/workforce.jpg", alt: "BunonBrain Workforce hub with active workers, attendance, overtime awaiting approval and headcount by department and line" },
     related: ["attendance-shifts", "access-control"],
   },
   {
     slug: "attendance-shifts",
     name: "Attendance & Shift Management",
-    short: "Attendance, leave and overtime records on the server.",
+    short: "RFID check-in, shifts, breaks, leave and overtime approval on the server.",
     icon: "clock",
-    status: "planned",
+    status: "available",
     group: "Workforce",
     summary:
-      "Server-side attendance, shift assignment, leave and overtime, governed by the same roles and scope as the rest of BunonBrain. The permissions for these functions are already defined; the module itself is in development.",
+      "Server-side attendance, shifts, breaks, holidays, leave and overtime, governed by the same roles and scope as the rest of BunonBrain. Work dates, lateness and overtime follow each factory's time zone.",
     problem:
-      "Attendance and overtime drive both payroll and compliance. They need to sit next to production data, under clear access rules.",
+      "Attendance and overtime drive both payroll and compliance. They need to sit next to production data, under clear access rules, with every correction traceable.",
     how: [
-      { title: "Shifts", body: "Production shifts already exist in planning; attendance will attach people to them." },
-      { title: "Records", body: "Attendance, leave and overtime will be stored on the server with role-based access." },
-      { title: "Review", body: "HR officers will manage records; managers will see summaries for their scope." },
+      { title: "Punches", body: "Card readers (RFID) or authorised staff record check-ins, check-outs and breaks; each event keeps its source." },
+      { title: "Shifts", body: "Shifts with their breaks are assigned to workers; lateness, early departure and over-break are calculated from them." },
+      { title: "Approvals", body: "Overtime is requested and approved, corrections are reviewed, and leave is recorded as an approved document." },
     ],
     beneficiaries: [
-      { role: "HR / Attendance Officer", benefit: "Attendance and overtime in one controlled system." },
+      { role: "HR / Attendance Officer", benefit: "Attendance, leave and overtime in one controlled system." },
       { role: "Management", benefit: "Labour availability next to the production plan." },
+      { role: "Supervisors", benefit: "Who is checked in, on break or late, line by line." },
     ],
     capabilities: [
-      { title: "Attendance records", body: "View and manage attendance.", status: "planned" },
-      { title: "Shift assignment", body: "Assign workers to shifts.", status: "planned" },
-      { title: "Leave and overtime", body: "Request, approve and report.", status: "planned" },
+      { title: "Attendance records", body: "Daily figures, sessions, missing punches and reports per factory and line." },
+      { title: "Shifts and assignment", body: "Shift calendars with breaks, assigned to workers in bulk." },
+      { title: "Overtime and corrections", body: "Request, approve and confirm payable overtime; review attendance corrections." },
+      { title: "Holidays and leave", body: "Factory holidays and approved leave keep people from being counted absent." },
     ],
-    notes: ["This module is planned. Dates are not committed. A browser-only preview is available in the Workforce demo."],
     related: ["workforce", "production-planning"],
+  },
+  {
+    slug: "monitoring-camera-ai",
+    name: "Monitoring Room & Camera AI",
+    short: "Cameras, devices, events and alerts live, with AI analysis of camera frames.",
+    icon: "camera",
+    status: "available",
+    group: "Operations",
+    summary:
+      "A central monitoring room for the cameras, devices and alerts of the factories and lines a person is responsible for. Camera frames can be analysed by AI for people, activity, helmets and safety vests, and confirmed changes become events and alerts.",
+    problem:
+      "Cameras record, but nobody watches every screen. Problems are found later on the recording, if at all.",
+    how: [
+      { title: "Live feed", body: "Events and alerts arrive in real time on every open screen, newest first and in local time." },
+      { title: "Camera AI", body: "A browser camera's frames are analysed on the server by a vision model; frames are not stored." },
+      { title: "Act", body: "Alerts are acknowledged, escalated or resolved, and every action is kept." },
+    ],
+    beneficiaries: [
+      { role: "Monitoring Operator", benefit: "One screen for cameras, devices and alerts." },
+      { role: "Factory Manager", benefit: "Safety issues raised as alerts, not discovered later." },
+    ],
+    capabilities: [
+      { title: "Monitoring room", body: "Cameras, devices, live events and active alerts across your scope." },
+      { title: "Camera AI", body: "People, activity, helmet and safety-vest checks with approximate boxes. No face recognition." },
+      { title: "Alert workflow", body: "Acknowledge, escalate, resolve or dismiss, with history." },
+      { title: "Simulated data labelled", body: "Simulated events are marked as such everywhere they appear." },
+    ],
+    screenshot: { src: "/site/screens/monitoring.jpg", alt: "BunonBrain monitoring room with cameras, devices, active alerts and a live event feed (simulated events labelled)" },
+    related: ["machine-monitoring", "line-monitoring"],
+  },
+  {
+    slug: "machine-monitoring",
+    name: "Machine Monitoring (IoT)",
+    short: "Running, idle, stopped or in error, from sensors over MQTT, with piece counts.",
+    icon: "cpu",
+    status: "available",
+    group: "Operations",
+    summary:
+      "ESP32 sensors and piece counters report over MQTT or HTTPS. BunonBrain derives each machine's state, records downtime and counts production, and flags machines that stop or go offline.",
+    problem:
+      "A stopped machine is noticed on a floor walk, and output is counted by hand at the end of the hour.",
+    how: [
+      { title: "Connect", body: "Register sensors and counters as devices; they send readings over MQTT (preferred) or HTTPS." },
+      { title: "Derive", body: "Readings become machine states (running, idle, stopped, error, offline) and production counts." },
+      { title: "Report", body: "Uptime, downtime and counts feed the line view, analytics and planned-versus-actual." },
+    ],
+    beneficiaries: [
+      { role: "Production Supervisor", benefit: "Which machines stopped, and since when." },
+      { role: "Maintenance", benefit: "Errors and downtime history per machine." },
+      { role: "Planning", benefit: "Actual output from counters, not tallies." },
+    ],
+    capabilities: [
+      { title: "Machine states", body: "Running, idle, stopped, error, maintenance and offline, with reasons." },
+      { title: "Piece counters", body: "Production counts with resets, corrections and duplicate handling." },
+      { title: "Device health", body: "Heartbeats and online / offline status per device." },
+      { title: "IoT simulator", body: "Evaluate the whole flow before any hardware is installed; simulated data is labelled." },
+    ],
+    related: ["monitoring-camera-ai", "integrations", "production-planning"],
+  },
+  {
+    slug: "floor-map-brain",
+    name: "Floor Map & Factory Brain",
+    short: "Every floor's live status, and a map of how lines, machines and orders connect.",
+    icon: "layers",
+    status: "available",
+    group: "Intelligence",
+    summary:
+      "The floor map shows each production floor with its people, machines, open alerts and an OK / Watch / Act status. Factory Brain draws the factory as a graph: floors, lines, machines, open orders, buyers, styles, targets and open risks.",
+    problem:
+      "Managers see one screen per module and have to connect the dots themselves.",
+    how: [
+      { title: "Roll up", body: "Alerts, machine states and exceptions are rolled up per floor; only real data sets a status." },
+      { title: "Connect", body: "The graph links each order to its buyer, style and lines, and each risk to what it threatens." },
+      { title: "Open", body: "Every node and floor opens the record behind it." },
+    ],
+    beneficiaries: [
+      { role: "Factory Manager", benefit: "The whole building at a glance." },
+      { role: "Planners", benefit: "See which orders depend on a line with a problem." },
+    ],
+    capabilities: [
+      { title: "Live floor map", body: "Floors stacked like the building, with status, people, machines and alerts." },
+      { title: "Floor pages", body: "Lines, machine states and recent alerts for one floor." },
+      { title: "Factory graph", body: "Floors, lines, machines, orders, buyers, styles, targets and risks, filterable by kind." },
+    ],
+    screenshot: { src: "/site/screens/floor-map.jpg", alt: "BunonBrain live floor map with three production floors, checked-in workers, machines, open alerts and cameras" },
+    related: ["line-monitoring", "machine-monitoring", "ai-agents"],
+  },
+  {
+    slug: "document-automation",
+    name: "Document Automation",
+    short: "38 factory documents generated from your data, exported to PDF, Excel or Word.",
+    icon: "file",
+    status: "available",
+    group: "Platform",
+    summary:
+      "Factory documents such as AQL reports, GRNs, packing lists and attendance sheets are generated from the records already in BunonBrain, checked for missing values, reviewed and approved, and exported to PDF, Excel or Word.",
+    problem:
+      "Clerks retype the same figures into many forms, and buyers and auditors receive documents nobody can trace back to a record.",
+    how: [
+      { title: "Generate", body: "Pick a document type and period; values are filled from the factory's records." },
+      { title: "Check", body: "Missing values, errors and warnings are listed before submission." },
+      { title: "Approve and export", body: "Documents go through review and approval and are exported in the format the reader needs." },
+    ],
+    beneficiaries: [
+      { role: "Document Controller", benefit: "One register of every document and its status." },
+      { role: "Compliance", benefit: "Each figure traceable to a record." },
+    ],
+    capabilities: [
+      { title: "38 document types", body: "Production, quality, store, HR and compliance documents." },
+      { title: "Review and approval", body: "Versioned documents with a review and approval workflow." },
+      { title: "PDF, Excel, Word", body: "Exports in the format the reader needs; Bangla text renders correctly in PDFs." },
+    ],
+    related: ["merchandising", "reports-analytics"],
   },
   {
     slug: "integrations",
     name: "Data Sources & Integrations",
-    short: "Sensor ingest, file imports and documents.",
+    short: "MQTT and HTTPS ingest, file imports, and every source's status on one page.",
     icon: "plug",
     status: "available",
     group: "Platform",
@@ -383,12 +497,14 @@ export const MODULES: ProductModule[] = [
       { role: "Management", benefit: "Start small, add sources over time." },
     ],
     capabilities: [
-      { title: "Sensor ingest API", body: "Machine telemetry, energy meters and RFID bundle scans." },
+      { title: "MQTT and HTTPS ingest", body: "Machine sensors, piece counters, energy meters and RFID readers over MQTT (preferred) or HTTPS." },
       { title: "File imports", body: "Output import and document uploads." },
       { title: "Simulator", body: "A built-in event stream for demonstrations and evaluation." },
-      { title: "Direct PLC / Modbus / MQTT connectors", body: "Not included today.", status: "planned" },
+      { title: "Integration status", body: "Every source with its devices, record counts and last activity, on one page." },
+      { title: "Direct PLC / Modbus connectors", body: "Not included today.", status: "planned" },
     ],
-    related: ["line-monitoring", "merchandising", "ask-and-knowledge"],
+    screenshot: { src: "/site/screens/integrations.jpg", alt: "BunonBrain integrations page listing RFID readers, attendance card readers, machine sensors and production counters with their devices and records" },
+    related: ["machine-monitoring", "line-monitoring", "merchandising"],
   },
 ];
 

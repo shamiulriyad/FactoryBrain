@@ -17,6 +17,8 @@ const PALETTE = [
   { name: "Deep Navy", hex: LOGO_COLORS.navyDeep, rgb: "16 38 61", role: "Dark backgrounds, sidebar, footer.", dark: true },
   { name: "Emerald Green", hex: LOGO_COLORS.emerald, rgb: "5 150 105", role: "Accent. Fabric waves, “Brain”, actions.", dark: true },
   { name: "Light Green", hex: LOGO_COLORS.lightGreen, rgb: "209 250 229", role: "Soft fills, highlights, badges.", dark: false },
+  { name: "Marigold", hex: "#D97706", rgb: "217 119 6", role: "Third colour. Highlights, numbers, eyebrows and accent lines; text uses #B45309. Never buttons.", dark: false },
+  { name: "Light Marigold", hex: "#FEF3C7", rgb: "254 243 199", role: "Warm section grounds and soft highlight fills.", dark: false },
   { name: "White", hex: LOGO_COLORS.white, rgb: "255 255 255", role: "Page ground and reversed logo.", dark: false },
 ] as const;
 
@@ -250,9 +252,9 @@ export default function BrandPage() {
           id="colour"
           eyebrow="03 · Colour"
           title="Colour palette"
-          intro="Navy leads, emerald accents. Keep emerald to roughly a fifth of any composition, and use flat colour: no gradients."
+          intro="Navy leads, emerald accents, marigold highlights. Keep emerald to roughly a fifth of any composition and marigold to small touches (numbers, labels, thin lines). The logo itself stays navy and emerald, in flat colour."
         >
-          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {PALETTE.map((c) => (
               <li key={c.hex} className="overflow-hidden rounded-xl border border-[#E2E8F0]">
                 <div className="flex h-32 items-end p-4" style={{ background: c.hex }}>

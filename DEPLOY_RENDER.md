@@ -124,7 +124,7 @@ Run it once per PDF (`--recreate` only for the first one).
 On a PC in the factory network, in `computer-vision/.env`:
 
 ```
-CV_BACKEND_URL=https://bunonbrain-api.onrender.com
+CV_BACKEND_URL=https://factorybrain-akvk.onrender.com
 CV_BACKEND_SERVICE_KEY=<value of CV_SERVICE_KEY from the API's Environment tab>
 CV_API_KEY=<new random 32+ chars>
 CV_ENABLE_PREVIEW=false
@@ -137,14 +137,14 @@ Stop it after the demo (see the 750-hour note in section 1).
 
 ## 7. IoT / MQTT (optional)
 
-- HTTP device ingestion works as-is against `https://bunonbrain-api.onrender.com`.
+- HTTP device ingestion works as-is against `https://factorybrain-akvk.onrender.com`.
 - Render accepts only HTTP(S), so MQTT needs a hosted broker with TLS (HiveMQ Cloud / EMQX Cloud
   free tier). Set on the API: `Iot__Mqtt__Enabled=true`, `Iot__Mqtt__Host`, `Iot__Mqtt__Port=8883`,
   `Iot__Mqtt__UseTls=true`, `Iot__Mqtt__Username`, `Iot__Mqtt__Password`.
 
 ## 8. Check it works
 
-1. Open `https://bunonbrain-api.onrender.com/health` first and wait for `Healthy` (this wakes the API).
+1. Open `https://factorybrain-akvk.onrender.com/health` first and wait for `Healthy` (this wakes the API).
 2. Open the frontend and sign in with the seeded admin.
 3. Ask BunonBrain a question about an ingested PDF (the first one may take a minute while the RAG service wakes).
 4. The Overview page updates live.

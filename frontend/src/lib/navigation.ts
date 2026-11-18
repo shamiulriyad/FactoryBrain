@@ -157,25 +157,26 @@ type RoleMenu = { id: string; labelKey: string; items: string[] }[];
 
 const ROLE_MENUS: Record<string, RoleMenu> = {
   SuperAdmin: [
-    { id: "home", labelKey: "sidebar.monitor", items: ["overview", "monitoring", "alerts"] },
+    { id: "home", labelKey: "sidebar.monitor", items: ["overview", "monitoring", "alerts", "floor-map"] },
     { id: "work", labelKey: "sidebar.plan", items: ["planning", "documents", "analytics", "reports", "approvals"] },
-    { id: "ai", labelKey: "sidebar.assistant", items: ["ask", "knowledge"] },
+    { id: "people", labelKey: "sidebar.people", items: ["workforce"] },
+    { id: "ai", labelKey: "sidebar.assistant", items: ["ask", "knowledge", "insights", "brain", "agents"] },
     { id: "admin", labelKey: "sidebar.admin", items: ["admin-users", "admin-roles", "admin-factories", "admin-website", "admin-inquiries"] },
-    { id: "system", labelKey: "sidebar.system", items: ["audit"] },
+    { id: "system", labelKey: "sidebar.system", items: ["audit", "integrations"] },
   ],
   FactoryAdmin: [
-    { id: "home", labelKey: "sidebar.monitor", items: ["overview", "monitoring", "alerts"] },
+    { id: "home", labelKey: "sidebar.monitor", items: ["overview", "monitoring", "alerts", "floor-map"] },
     { id: "work", labelKey: "sidebar.plan", items: ["planning", "documents", "inventory", "analytics", "reports", "approvals"] },
-    { id: "people", labelKey: "sidebar.people", items: ["workers", "attendance", "assignments"] },
-    { id: "ai", labelKey: "sidebar.assistant", items: ["ask", "knowledge"] },
+    { id: "people", labelKey: "sidebar.people", items: ["workforce", "workers", "attendance", "assignments"] },
+    { id: "ai", labelKey: "sidebar.assistant", items: ["ask", "knowledge", "insights", "brain", "agents"] },
     { id: "admin", labelKey: "sidebar.admin", items: ["admin-users", "admin-roles", "admin-factories"] },
-    { id: "system", labelKey: "sidebar.system", items: ["audit"] },
+    { id: "system", labelKey: "sidebar.system", items: ["audit", "integrations"] },
   ],
   FactoryManager: [
-    { id: "home", labelKey: "sidebar.monitor", items: ["overview", "monitoring", "alerts"] },
+    { id: "home", labelKey: "sidebar.monitor", items: ["overview", "monitoring", "alerts", "floor-map"] },
     { id: "work", labelKey: "sidebar.plan", items: ["planning", "documents", "orders", "approvals", "analytics", "reports", "qc", "inventory"] },
-    { id: "people", labelKey: "sidebar.people", items: ["attendance", "assignments", "workers"] },
-    { id: "ai", labelKey: "sidebar.assistant", items: ["ask"] },
+    { id: "people", labelKey: "sidebar.people", items: ["workforce", "attendance", "assignments", "workers"] },
+    { id: "ai", labelKey: "sidebar.assistant", items: ["ask", "insights", "brain"] },
   ],
   ProductionSupervisor: [
     { id: "home", labelKey: "sidebar.monitor", items: ["overview", "alerts", "floor-board"] },
@@ -190,12 +191,12 @@ const ROLE_MENUS: Record<string, RoleMenu> = {
   ],
   HrOfficer: [
     { id: "home", labelKey: "sidebar.monitor", items: ["overview"] },
-    { id: "people", labelKey: "sidebar.people", items: ["workers", "attendance", "assignments"] },
+    { id: "people", labelKey: "sidebar.people", items: ["workforce", "workers", "attendance", "assignments"] },
     { id: "work", labelKey: "sidebar.plan", items: ["documents", "analytics", "reports"] },
   ],
   DeviceAdmin: [
     { id: "home", labelKey: "sidebar.monitor", items: ["overview", "monitoring"] },
-    { id: "system", labelKey: "sidebar.system", items: ["cameras-devices", "sensors", "documents", "analytics"] },
+    { id: "system", labelKey: "sidebar.system", items: ["cameras-devices", "sensors", "integrations", "documents", "analytics"] },
   ],
   DocumentController: [
     { id: "home", labelKey: "sidebar.monitor", items: ["overview"] },

@@ -172,7 +172,7 @@ export default function OverviewPage() {
 
   const queue = [
     { key: "overtime", label: "Overtime requests", count: overtime.data?.total, href: "/app/attendance/overtime", show: canOvertime },
-    { key: "plans", label: "Production plans", count: plans.data?.total, href: "/app/production/plans", show: canProduction },
+    { key: "plans", label: "Production plans", count: plans.data?.total, href: "/app/production?tab=plans", show: canProduction },
     { key: "docs", label: "Documents to review", count: docs.data?.total, href: "/app/documents/list", show: canDocuments },
     { key: "daily", label: "Daily plans submitted", count: dailyPlans.data?.items?.filter((p) => p.status === "SUBMITTED").length, href: "/app/planning/plans", show: canPlanning }
   ].filter((q) => q.show);

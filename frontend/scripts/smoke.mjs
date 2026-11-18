@@ -56,9 +56,7 @@ async function main() {
     "src/data/activity.ts",
     "src/services/types.ts",
     "src/services/business.service.ts",
-    "src/services/ingestion.service.ts",
     "src/services/metric.service.ts",
-    "src/services/brain.service.ts",
     "src/services/insight.service.ts",
     "src/services/evidence.service.ts",
     "src/services/approval.service.ts",
@@ -101,22 +99,7 @@ async function main() {
     "src/components/overview/QcSummary.tsx",
     "src/app/app/qc/page.tsx",
     "src/app/app/workforce/page.tsx",
-    "src/app/app/workforce/workers/[id]/page.tsx",
-    "src/data/workforce/lines.ts",
-    "src/data/workforce/policy.ts",
-    "src/data/workforce/types.ts",
-    "src/data/workforce/seed.ts",
-    "src/lib/workforce.ts",
-    "src/store/workforce.store.ts",
-    "src/components/workforce/shared.tsx",
-    "src/components/workforce/OverviewTab.tsx",
-    "src/components/workforce/WorkersTab.tsx",
-    "src/components/workforce/AttendanceTab.tsx",
-    "src/components/workforce/LeaveOvertimeTab.tsx",
-    "src/components/workforce/PerformanceTab.tsx",
-    "src/components/workforce/SkillsTrainingTab.tsx",
-    "src/components/workforce/GrievancesTab.tsx",
-    "src/components/workforce/WellbeingTab.tsx"
+    "src/app/app/workforce/workers/[id]/page.tsx"
   ]) {
     try { await read(f); assert(true, f); } catch { assert(false, f); }
   }
@@ -353,25 +336,11 @@ async function main() {
   const oosIdx = businessStore.indexOf('"shopify", category: "out_of_scope"');
   assert(sensorsIdx > 0 && pilotIdx > sensorsIdx && oosIdx > pilotIdx, "store: default source order is sensors → pilot → out_of_scope");
 
-  const ingestionSvc = await read("src/services/ingestion.service.ts");
-  assert(ingestionSvc.includes("SOURCE_CATEGORY"), "ingestion.service: imports SOURCE_CATEGORY for back-compat");
-  assert(ingestionSvc.includes("category ="), "ingestion.service: stamps category on every listed source");
-
   const integrationsPage = await read("src/app/app/integrations/page.tsx");
-  assert(integrationsPage.includes('"sensor"'), "integrations page: renders the sensor group");
-  assert(integrationsPage.includes('"pilot"'), "integrations page: renders the pilot group");
-  assert(integrationsPage.includes('"out_of_scope"'), "integrations page: handles the out_of_scope group");
-  assert(integrationsPage.includes("groupSensors"), "integrations page: uses groupSensors i18n key");
-  assert(integrationsPage.includes("groupPilot"), "integrations page: uses groupPilot i18n key");
-  assert(integrationsPage.includes("groupOutOfScope"), "integrations page: uses groupOutOfScope i18n key");
-  assert(integrationsPage.includes("showOutOfScope"), "integrations page: out_of_scope is disclosed behind a toggle");
-  assert(integrationsPage.includes("integration-card-"), "integrations page: smoke-visible per-card testid");
-  assert(integrationsPage.includes("integration-simulated-"), "integrations page: keeps the Simulated pill for sensor sources");
-  assert(integrationsPage.includes("calibrationNote"), "integrations page: surfaces the calibration note on sensor cards");
-  assert(integrationsPage.includes("RFID bundle scans") || integrationsPage.includes("RFID"), "integrations page: keeps the kept sensor sources connected");
-  // Connect / disconnect flow for kept sources must still exist.
-  assert(integrationsPage.includes("ConnectModal") || integrationsPage.includes("setConnectFor"), "integrations page: Connect flow still wired for kept sources");
-  assert(integrationsPage.includes("setConfirmDisconnect") || integrationsPage.includes("handleDisconnect"), "integrations page: Disconnect flow still wired for kept sources");
+  assert(integrationsPage.includes("/api/integrations/status"), "integrations page: reads GET /api/integrations/status");
+  assert(integrationsPage.includes('"sensor"') && integrationsPage.includes('"pilot"') && integrationsPage.includes('"camera"'), "integrations page: groups sensor, camera and pilot sources");
+  assert(integrationsPage.includes("integration-${s.id}"), "integrations page: per-source testid");
+  assert(!integrationsPage.includes("DemoDataBanner"), "integrations page: no demo banner (real data)");
 
   // i18n additions for the category grouping.
   for (const k of [

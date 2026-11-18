@@ -32,8 +32,6 @@ import type { LucideIcon } from "lucide-react";
 import { FileStack, Target, KeyRound, ShieldHalf, UserCircle2, UserCog, Building2, IdCard, Inbox, Globe, ArrowRightLeft, CalendarCheck, Cctv, ChartNoAxesCombined } from "lucide-react";
 import { P } from "@/lib/access";
 
-export type FloorId = "fabric" | "cutting" | "sewing" | "qc" | "packing";
-
 /** Which live count a badge shows. */
 export type BadgeSource = "alerts" | "approvals";
 
@@ -41,11 +39,13 @@ export interface NavItem {
   id: string;
   /** i18n key for the label. */
   labelKey: string;
+  /** Literal label (records from the API, e.g. a production floor); wins over labelKey. */
+  label?: string;
   href: string;
   icon?: LucideIcon;
   /** Production floors show their floor code in a round "lift button" instead of an icon. */
   floorCode?: string;
-  floorId?: FloorId;
+  floorId?: string;
   badge?: BadgeSource;
   /**
    * Permissions that open the page (any one is enough). Empty = every
@@ -66,14 +66,6 @@ export interface NavGroup {
   items: NavItem[];
 }
 
-export const FLOORS: { id: FloorId; code: string; labelKey: string; href: string }[] = [
-  { id: "fabric", code: "G", labelKey: "nav.floors.fabric", href: "/app/floors/fabric" },
-  { id: "cutting", code: "1", labelKey: "nav.floors.cutting", href: "/app/floors/cutting" },
-  { id: "sewing", code: "2", labelKey: "nav.floors.sewing", href: "/app/floors/sewing" },
-  { id: "qc", code: "3", labelKey: "nav.floors.qc", href: "/app/floors/qc" },
-  { id: "packing", code: "4", labelKey: "nav.floors.packing", href: "/app/floors/packing" },
-];
-
 export const NAV_GROUPS: NavGroup[] = [
   {
     id: "monitor",
@@ -85,20 +77,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: "floor-map", labelKey: "nav.floorMap", href: "/app/floor-map", icon: Layers, perms: [P.MonitoringView, P.ProductionView], keywords: "building floors map live" },
       { id: "alerts", labelKey: "nav.alerts", href: "/app/activity", icon: Bell, badge: "alerts", perms: [P.MonitoringView, P.ProductionView], keywords: "alerts whatsapp floor notifications activity" },
     ],
-  },
-  {
-    id: "floors",
-    labelKey: "sidebar.floors",
-    // Material-flow order: fabric comes in at G, cartons leave from 4.
-    items: FLOORS.map((f) => ({
-      id: `floor-${f.id}`,
-      labelKey: f.labelKey,
-      href: f.href,
-      floorCode: f.code,
-      floorId: f.id,
-      perms: [P.ProductionView, P.MonitoringView],
-      keywords: `floor ${f.code} ${f.id}`,
-    })),
   },
   {
     id: "plan",
@@ -126,14 +104,14 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: "attendance", labelKey: "nav.attendance", href: "/app/attendance", icon: CalendarCheck, perms: [P.AttendanceView, P.AttendanceManage, P.ShiftsManage, P.ShiftsAssign, P.OvertimeView, P.OvertimeApprove], keywords: "attendance shift shifts check-in check-out punch rfid card simulator break lunch tea overtime ot late absent present correction roster schedule report" },
       { id: "assignments", labelKey: "nav.assignments", href: "/app/assignments", icon: ArrowRightLeft, perms: [P.WorkersView], keywords: "assignment assign workstation table transfer occupancy capacity line layout machine t-025" },
       { id: "workers", labelKey: "nav.workers", href: "/app/workers", icon: IdCard, perms: [P.WorkersView], keywords: "workers worker directory register employee staff id w-001 import csv export status hr profile" },
-      { id: "workforce", labelKey: "nav.workforce", href: "/app/workforce", icon: UsersRound, perms: [P.WorkersView], demo: true, keywords: "workers hr attendance leave overtime wellbeing grievance skills training bonus" },
+      { id: "workforce", labelKey: "nav.workforce", href: "/app/workforce", icon: UsersRound, perms: [P.WorkersView, P.AttendanceView, P.OvertimeView], keywords: "workers hr headcount attendance leave overtime performance" },
       { id: "ask", labelKey: "nav.ask", href: "/app/ask", icon: MessageSquareText, perms: [P.KnowledgeView], keywords: "question rag assistant search manuals" },
       { id: "knowledge", labelKey: "nav.knowledge", href: "/app/knowledge", icon: BookOpenText, perms: [P.KnowledgeView], keywords: "documents rag ingest reindex embeddings manuals" },
       { id: "agents", labelKey: "nav.agents", href: "/app/agents", icon: Bot, perms: [P.KnowledgeView], keywords: "run agent roster" },
       { id: "audit", labelKey: "nav.audit", href: "/app/audit", icon: ScrollText, perms: [P.AuditView], keywords: "log history trail" },
-      { id: "insights", labelKey: "nav.insights", href: "/app/insights", icon: Lightbulb, perms: [P.KnowledgeView], demo: true },
-      { id: "brain", labelKey: "nav.brain", href: "/app/brain", icon: Network, perms: [P.KnowledgeView], demo: true, keywords: "graph knowledge" },
-      { id: "integrations", labelKey: "nav.integrations", href: "/app/integrations", icon: PlugZap, perms: [P.DevicesView, P.KnowledgeView], demo: true },
+      { id: "insights", labelKey: "nav.insights", href: "/app/insights", icon: Lightbulb, perms: [P.KnowledgeView], keywords: "insights findings agents qc recommendations" },
+      { id: "brain", labelKey: "nav.brain", href: "/app/brain", icon: Network, perms: [P.KnowledgeView], keywords: "graph knowledge floors lines machines orders buyers risks" },
+      { id: "integrations", labelKey: "nav.integrations", href: "/app/integrations", icon: PlugZap, perms: [P.DevicesView, P.KnowledgeView], keywords: "integrations data sources sensors rfid counters gateways cameras imports" },
     ],
   },
 ];
@@ -301,4 +279,26 @@ export interface FactoryOption {
   detail: string;
 }
 
-
+/**
+ * The factory's production floors as a nav group (from the live floor
+ * status), shown right after the group that holds the floor map.
+ */
+export function withFloors(menu: NavGroup[], floors: { id: string; code: string; name: string }[]): NavGroup[] {
+  const at = menu.findIndex((g) => g.items.some((i) => i.id === "floor-map"));
+  if (at < 0 || floors.length === 0) return menu;
+  const group: NavGroup = {
+    id: "floors",
+    labelKey: "sidebar.floors",
+    items: floors.map((f) => ({
+      id: `floor-${f.id}`,
+      labelKey: "sidebar.floors",
+      label: f.name,
+      href: `/app/floors/${f.id}`,
+      floorCode: f.code,
+      floorId: f.id,
+      perms: [P.ProductionView, P.MonitoringView],
+      keywords: `floor ${f.code} ${f.name}`,
+    })),
+  };
+  return [...menu.slice(0, at + 1), group, ...menu.slice(at + 1)];
+}

@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { Building2, Palette, Database, Trash2, Sun, Moon, Monitor, Users, Cpu } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useT } from "@/lib/useT";
-import { useBusinessStore } from "@/store/business.store";
 import { useAppStore, type Theme } from "@/store/app.store";
 import { Panel } from "@/components/ui/Panel";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -18,7 +17,13 @@ import { EmbeddingSettingsPanel } from "@/components/settings/EmbeddingSettingsP
 import { UsersAccessPanel } from "@/components/settings/UsersPanel";
 import { cn } from "@/lib/cn";
 import { can, useAuthStore } from "@/lib/auth";
-import { P } from "@/lib/access";
+import { P, type FactoryDto } from "@/lib/access";
+import { FilterSelect } from "@/components/ui/Field";
+import { SkeletonRows, ErrorState } from "@/components/ui/Status";
+import { useToast } from "@/components/ui/Toast";
+import { useMyFactories } from "@/components/workers/shared";
+import { useResource, announceDataChanged } from "@/lib/useResource";
+import { apiJson, errorMessage } from "@/lib/api";
 
 // "advanced" keeps its id so existing deep links (?section=advanced) still open the AI section.
 type SectionId = "profile" | "appearance" | "advanced" | "users" | "dataReset";
@@ -27,7 +32,7 @@ type SectionId = "profile" | "appearance" | "advanced" | "users" | "dataReset";
 const SECTIONS: Array<{ id: SectionId; icon: typeof Building2; labelKey: string; perms?: string[]; hint: string }> = [
   { id: "advanced", icon: Cpu, labelKey: "settings.aiModels", hint: "Language model & embeddings", perms: [P.KnowledgeView, P.PlatformSettingsManage] },
   { id: "users", icon: Users, labelKey: "settings.usersSection", hint: "Roles and access" },
-  { id: "profile", icon: Building2, labelKey: "settings.businessProfile", hint: "This browser" },
+  { id: "profile", icon: Building2, labelKey: "settings.businessProfile", hint: "Factory name and location" },
   { id: "appearance", icon: Palette, labelKey: "settings.appearance", hint: "Theme, language" },
   { id: "dataReset", icon: Database, labelKey: "settings.dataReset", hint: "This browser" }
 ];
@@ -118,17 +123,77 @@ const LOCAL_NOTE = "Saved in this browser only; not sent to the server and not s
 
 function ProfileSection() {
   const { t } = useT();
-  const profile = useBusinessStore((s) => s.profile);
-  const setProfile = useBusinessStore((s) => s.setProfile);
+  const toast = useToast();
+  const user = useAuthStore((s) => s.user);
+  const { factories } = useMyFactories();
+  const [picked, setPicked] = useState("");
+  const factoryId = picked || factories?.[0]?.id || "";
+  const canRead = can(user, P.FactoriesView, P.UsersView);
+  const canEdit = can(user, P.FactoriesManage);
+  const res = useResource<FactoryDto>(factoryId && canRead ? `/api/factories/${factoryId}` : null);
+  const f = res.data;
+  const [name, setName] = useState("");
+  const [location, setLocation] = useState("");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (f) { setName(f.name); setLocation(f.location ?? ""); }
+  }, [f]);
+
+  const fallback = factories?.find((x) => x.id === factoryId);
+  const dirty = !!f && (name.trim() !== f.name || (location.trim() || null) !== (f.location ?? null));
+
+  async function save() {
+    if (!f || !name.trim()) return;
+    setSaving(true);
+    try {
+      await apiJson(`/api/factories/${f.id}`, { method: "PUT", body: { name: name.trim(), location: location.trim() || null } });
+      toast.push({ title: "Factory profile saved" });
+      announceDataChanged();
+      await res.reload();
+    } catch (e) {
+      toast.push({ title: "Couldn't save", description: errorMessage(e), tone: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <Panel title={t("settings.businessProfile")} subtitle={LOCAL_NOTE}>
-      <Row label={t("settings.businessName")} hint="Shown in greetings on this device">
-        <Input value={profile.businessName} onChange={(e) => setProfile({ businessName: e.target.value })} aria-label={t("settings.businessName")} />
-      </Row>
-      <Row label={t("settings.city")}>
-        <Input value={profile.city} onChange={(e) => setProfile({ city: e.target.value })} aria-label={t("settings.city")} />
-      </Row>
-      <p className="mt-3 text-caption text-fg-tertiary">Changes save as you type.</p>
+    <Panel title={t("settings.businessProfile")} subtitle={canEdit ? "Saved on the server for everyone in this factory." : "Read only: changing it needs the factories.manage permission."}>
+      {(factories?.length ?? 0) > 1 && (
+        <div className="pb-3">
+          <FilterSelect label="Factory" value={factoryId} onChange={setPicked}>
+            {factories!.map((x) => <option key={x.id} value={x.id}>{x.code} · {x.name}</option>)}
+          </FilterSelect>
+        </div>
+      )}
+      {!factoryId ? (
+        <p className="text-caption text-fg-tertiary">Your account isn&apos;t assigned to a factory.</p>
+      ) : !canRead ? (
+        <>
+          <Row label={t("settings.businessName")}><p className="text-body">{fallback?.name ?? "—"}</p></Row>
+          <Row label="Code"><p className="text-body mono-pill">{fallback?.code ?? "—"}</p></Row>
+        </>
+      ) : res.loading ? (
+        <SkeletonRows rows={2} />
+      ) : res.error && !f ? (
+        <ErrorState title="Couldn't load the factory" body={errorMessage(res.error)} retryLabel="Try again" onRetry={() => void res.reload()} />
+      ) : f ? (
+        <>
+          <Row label="Code" hint="Set when the factory is created"><p className="text-body mono-pill">{f.code}</p></Row>
+          <Row label={t("settings.businessName")}>
+            {canEdit ? <Input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} aria-label={t("settings.businessName")} /> : <p className="text-body">{f.name}</p>}
+          </Row>
+          <Row label={t("settings.city")} hint="Location or address">
+            {canEdit ? <Input value={location} maxLength={200} onChange={(e) => setLocation(e.target.value)} aria-label={t("settings.city")} /> : <p className="text-body">{f.location || "—"}</p>}
+          </Row>
+          {canEdit && (
+            <div className="pt-3 flex justify-end gap-2">
+              <Button variant="secondary" size="sm" disabled={!dirty || saving} onClick={() => { setName(f.name); setLocation(f.location ?? ""); }}>Reset</Button>
+              <Button variant="primary" size="sm" disabled={!dirty || !name.trim() || saving} onClick={() => void save()}>{saving ? "Saving…" : "Save"}</Button>
+            </div>
+          )}
+        </>
+      ) : null}
     </Panel>
   );
 }
@@ -188,7 +253,7 @@ function DataResetSection({ router }: { router: ReturnType<typeof useRouter> }) 
       <ConfirmDialog
         open={confirmReset}
         title={t("settings.resetConfirm")}
-        description="Profile, theme, language, Ask history and demo integrations in this browser are cleared."
+        description="Theme, language and other preferences saved in this browser are cleared."
         confirmLabel={t("common.confirm")}
         tone="danger"
         onConfirm={() => {

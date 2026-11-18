@@ -726,6 +726,7 @@ builder.Services.AddScoped<ISensorService,     SensorService>();
 builder.Services.AddScoped<IAgentRunService,   AgentRunService>();
 builder.Services.AddScoped<IBriefService,      BriefService>();
 builder.Services.AddScoped<IApprovalService,   ApprovalService>();
+builder.Services.AddScoped<IOperationsViewService, BunonBrain.Infrastructure.Operations.OperationsViewService>();
 
 // ─── Quality inspection (QC_* env vars, read once; see QcOptions) ──────────
 // Images go to the file store (QC_IMAGE_STORAGE_PATH), metadata and

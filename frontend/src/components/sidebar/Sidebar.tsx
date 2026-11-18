@@ -8,10 +8,10 @@ import { ChevronDown, KeyRound, PanelLeftClose, Search, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { appFontVariables } from "@/lib/fonts";
 import { can, useAuthStore } from "@/lib/auth";
-import { SCOPE_LABEL } from "@/lib/access";
+import { P, SCOPE_LABEL } from "@/lib/access";
 import { useT } from "@/lib/useT";
 import { useAppStore } from "@/store/app.store";
-import { FOOTER_ITEMS, menuFor, isActivePath, navTestId, type NavItem, type FactoryOption } from "@/lib/navigation";
+import { FOOTER_ITEMS, menuFor, isActivePath, navTestId, type NavItem, type FactoryOption, withFloors } from "@/lib/navigation";
 import { useFloorStatus, usePendingCount } from "@/lib/useFloorStatus";
 import { AccountMenu } from "./AccountMenu";
 import { FactorySwitcher } from "./FactorySwitcher";
@@ -123,7 +123,7 @@ export function Sidebar({ mode, onClose }: { mode: "rail" | "drawer"; onClose?: 
   const { t } = useT();
   const user = useAuthStore((s) => s.user);
   const openPalette = useAppStore((s) => s.openCommandPalette);
-  const { statuses, alertCount, source: statusSource } = useFloorStatus();
+  const { floors, alertCount } = useFloorStatus();
   const pendingCount = usePendingCount();
   // The factories this account is assigned to (a Super Admin reaches all of them).
   const factories = useMemo<FactoryOption[]>(() => {
@@ -141,7 +141,11 @@ export function Sidebar({ mode, onClose }: { mode: "rail" | "drawer"; onClose?: 
   const [hint, setHint] = useState<{ text: string; style: CSSProperties } | null>(null);
   const [closedGroups, toggleGroup] = useClosedGroups();
   // Only the pages this person's role works in (see menuFor); the rest is reachable from the home shortcuts and search.
-  const menu = useMemo(() => menuFor(user, (it) => can(user, ...it.perms)), [user]);
+  const floorById = useMemo(() => new Map(floors.map((f) => [f.id, f])), [floors]);
+  const menu = useMemo(
+    () => withFloors(menuFor(user, (it) => can(user, ...it.perms)), can(user, P.ProductionView, P.MonitoringView) ? floors.filter((f) => f.isActive) : []),
+    [user, floors],
+  );
 
   const onHint: HintHandler = useCallback((text, anchor) => {
     if (!text || !anchor) return setHint(null);
@@ -227,14 +231,13 @@ export function Sidebar({ mode, onClose }: { mode: "rail" | "drawer"; onClose?: 
   }, []);
 
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
-  const statusWord = (s: keyof typeof statuses) => t(`sidebar.status.${statuses[s]}`);
+  const statusWord = (floorId: string) => t(`sidebar.status.${floorById.get(floorId)?.status ?? "ok"}`);
 
   const renderItem = (item: NavItem) => {
-    const label = t(item.labelKey);
+    const label = item.label ?? t(item.labelKey);
     const active = isActivePath(pathname, item.href);
     const badgeCount = item.badge === "alerts" ? alertCount : item.badge === "approvals" ? pendingCount : 0;
-    // Floor status is sample data until the API provides it: never show it as if it were live.
-    const status = item.floorId && statusSource === "live" ? statuses[item.floorId] : undefined;
+    const status = item.floorId ? floorById.get(item.floorId)?.status : undefined;
     let ariaLabel: string | undefined;
     if (item.floorId && item.floorCode && status) {
       ariaLabel = t("sidebar.floorAria", { code: item.floorCode, name: label, status: statusWord(item.floorId) });

@@ -6,6 +6,9 @@ using BunonBrain.Application.Dtos.Approvals;
 using BunonBrain.Application.Dtos.Ask;
 using BunonBrain.Application.Dtos.Auth;
 using BunonBrain.Application.Dtos.Brief;
+using BunonBrain.Application.Dtos.Access;
+using BunonBrain.Application.Access;
+using BunonBrain.Application.Dtos.Operations;
 using BunonBrain.Application.Dtos.FloorAlerts;
 using BunonBrain.Application.Dtos.LineBoard;
 using BunonBrain.Application.Dtos.Qc;
@@ -353,3 +356,20 @@ public interface IEmailQueue
 {
     void Enqueue(EmailMessage message);
 }
+
+/// <summary>
+/// Read-only operational views over existing records: the insight feed, the
+/// factory graph, the per-floor status rollup and the integration status.
+/// Factory-scoped methods return NotFound for a factory outside the caller's reach.
+/// </summary>
+public interface IOperationsViewService
+{
+    /// <param name="stage">Wire stage (<c>suggested</c>, <c>pending_approval</c>, …) or null for all.</param>
+    /// <param name="risk"><c>low</c>, <c>medium</c>, <c>high</c> or null for all.</param>
+    Task<InsightListResponse> InsightsAsync(string? agentId, string? risk, string? stage, int limit, CancellationToken ct);
+    Task<InsightDto?> InsightAsync(string id, CancellationToken ct);
+    Task<AccessResult<FloorStatusResponse>> FloorStatusAsync(AccessContext caller, Guid factoryId, CancellationToken ct);
+    Task<AccessResult<BrainGraphResponse>> BrainGraphAsync(AccessContext caller, Guid? factoryId, CancellationToken ct);
+    Task<AccessResult<IntegrationStatusResponse>> IntegrationsAsync(AccessContext caller, Guid? factoryId, CancellationToken ct);
+}
+

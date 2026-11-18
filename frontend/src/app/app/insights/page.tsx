@@ -1,186 +1,141 @@
 "use client";
 
-import { DemoDataBanner } from "@/components/ui/Callout";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { motion } from "framer-motion";
-import { Filter as FilterIcon } from "lucide-react";
-import { useT } from "@/lib/useT";
-import { insightService } from "@/services/insight.service";
-import { agentService } from "@/services/agent.service";
-import { useBusinessStore } from "@/store/business.store";
-import { Panel } from "@/components/ui/Panel";
-import { InsightCard } from "@/components/insights/InsightCard";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { Skeleton } from "@/components/ui/Skeleton";
-import { AgentAvatar, AGENT_PALETTE, type AgentGlyph } from "@/components/agents/AgentAvatar";
-import { cn } from "@/lib/cn";
-import type { Stage, RiskTier } from "@/services/types";
+// Insights stored on the server: written by agent runs, QC inspections and
+// the production rules (GET /api/insights), grouped by stage. Decisions on
+// the ones that need approval happen on the Approvals page.
 
-const STAGE_ORDER: Stage[] = ["suggested", "pending_approval", "executing", "done", "logged"];
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Lightbulb, RefreshCw } from "lucide-react";
+import { useT } from "@/lib/useT";
+import { Panel } from "@/components/ui/Panel";
+import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { FilterSelect } from "@/components/ui/Field";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ErrorState, SkeletonRows } from "@/components/ui/Status";
+import { InsightCard } from "@/components/insights/InsightCard";
+import { useResource } from "@/lib/useResource";
+import { errorMessage } from "@/lib/api";
+import { cn } from "@/lib/cn";
+import type { AgentDefinition } from "@/services/contracts";
+import type { InsightPublic, Stage, RiskTier } from "@/services/types";
+
+const STAGE_ORDER: Stage[] = ["suggested", "pending_approval", "approved", "executing", "done", "logged", "rejected", "failed"];
 const RISK_OPTIONS: RiskTier[] = ["low", "medium", "high"];
+const FILTER_AGENT: Record<string, string> = { throughput: "line-throughput-agent", machines: "maintenance-agent", brief: "manager-agent" };
+
+type InsightList = { total: number; items: InsightPublic[] };
 
 export default function InsightsPage() {
-  const { t, locale } = useT();
+  const { t } = useT();
   const search = useSearchParams();
-  const [agentFilter, setAgentFilter] = useState<string | null>(null);
-  const [riskFilter, setRiskFilter] = useState<RiskTier | null>(null);
-  const [focusedId, setFocusedId] = useState<string | null>(null);
-  // Soft tick keeps the page in sync with insights that were persisted by
-  // agent runs (the runs mutate the shared `dataset.insights` array on the
-  // server side; the client re-derives via this re-render trigger).
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setTick((n) => n + 1), 1500);
-    return () => clearInterval(id);
-  }, []);
-  // Manual refresh hook for components that want to nudge us after they
-  // mutate state (e.g. the agent drawer closing).
-  useEffect(() => {
-    const onRefresh = () => setTick((n) => n + 1);
-    window.addEventListener("bunonbrain:insights-refresh", onRefresh as EventListener);
-    return () => window.removeEventListener("bunonbrain:insights-refresh", onRefresh as EventListener);
-  }, []);
-  // tick is intentionally in the deps to re-group after server refresh; the
-  // service itself doesn't reference it.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const groups = useMemo(() => insightService.groupedByStage(), [tick]);
-  const agents = useMemo(() => agentService.list(), []);
-  const selectedAgentId = useBusinessStore((s) => s.selectedAgentId);
-  const setSelectedAgent = useBusinessStore((s) => s.setSelectedAgent);
-
   const focusParam = search?.get("focus");
   const filterParam = search?.get("filter");
+  const [agentFilter, setAgentFilter] = useState<string>(() => (filterParam && FILTER_AGENT[filterParam]) || "");
+  const [riskFilter, setRiskFilter] = useState<string>("");
+  const [focusedId, setFocusedId] = useState<string | null>(null);
 
-  // Pre-filter from search query.
-  useEffect(() => {
-    if (filterParam === "throughput") {
-      setRiskFilter(null);
-      setAgentFilter("line-throughput-agent");
-    } else if (filterParam === "machines") {
-      setAgentFilter("maintenance-agent");
-    } else if (filterParam === "brief") {
-      setAgentFilter("manager-agent");
-    }
-  }, [filterParam]);
+  const path = useMemo(() => {
+    const p = new URLSearchParams({ limit: "200" });
+    if (agentFilter) p.set("agentId", agentFilter);
+    if (riskFilter) p.set("risk", riskFilter);
+    return `/api/insights?${p}`;
+  }, [agentFilter, riskFilter]);
+  const list = useResource<InsightList>(path, { pollMs: 60_000 });
+  const agents = useResource<AgentDefinition[]>("/api/agents");
 
-  // Mirror the Ask-page agent selection into the filter chip.
-  useEffect(() => {
-    if (selectedAgentId) setAgentFilter(selectedAgentId);
-  }, [selectedAgentId]);
+  const groups = useMemo(() => {
+    const g = new Map<Stage, InsightPublic[]>();
+    for (const i of list.data?.items ?? []) g.set(i.stage, [...(g.get(i.stage) ?? []), i]);
+    return g;
+  }, [list.data]);
+  const stages = STAGE_ORDER.filter((s) => (groups.get(s)?.length ?? 0) > 0 || ["suggested", "pending_approval", "done"].includes(s));
 
-  // Focus handling: scroll to the insight, mark for 2s with a ring.
+  // Deep link from a floor alert: scroll to the insight and ring it briefly.
   useEffect(() => {
-    if (!focusParam) return;
+    if (!focusParam || !list.data) return;
     setFocusedId(focusParam);
-    setTimeout(() => {
-      const el = document.querySelector(`[data-insight-id="${focusParam}"]`) as HTMLElement | null;
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const scroll = setTimeout(() => {
+      document.querySelector(`[data-insight-id="${focusParam}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 150);
-    const t = setTimeout(() => setFocusedId(null), 2400);
-    return () => clearTimeout(t);
-  }, [focusParam]);
+    const clear = setTimeout(() => setFocusedId(null), 2400);
+    return () => { clearTimeout(scroll); clearTimeout(clear); };
+  }, [focusParam, list.data]);
 
-  function applyFilters(items: typeof groups.suggested) {
-    return items.filter(
-      (i) => (!agentFilter || i.agentId === agentFilter) && (!riskFilter || i.recommendation.riskTier === riskFilter)
-    );
-  }
+  const total = list.data?.items.length ?? 0;
 
   return (
-    <div className="page" data-tour="insights">
-      <DemoDataBanner className="mb-5" what="These insights are a sample dataset generated in your browser. The API stores insights from agent runs, QC flags and vision analyses, but has no endpoint to list them yet — see Approvals for the server-side items that need a decision." />
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-display font-semibold tracking-tight">{t("insights.title")}</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          {agentFilter && (() => {
-            const a = agentService.get(agentFilter);
-            if (!a) return null;
-            const palette = AGENT_PALETTE[a.glyph as AgentGlyph];
-            return (
-              <button
-                type="button"
-                onClick={() => { setAgentFilter(null); setSelectedAgent(null); }}
-                className="inline-flex items-center gap-2 h-9 pl-1.5 pr-3 rounded-full border text-caption transition-colors"
-                style={{
-                  background: palette.soft,
-                  borderColor: palette.ring,
-                  color: palette.strong
-                }}
-                aria-label="Clear agent filter"
-              >
-                <AgentAvatar agentId={a.id} size={22} framed={false} />
-                <span className="font-medium">{locale === "bn" ? a.nameBn : a.name}</span>
-                <span className="text-[10px]">✕</span>
-              </button>
-            );
-          })()}
-          <select
-            value={agentFilter ?? ""}
-            onChange={(e) => setAgentFilter(e.target.value || null)}
-            className="h-9 rounded-md bg-surface-2 border border-border-subtle px-3 text-caption text-fg-secondary"
-          >
-            <option value="">All agents</option>
-            {agents.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
-          <select
-            value={riskFilter ?? ""}
-            onChange={(e) => setRiskFilter((e.target.value || null) as RiskTier | null)}
-            className="h-9 rounded-md bg-surface-2 border border-border-subtle px-3 text-caption text-fg-secondary"
-          >
-            <option value="">All risk</option>
-            {RISK_OPTIONS.map((r) => (
-              <option key={r} value={r}>{r}</option>
-            ))}
-          </select>
-        </div>
-      </div>
+    <div className="page" data-tour="insights" data-testid="insights-page">
+      <PageHeader
+        title={t("insights.title")}
+        description="Findings saved by agent runs, QC inspections and the production rules. The ones that need a decision wait on the Approvals page."
+        actions={
+          <div className="flex flex-wrap items-end gap-2">
+            <FilterSelect label="Agent" value={agentFilter} onChange={setAgentFilter}>
+              <option value="">All agents</option>
+              {(agents.data ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </FilterSelect>
+            <FilterSelect label="Risk" value={riskFilter} onChange={setRiskFilter}>
+              <option value="">All risk</option>
+              {RISK_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </FilterSelect>
+            <Button variant="secondary" size="sm" aria-label="Refresh" onClick={() => void list.reload()}>
+              <RefreshCw size={13} className={cn(list.refreshing && "animate-spin")} />
+            </Button>
+          </div>
+        }
+      />
 
-      <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {STAGE_ORDER.map((stage, idx) => {
-          const items = applyFilters(groups[stage]);
-          return (
-            <motion.section
-              key={stage}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: idx * 0.04 }}
-            >
-              <Panel
-                className={cn(stage === "pending_approval" && "border-stage-pending/40")}
-                title={
-                  <span className="flex items-center gap-2">
-                    <span className="mono-pill text-fg-tertiary">{items.length}</span>
-                    <span>{t(`insights.stages.${stage}`)}</span>
-                  </span>
-                }
-              >
-                {items.length === 0 ? (
-                  <div className="space-y-2.5" aria-busy>
-                    <Skeleton className="h-4 w-[60%]" />
-                    <Skeleton className="h-3 w-[80%]" />
-                    <Skeleton className="h-3 w-[68%]" />
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {items.map((i) => (
-                      <InsightCard
-                        key={i.id}
-                        insight={i}
-                        focused={focusedId === i.id}
-                      />
-                    ))}
-                  </div>
-                )}
-              </Panel>
-            </motion.section>
-          );
-        })}
-      </div>
+      {list.loading ? (
+        <div className="mt-6"><SkeletonRows rows={6} /></div>
+      ) : list.error && !list.data ? (
+        <ErrorState className="mt-6" title="Couldn't load insights" body={errorMessage(list.error)} retryLabel="Try again" onRetry={() => void list.reload()} />
+      ) : total === 0 ? (
+        <EmptyState
+          className="mt-6"
+          icon={<Lightbulb size={18} />}
+          title={agentFilter || riskFilter ? "No insights match these filters" : "No insights yet"}
+          body={agentFilter || riskFilter
+            ? "Clear the filters to see every insight."
+            : "Insights appear when an agent runs (see Agents), a QC inspection flags a defect or a production rule finds something."}
+        />
+      ) : (
+        <>
+          <p className="mt-4 text-caption text-fg-tertiary">
+            {total} insight{total === 1 ? "" : "s"}
+            {(groups.get("pending_approval")?.length ?? 0) > 0 && (
+              <> · <Link className="text-[var(--accent)]" href="/app/approvals">{groups.get("pending_approval")!.length} waiting for approval</Link></>
+            )}
+          </p>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {stages.map((stage) => {
+              const items = groups.get(stage) ?? [];
+              return (
+                <Panel
+                  key={stage}
+                  className={cn(stage === "pending_approval" && "border-stage-pending/40")}
+                  title={
+                    <span className="flex items-center gap-2">
+                      <span className="mono-pill text-fg-tertiary">{items.length}</span>
+                      <span>{t(`insights.stages.${stage}`)}</span>
+                    </span>
+                  }
+                >
+                  {items.length === 0 ? (
+                    <p className="text-caption text-fg-tertiary">Nothing at this stage.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {items.map((i) => <InsightCard key={i.id} insight={i} focused={focusedId === i.id} />)}
+                    </div>
+                  )}
+                </Panel>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }

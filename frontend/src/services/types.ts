@@ -38,14 +38,17 @@ export type BrainEntityPublic = {
     | "buyer"
     | "process"
     | "target"
-    | "compliance";
+    | "compliance"
+    | "floor";
   label: string;
   labelBn: string;
   /** 0..1 importance weight — drives node size on the canvas. */
   weight?: number;
   meta?: Record<string, string | number>;
   /** Optional operational status, layered on top of kind colour. */
-  status?: "healthy" | "at_risk" | "down";
+  status?: "healthy" | "at_risk" | "down" | null;
+  /** App page for the record behind the node (server graph only). */
+  href?: string | null;
 };
 
 /** Typed edge relationships for the factory graph. */

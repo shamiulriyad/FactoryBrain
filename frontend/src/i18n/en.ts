@@ -325,7 +325,8 @@ export const en = {
       buyer: "Buyer",
       process: "Process",
       target: "Target",
-      compliance: "Compliance"
+      compliance: "Compliance",
+      floor: "Floor"
     },
     status: {
       healthy: "Healthy",
@@ -634,7 +635,7 @@ export const en = {
       agents: { title: "Agents", body: "The agents registered on the server. Operators can run one; results land in Approvals and Floor alerts." },
       approvals: { title: "Approvals with risk tiers", body: "Approve, or reject with a reason. High-risk items need an Admin. Keyboard: a, r, j, k." },
       activity: { title: "Floor alerts", body: "Alerts raised by agent runs and vision analyses. Operators mark them as read." },
-      integrations: { title: "Sources", body: "Connect sensors, ERP, WhatsApp, CSV. Demo mode lets you walk every flow without a real account." },
+      integrations: { title: "Sources", body: "Every data source of the factory with its devices, record counts and when the last record arrived." },
       settings: { title: "Settings", body: "Language model and embeddings, users and roles (Admin), theme and language." },
       search: { title: "Jump anywhere", body: "Ctrl+K (⌘K) opens any page or setting your role can use, or sends the text to Ask." }
     }

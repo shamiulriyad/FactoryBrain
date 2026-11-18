@@ -1,6 +1,10 @@
 "use client";
 
-import { DemoDataBanner } from "@/components/ui/Callout";
+// Factory graph from the server (GET /api/brain/graph): floors, lines,
+// machines, open orders with their buyers and styles, line targets and open
+// risks (real alerts and production exceptions).
+
+import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import ReactFlow, {
   Background,
@@ -14,6 +18,8 @@ import ReactFlow, {
   useReactFlow,
   ReactFlowProvider
 } from "reactflow";
+// React Flow's stylesheet has no TypeScript declaration.
+// @ts-expect-error -- side-effect CSS import provided by React Flow
 import "reactflow/dist/style.css";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -33,15 +39,20 @@ import {
   Activity,
   Crosshair,
   ShieldCheck,
-  Scissors
+  Scissors,
+  Layers,
+  ExternalLink,
+  RefreshCw
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useT } from "@/lib/useT";
-import { brainService, useBrainGraph } from "@/services/brain.service";
-import { startSyntheticSensorStream } from "@/store/factory.store";
-import type { BrainEntityPublic } from "@/services/types";
-import { Panel } from "@/components/ui/Panel";
-import { EvidenceBlock } from "@/components/evidence/EvidenceBlock";
+import type { BrainEntityPublic, BrainEdgePublic } from "@/services/types";
+import { FilterSelect } from "@/components/ui/Field";
+import { Callout } from "@/components/ui/Callout";
+import { ErrorState, SkeletonRows } from "@/components/ui/Status";
+import { useMyFactories } from "@/components/workers/shared";
+import { useResource } from "@/lib/useResource";
+import { errorMessage } from "@/lib/api";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/cn";
@@ -59,6 +70,7 @@ const KIND_META: Record<BrainEntityPublic["kind"], { color: string; icon: any }>
   goal: { color: "#C498F0", icon: Crosshair },
   risk: { color: "#E26B6B", icon: AlertTriangle },
   // Factory kinds.
+  floor: { color: "#8FA7F5", icon: Layers },
   line: { color: "#7CD3F0", icon: Factory },
   machine: { color: "#F0B97C", icon: Cog },
   order: { color: "#7CE0C6", icon: ShoppingBag },
@@ -94,15 +106,20 @@ function BrainInner() {
   const rf = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const reduceMotion = useReducedMotion();
+  const { factories } = useMyFactories();
+  const [factoryId, setFactoryId] = useState("");
+  const res = useResource<GraphResponse>(`/api/brain/graph${factoryId ? `?factoryId=${factoryId}` : ""}`, { pollMs: 120_000 });
+  const full = res.data;
 
-  // Start the synthetic sensor stream when the brain page mounts.
-  useEffect(() => {
-    const stop = startSyntheticSensorStream();
-    return stop;
-  }, []);
-
-  // Effective graph — reactive against factory.store ticks.
-  const graph = useBrainGraph({ kinds: Array.from(filters) });
+  // Kind filters (none selected = everything).
+  const graph = useMemo(() => {
+    const nodes = (full?.nodes ?? []).filter((n) => filters.size === 0 || filters.has(n.kind));
+    const ids = new Set(nodes.map((n) => n.id));
+    return { nodes, edges: (full?.edges ?? []).filter((e) => ids.has(e.source) && ids.has(e.target)) };
+  }, [full, filters]);
+  const byId = useMemo(() => new Map((full?.nodes ?? []).map((n) => [n.id, n])), [full]);
+  const getEntity = useCallback((id: string) => byId.get(id), [byId]);
+  const kindCount = (k: BrainEntityPublic["kind"]) => (full?.nodes ?? []).filter((n) => n.kind === k).length;
 
   // Filtered by search query (overlay on top of the kind filters).
   const filteredGraph = useMemo(() => {
@@ -118,8 +135,12 @@ function BrainInner() {
     };
   }, [graph, query]);
 
-  const selected = selectedId ? brainService.getEntity(selectedId) : null;
-  const neighbors = selectedId ? brainService.getNeighbors(selectedId) : [];
+  const selected = selectedId ? getEntity(selectedId) ?? null : null;
+  const neighbors = useMemo(() => {
+    if (!selectedId) return [];
+    const ids = (full?.edges ?? []).filter((e) => e.source === selectedId || e.target === selectedId).map((e) => (e.source === selectedId ? e.target : e.source));
+    return ids.map((id) => byId.get(id)).filter((n): n is BrainEntityPublic => Boolean(n));
+  }, [selectedId, full, byId]);
 
   // Pre-compute which node ids are highlighted or dimmed.
   const dimSet = useMemo(() => {
@@ -149,7 +170,7 @@ function BrainInner() {
   // Honor ?node= deep links from the command palette.
   useEffect(() => {
     if (!nodeParam) return;
-    const entity = brainService.getEntity(nodeParam);
+    const entity = getEntity(nodeParam);
     if (!entity) return;
     setFilters((cur) => {
       if (cur.has(entity.kind)) return cur;
@@ -166,7 +187,7 @@ function BrainInner() {
         setTimeout(() => el.classList.remove("brain-node-focus"), 2400);
       }
     }, 280);
-  }, [nodeParam, rf]);
+  }, [nodeParam, rf, getEntity]);
 
   function toggleKind(k: BrainEntityPublic["kind"]) {
     setFilters((cur) => {
@@ -184,7 +205,9 @@ function BrainInner() {
   return (
     <div className="h-full flex flex-col" data-tour="brain">
       <div className="px-4 md:px-8 pt-5">
-        <DemoDataBanner what="This graph is built in your browser from a sample dataset (orders, buyers, suppliers, risks). The API has no knowledge-graph endpoint, so nothing here reflects your server data." />
+        {full && (full.omitted.length > 0 || full.truncated.length > 0) && (
+          <Callout tone="info">{[...full.truncated, ...full.omitted.map((o) => `Not shown: ${o}`)].join(" ")}</Callout>
+        )}
       </div>
       <div className="px-4 md:px-8 py-5 flex items-start justify-between gap-4 flex-wrap">
         <div>
@@ -192,6 +215,17 @@ function BrainInner() {
           <p className="mt-1 text-caption text-fg-tertiary">{t("brain.subtitle")}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {(factories?.length ?? 0) > 1 && (
+            <FilterSelect label="Factory" value={factoryId || full?.factoryId || ""} onChange={(v) => { setFactoryId(v); setSelectedId(null); }}>
+              {factories!.map((f) => <option key={f.id} value={f.id}>{f.code} · {f.name}</option>)}
+            </FilterSelect>
+          )}
+          <Tooltip content="Refresh">
+            <button type="button" onClick={() => void res.reload()} aria-label="Refresh"
+              className="size-9 rounded-md border border-border-subtle bg-surface-2 text-fg-secondary hover:text-fg-primary inline-flex items-center justify-center">
+              <RefreshCw size={14} className={cn(res.refreshing && "animate-spin")} />
+            </button>
+          </Tooltip>
           <div className="relative">
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-tertiary pointer-events-none" />
             <Input
@@ -244,21 +278,11 @@ function BrainInner() {
             <Filter size={12} /> {t("brain.filter")}
           </div>
           <div className="space-y-1.5">
-            {([
-              "line",
-              "machine",
-              "order",
-              "buyer",
-              "supplier",
-              "process",
-              "target",
-              "compliance",
-              "risk"
-            ] as BrainEntityPublic["kind"][]).map((k) => {
+            {GRAPH_KINDS.map((k) => {
               const meta = KIND_META[k];
               const Icon = meta.icon;
               const active = filters.has(k);
-              const count = graph.nodes.filter((n) => n.kind === k).length;
+              const count = kindCount(k);
               return (
                 <motion.button
                   key={k}
@@ -290,17 +314,7 @@ function BrainInner() {
           <div className="mt-6 text-caption text-fg-tertiary">
             <p>{t("brain.legend")}</p>
             <div className="mt-2 space-y-1.5">
-              {([
-                "line",
-                "machine",
-                "order",
-                "buyer",
-                "supplier",
-                "process",
-                "target",
-                "compliance",
-                "risk"
-              ] as BrainEntityPublic["kind"][]).map((k) => {
+              {GRAPH_KINDS.map((k) => {
                 const meta = KIND_META[k];
                 return (
                   <div key={k} className="flex items-center gap-2 text-caption text-fg-secondary">
@@ -333,6 +347,18 @@ function BrainInner() {
 
         {/* Canvas */}
         <div ref={wrapperRef} className="flex-1 relative brain-canvas">
+          {res.loading ? (
+            <div className="absolute inset-0 z-20 p-8"><SkeletonRows rows={6} /></div>
+          ) : res.error && !full ? (
+            <div className="absolute inset-0 z-20 p-8">
+              <ErrorState title="Couldn't load the factory graph" body={errorMessage(res.error)} retryLabel="Try again" onRetry={() => void res.reload()} />
+            </div>
+          ) : full && full.nodes.length === 0 ? (
+            <div className="absolute inset-0 z-20 p-8 text-center text-caption text-fg-tertiary">
+              <p className="text-body text-fg-secondary">Nothing to draw yet for {full.factoryCode}.</p>
+              <p className="mt-1">Add floors and lines under Factories, machines under Workstations and orders under Planning; they appear here.</p>
+            </div>
+          ) : null}
           <ReactFlow
             nodes={nodes.map((n) => {
               const dim = dimSet && !dimSet.keep.has(n.id);
@@ -390,7 +416,7 @@ function BrainInner() {
           {/* Hover floating card */}
           <AnimatePresence>
             {hoveredId && !selected && (() => {
-              const entity = brainService.getEntity(hoveredId);
+              const entity = getEntity(hoveredId);
               if (!entity) return null;
               const meta = KIND_META[entity.kind];
               const Icon = meta.icon;
@@ -514,13 +540,13 @@ function BrainInner() {
                 </div>
               )}
 
-              <div className="px-4 pb-6">
-                <EvidenceBlock
-                  refs={[
-                    { domain: entityToDomain(selected.kind), count: 1, previewIds: [selected.id] }
-                  ]}
-                />
-              </div>
+              {selected.href && (
+                <div className="px-4 pb-6">
+                  <Link href={selected.href} className="inline-flex items-center gap-1.5 text-caption text-[var(--accent)] hover:underline">
+                    <ExternalLink size={12} /> Open the record
+                  </Link>
+                </div>
+              )}
             </motion.aside>
           )}
         </AnimatePresence>
@@ -529,25 +555,6 @@ function BrainInner() {
   );
 }
 
-function entityToDomain(kind: BrainEntityPublic["kind"]): any {
-  switch (kind) {
-    case "line": return "orders";
-    case "machine": return "inventory";
-    case "order": return "orders";
-    case "buyer": return "customers";
-    case "supplier": return "suppliers";
-    case "process": return "orders";
-    case "target": return "orders";
-    case "compliance": return "policies";
-    case "risk": return "orders";
-    // Legacy aliases (so any leftover seed still maps).
-    case "product": return "products";
-    case "customer": return "customers";
-    case "policy": return "policies";
-    case "workflow": return "orders";
-    case "goal": return "orders";
-  }
-}
 
 type NodeData = {
   kind: BrainEntityPublic["kind"];
@@ -601,31 +608,32 @@ function EntityNode({ data }: NodeProps<NodeData>) {
   );
 }
 
-function layoutGraph(nodes: BrainEntityPublic[], edges: any[]): { nodes: Node[]; edges: Edge[] } {
+const GRAPH_KINDS: BrainEntityPublic["kind"][] = ["floor", "line", "machine", "order", "buyer", "process", "target", "risk"];
+
+type GraphResponse = {
+  factoryId: string;
+  factoryCode: string;
+  generatedAt: string;
+  nodes: BrainEntityPublic[];
+  edges: BrainEdgePublic[];
+  omitted: string[];
+  truncated: string[];
+};
+
+function layoutGraph(nodes: BrainEntityPublic[], edges: BrainEdgePublic[]): { nodes: Node[]; edges: Edge[] } {
   const kindBuckets: Record<string, BrainEntityPublic[]> = {};
   for (const n of nodes) (kindBuckets[n.kind] ??= []).push(n);
 
-  const order: BrainEntityPublic["kind"][] = [
-    "risk",
-    "target",
-    "process",
-    "compliance",
-    "supplier",
-    "buyer",
-    "order",
-    "machine",
-    "line"
-  ];
+  const order: BrainEntityPublic["kind"][] = ["floor", "line", "risk", "target", "machine", "order", "process", "buyer"];
   const radiusByKind: Record<string, number> = {
-    risk: 80,
-    target: 140,
-    process: 200,
-    compliance: 260,
-    supplier: 320,
-    buyer: 380,
-    order: 440,
-    machine: 500,
-    line: 560
+    floor: 90,
+    line: 190,
+    risk: 280,
+    target: 360,
+    machine: 450,
+    order: 560,
+    process: 650,
+    buyer: 730
   };
 
   const rfNodes: Node[] = [];

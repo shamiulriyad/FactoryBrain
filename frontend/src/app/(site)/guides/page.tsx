@@ -36,7 +36,7 @@ export default function GuidesPage() {
           <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {DOCS.map((d) => (
               <Card key={d.slug} href={`/docs/${d.slug}`} className="p-6">
-                <p className="font-plexmono text-[0.68rem] uppercase tracking-[0.14em] text-brand-emerald-ink">{d.section}</p>
+                <p className="font-plexmono text-[0.68rem] uppercase tracking-[0.14em] text-brand-marigold-ink">{d.section}</p>
                 <p className="mt-2 font-heading text-[1.1rem] font-semibold text-brand-text">{d.title}</p>
                 <p className="mt-1.5 text-[0.93rem] leading-relaxed text-brand-body">{d.summary}</p>
               </Card>

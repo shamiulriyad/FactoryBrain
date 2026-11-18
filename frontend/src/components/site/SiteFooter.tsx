@@ -18,7 +18,7 @@ export function SiteFooter() {
         <div className="grid gap-12 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,3fr)]">
           <div className="max-w-sm">
             <Logo height={36} tone="onDark" label="BunonBrain" />
-            <p className="mt-4 font-plexmono text-[0.72rem] uppercase tracking-[0.14em] text-[rgb(var(--brand-emerald-on-dark))]">{SITE.tagline}</p>
+            <p className="mt-4 font-plexmono text-[0.72rem] uppercase tracking-[0.14em] text-brand-marigold-on-dark">{SITE.tagline}</p>
             <p className="mt-4 text-[0.95rem] leading-relaxed text-white/70">
               The operations layer for Bangladesh&apos;s ready-made garment factories: production, quality, merchandising and
               workforce in one role-based system.

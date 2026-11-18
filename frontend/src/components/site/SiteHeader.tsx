@@ -43,7 +43,7 @@ function MegaPanel({ menu, id, onNavigate }: { menu: NavMenu; id: string; onNavi
           >
             <div aria-hidden className="site-weave pointer-events-none absolute inset-0" />
             <div className="relative">
-              <p className="font-plexmono text-[0.66rem] uppercase tracking-[0.14em] text-[rgb(var(--brand-emerald-on-dark))]">{menu.feature.eyebrow}</p>
+              <p className="font-plexmono text-[0.66rem] uppercase tracking-[0.14em] text-brand-marigold-on-dark">{menu.feature.eyebrow}</p>
               <p className="mt-2 font-heading text-[1.2rem] font-semibold leading-snug">{menu.feature.title}</p>
               <p className="mt-2 text-[0.85rem] leading-relaxed text-white/75">{menu.feature.body}</p>
             </div>
@@ -133,7 +133,7 @@ export function SiteHeader() {
                     <Link
                       href={menu.href}
                       aria-current={active ? "page" : undefined}
-                      className={cn("inline-flex min-h-11 items-center rounded-lg px-3 text-[0.93rem] font-medium transition-colors", active ? "text-brand-text" : "text-brand-body hover:text-brand-text")}
+                      className={cn("relative inline-flex min-h-11 items-center rounded-lg px-3 text-[0.93rem] font-medium transition-colors", active ? "text-brand-text after:absolute after:inset-x-3 after:bottom-1 after:h-0.5 after:rounded-full after:bg-brand-marigold" : "text-brand-body hover:text-brand-text")}
                     >
                       {menu.label}
                     </Link>
@@ -149,8 +149,9 @@ export function SiteHeader() {
                     aria-controls={panelId}
                     onClick={() => setOpen(isOpen ? null : menu.label)}
                     className={cn(
-                      "inline-flex min-h-11 items-center gap-1 rounded-lg px-3 text-[0.93rem] font-medium transition-colors",
+                      "relative inline-flex min-h-11 items-center gap-1 rounded-lg px-3 text-[0.93rem] font-medium transition-colors",
                       active || isOpen ? "text-brand-text" : "text-brand-body hover:text-brand-text",
+                      active && "after:absolute after:inset-x-3 after:bottom-1 after:h-0.5 after:rounded-full after:bg-brand-marigold",
                     )}
                   >
                     {menu.label}

@@ -8,7 +8,9 @@ import {
   BrainCircuit,
   CheckCircle2,
   ChevronRight,
+  Cctv,
   Clock,
+  Cpu,
   Factory,
   FileText,
   Gauge,
@@ -36,6 +38,7 @@ const TONES = {
   off: "bg-brand-offwhite",
   navy: "site-on-dark bg-brand-navy-deep text-white",
   mint: "bg-brand-emerald-light/40",
+  warm: "site-warm",
 } as const;
 
 export function Section({
@@ -61,7 +64,7 @@ export function Section({
 
 export function Eyebrow({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <p className={cn("font-plexmono text-[0.72rem] font-medium uppercase tracking-[0.16em] text-brand-emerald-ink", className)}>
+    <p className={cn("site-eyebrow font-plexmono text-[0.72rem] font-medium uppercase tracking-[0.16em] text-brand-marigold-ink", className)}>
       {children}
     </p>
   );
@@ -165,16 +168,20 @@ const ICONS: Record<IconName, LucideIcon> = {
   layers: Layers,
   brain: BrainCircuit,
   bell: Bell,
+  camera: Cctv,
+  cpu: Cpu,
 };
 
-export function IconTile({ name, className, tone = "light" }: { name: IconName; className?: string; tone?: "light" | "dark" }) {
+export function IconTile({ name, className, tone = "light" }: { name: IconName; className?: string; tone?: "light" | "dark" | "warm" }) {
   const Icon = ICONS[name];
   return (
     <span
       aria-hidden="true"
       className={cn(
         "inline-flex size-11 shrink-0 items-center justify-center rounded-xl",
-        tone === "light" ? "bg-brand-emerald-light/70 text-brand-emerald-ink ring-1 ring-brand-emerald/15" : "bg-white/10 text-[rgb(var(--brand-emerald-on-dark))] ring-1 ring-white/10",
+        tone === "light" && "bg-brand-emerald-light/70 text-brand-emerald-ink ring-1 ring-brand-emerald/15",
+        tone === "warm" && "bg-brand-marigold-light text-brand-marigold-ink ring-1 ring-brand-marigold/20",
+        tone === "dark" && "bg-white/10 text-[rgb(var(--brand-emerald-on-dark))] ring-1 ring-white/10",
         className,
       )}
     >
@@ -260,7 +267,8 @@ export function PageHero({
             {title}
           </h1>
           {lead && <p className="mt-6 max-w-[42rem] text-[1.08rem] leading-[1.7] text-brand-body md:text-[1.2rem]">{lead}</p>}
-          {actions && <div className="mt-9 flex flex-wrap items-center gap-3">{actions}</div>}
+          <div aria-hidden className="site-thread mt-8 w-24" />
+          {actions && <div className="mt-8 flex flex-wrap items-center gap-3">{actions}</div>}
           {children}
         </div>
         {aside && <div className="relative">{aside}</div>}
@@ -287,7 +295,8 @@ export function CtaBand({
           <div aria-hidden className="site-weave pointer-events-none absolute inset-0 opacity-60" />
           <div className="relative grid items-center gap-8 md:grid-cols-[minmax(0,1.4fr)_auto]">
             <div>
-              <h2 className="font-heading text-[1.9rem] font-semibold leading-tight tracking-[-0.02em] md:text-[2.4rem]">{title}</h2>
+              <p className="site-eyebrow font-plexmono text-[0.72rem] font-medium uppercase tracking-[0.16em] text-brand-marigold-on-dark">Next step</p>
+              <h2 className="mt-3 font-heading text-[1.9rem] font-semibold leading-tight tracking-[-0.02em] md:text-[2.4rem]">{title}</h2>
               <p className="mt-4 max-w-[38rem] text-[1.05rem] leading-relaxed text-white/80">{body}</p>
             </div>
             <div className="flex flex-wrap gap-3 md:justify-end">

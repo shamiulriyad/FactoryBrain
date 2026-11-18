@@ -12,7 +12,7 @@ export function ArticleCard({ a, large = false }: { a: Article; large?: boolean 
         large && "site-hero md:p-10",
       )}
     >
-      <span className="font-plexmono text-[0.7rem] uppercase tracking-[0.14em] text-brand-emerald-ink">{a.category}</span>
+      <span className="font-plexmono text-[0.7rem] uppercase tracking-[0.14em] text-brand-marigold-ink">{a.category}</span>
       <span className={cn("mt-3 font-heading font-semibold leading-snug tracking-[-0.01em] text-brand-text", large ? "text-[1.7rem] md:text-[2rem]" : "text-[1.2rem]")}>{a.title}</span>
       <span className="mt-3 flex-1 leading-relaxed text-brand-body">{a.excerpt}</span>
       <span className="mt-6 flex items-center justify-between text-[0.85rem] text-brand-muted">

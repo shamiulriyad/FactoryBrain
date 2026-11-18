@@ -44,7 +44,7 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
               src={m.screenshot.src}
               alt={m.screenshot.alt}
               priority
-              caption={m.status === "available" && m.slug !== "workforce" ? undefined : "Demo screen · browser-only sample data"}
+              caption={m.status === "available" ? undefined : "Demo screen · browser-only sample data"}
             />
           ) : (
             <div className="site-cta relative overflow-hidden rounded-3xl p-10 text-white">
@@ -110,7 +110,7 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
           <div className="mt-10 grid gap-5 md:grid-cols-3">
             {m.beneficiaries.map((b) => (
               <div key={b.role} className="rounded-2xl border border-white/10 bg-white/[0.04] p-6">
-                <p className="font-plexmono text-[0.72rem] uppercase tracking-[0.14em] text-[rgb(var(--brand-emerald-on-dark))]">{b.role}</p>
+                <p className="font-plexmono text-[0.72rem] uppercase tracking-[0.14em] text-brand-marigold-on-dark">{b.role}</p>
                 <p className="mt-3 leading-relaxed text-white/85">{b.benefit}</p>
               </div>
             ))}

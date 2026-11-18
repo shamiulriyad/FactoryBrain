@@ -1,26 +1,26 @@
 import Link from "next/link";
-import { ArrowRight, Box, Languages, ScrollText, ShieldCheck, Users2, Workflow } from "lucide-react";
+import { ArrowRight, BadgeCheck, Box, Clock3, FileSpreadsheet, Languages, ScrollText, ShieldCheck, Users2, Workflow } from "lucide-react";
 import { ButtonLink, Card, CheckList, Container, CtaBand, Eyebrow, IconTile, Section, SectionHeader, StatusBadge } from "@/components/site/ui";
 import { FaqList, PlatformDiagram, ScreenFrame, Steps } from "@/components/site/visuals";
 import { HeroVisual } from "@/components/site/HeroVisual";
 import { resolveHero } from "@/content/site/heroMedia";
 import { getHeroSettings } from "@/lib/site/heroSettings";
 import { FAQS } from "@/content/site/faqs";
-import { MODULES } from "@/content/site/modules";
+import { MODULES, type IconName } from "@/content/site/modules";
 import { SOLUTIONS } from "@/content/site/solutions";
 import { pageMeta } from "@/lib/site/seo";
 
 export const metadata = pageMeta({
   title: "Home",
   description:
-    "BunonBrain is the operations system for Bangladesh's garment factories: production planning, live line status, quality inspection, merchandising, approvals and workforce records in one role-based platform.",
+    "BunonBrain is the operations system for Bangladesh's garment factories: production planning, live floor and machine monitoring, camera AI, quality inspection, merchandising, documents, approvals and workforce records in one role-based platform.",
   path: "/",
 });
 
 const FACTS = [
   { icon: Users2, title: "Eight roles", body: "From Super Admin to Worker, scoped by factory and line." },
   { icon: ScrollText, title: "Every decision audited", body: "Approvals and access changes go to an append-only log." },
-  { icon: Box, title: "Starts with your records", body: "Output files, documents and photos. Hardware later." },
+  { icon: Box, title: "Starts with your records", body: "Output files, documents and photos. Sensors when you are ready." },
   { icon: Languages, title: "English and বাংলা", body: "One interface for the office and the floor." },
 ];
 
@@ -31,32 +31,59 @@ const CHALLENGES = [
   { title: "Decisions leave no record", body: "Changes to plans and line assignments happen verbally, so nobody can say later who decided and why." },
 ];
 
+const LIVE: { icon: IconName; title: string; body: string; href: string }[] = [
+  { icon: "layers", title: "Live floor map", body: "Every production floor with its people, machines, open alerts and an OK / Watch / Act status.", href: "/product/floor-map-brain" },
+  { icon: "camera", title: "Monitoring room & camera AI", body: "Cameras, devices and alerts as they happen; camera frames checked for people, helmets and vests.", href: "/product/monitoring-camera-ai" },
+  { icon: "cpu", title: "Machines over MQTT", body: "Sensors and piece counters show each machine running, idle, stopped or in error, with real counts.", href: "/product/machine-monitoring" },
+  { icon: "brain", title: "Factory Brain", body: "Floors, lines, machines, orders, buyers and risks drawn as one connected map.", href: "/product/floor-map-brain" },
+];
+
 const WHY = [
   { icon: Workflow, title: "People decide, software proposes", body: "Agents and vision models recommend. An authorised person approves, and the decision is recorded." },
   { icon: ShieldCheck, title: "Access that matches the org chart", body: "Factory and line scope enforced by the server on every request, not just hidden in the interface." },
   { icon: ScrollText, title: "Numbers you can trace", body: "Efficiency, WIP, DHU and delivery risk calculated from records, with nothing estimated or filled in." },
 ];
 
+const LOCAL = [
+  { icon: Languages, title: "বাংলা and English", body: "Switch the whole interface with one click; Bangla renders correctly in exported PDFs." },
+  { icon: Clock3, title: "Dhaka time by default", body: "Work dates, lateness and overtime follow each factory's time zone." },
+  { icon: FileSpreadsheet, title: "The paperwork plants file", body: "AQL, GRN, packing lists and attendance sheets generated from the records." },
+  { icon: BadgeCheck, title: "Roles of an RMG plant", body: "Merchandiser, QC, HR, supervisor and manager, each with their own menu." },
+];
+
 export default async function HomePage() {
   // Which photo(s) the hero shows is a setting (Administration → Website), not code.
   const hero = resolveHero(await getHeroSettings());
-  const capabilities = MODULES.slice(0, 9);
+  const available = MODULES.filter((m) => m.status === "available");
+  const stats = [
+    { value: String(available.length), label: "modules in production", note: "each with its status on its page" },
+    { value: "8", label: "roles", note: "scoped by factory and line" },
+    { value: "38", label: "factory documents", note: "generated from your records" },
+    { value: "2", label: "languages", note: "English and বাংলা" },
+  ];
+
   return (
     <>
       {/* 1 · Hero */}
       <section aria-labelledby="hero-title" className="site-hero relative overflow-hidden border-b border-brand-border">
         <div aria-hidden className="site-grid pointer-events-none absolute inset-0" />
-        <Container wide className="relative grid items-center gap-14 pb-20 pt-14 md:pt-20 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:pb-28">
+        <Container wide className="relative grid items-center gap-14 pb-20 pt-14 md:pt-20 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:pb-24">
           <div className="site-rise">
-            <p className="inline-flex items-center gap-2 rounded-full border border-brand-emerald/25 bg-white/80 px-3 py-1 font-plexmono text-[0.7rem] uppercase tracking-[0.14em] text-brand-emerald-ink">
-              <span className="size-1.5 rounded-full bg-brand-emerald" aria-hidden /> Bangladesh RMG Workforce OS
+            <p className="inline-flex items-center gap-2 rounded-full border border-brand-marigold/30 bg-white/85 px-3 py-1 font-plexmono text-[0.7rem] uppercase tracking-[0.14em] text-brand-marigold-ink shadow-[0_1px_2px_rgba(16,38,61,0.06)]">
+              <span className="size-1.5 rounded-full bg-brand-marigold" aria-hidden /> Bangladesh RMG Workforce OS
             </p>
             <h1 id="hero-title" className="mt-6 font-heading text-[2.7rem] font-semibold leading-[1.03] tracking-[-0.03em] text-brand-text sm:text-[3.4rem] xl:text-[4.1rem]">
-              One operating system for the whole <span className="text-brand-emerald-ink">garment floor.</span>
+              One operating system for the whole{" "}
+              <span className="relative inline-block text-brand-emerald-ink">
+                garment floor.
+                <svg aria-hidden viewBox="0 0 300 14" preserveAspectRatio="none" className="absolute -bottom-2 left-0 h-3 w-full text-brand-marigold">
+                  <path d="M2 9 Q 40 2 78 8 T 154 8 T 230 7 T 298 6" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+                </svg>
+              </span>
             </h1>
-            <p className="mt-6 max-w-[34rem] text-[1.1rem] leading-[1.7] text-brand-body md:text-[1.2rem]">
-              BunonBrain connects production plans, line status, quality inspections, buyer documents and the people who
-              run them, so every decision on the floor is made on the same, current information.
+            <p className="mt-7 max-w-[34rem] text-[1.1rem] leading-[1.7] text-brand-body md:text-[1.2rem]">
+              BunonBrain connects production plans, live floor and machine status, quality inspections, buyer documents and
+              the people who run them, so every decision on the floor is made on the same, current information.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <ButtonLink href="/demo" size="lg" arrow>
@@ -66,15 +93,41 @@ export default async function HomePage() {
                 Explore the product
               </ButtonLink>
             </div>
+            <ul className="mt-9 flex flex-wrap gap-x-6 gap-y-2 text-[0.9rem] text-brand-body">
+              {["Built for Bangladesh RMG", "English and বাংলা", "Every decision audited"].map((t) => (
+                <li key={t} className="inline-flex items-center gap-2">
+                  <span aria-hidden className="size-1.5 rotate-45 bg-brand-marigold" />
+                  {t}
+                </li>
+              ))}
+            </ul>
           </div>
           <div className="site-rise site-rise-2 relative">
-            <div aria-hidden className="absolute -inset-6 -z-0 rounded-[2rem] bg-gradient-to-br from-brand-emerald-light/70 via-white/0 to-brand-navy/[0.06] blur-2xl" />
+            <div aria-hidden className="absolute -inset-6 -z-0 rounded-[2rem] bg-gradient-to-br from-brand-emerald-light/70 via-white/0 to-brand-marigold-light/80 blur-2xl" />
             <HeroVisual {...hero} />
           </div>
         </Container>
       </section>
 
-      {/* 2 · Introduction */}
+      {/* 2 · Numbers */}
+      <section aria-label="BunonBrain in numbers" className="border-b border-brand-border bg-white">
+        <Container wide>
+          <dl className="grid grid-cols-2 divide-brand-border lg:grid-cols-4 lg:divide-x">
+            {stats.map((s, i) => (
+              <div key={s.label} className={`px-2 py-9 sm:px-6 ${i % 2 === 1 ? "border-l border-brand-border lg:border-l-0" : ""} ${i >= 2 ? "border-t border-brand-border lg:border-t-0" : ""}`}>
+                <dt className="sr-only">{s.label}</dt>
+                <dd>
+                  <span className="font-heading text-[2.6rem] font-semibold leading-none tracking-[-0.03em] text-brand-marigold-ink md:text-[3.1rem]">{s.value}</span>
+                  <span className="mt-2 block font-heading text-[1.02rem] font-semibold text-brand-text">{s.label}</span>
+                  <span className="mt-0.5 block text-[0.88rem] text-brand-muted">{s.note}</span>
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </Container>
+      </section>
+
+      {/* 3 · Introduction */}
       <section aria-labelledby="intro-title" className="border-b border-brand-border bg-white py-16 md:py-20">
         <Container wide className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
           <div>
@@ -82,17 +135,21 @@ export default async function HomePage() {
             <h2 id="intro-title" className="mt-3 font-heading text-[1.9rem] font-semibold leading-tight tracking-[-0.02em] text-brand-text md:text-[2.3rem]">
               Built around how a Bangladeshi garment plant actually works.
             </h2>
+            <div aria-hidden className="site-thread mt-7 w-20" />
           </div>
           <div>
             <p className="text-[1.08rem] leading-[1.8] text-brand-body">
               From the cutting table to the packing conveyor, a plant generates the information it needs to run well, but
-              it rarely reaches the right person in time. BunonBrain is one system for that information: lines, orders,
-              inspections and people, each visible to the roles responsible for them.
+              it rarely reaches the right person in time. BunonBrain is one system for that information: lines, machines,
+              orders, inspections and people, each visible to the roles responsible for them.
             </p>
             <ul className="mt-10 grid gap-6 sm:grid-cols-2">
-              {FACTS.map((f) => (
+              {FACTS.map((f, i) => (
                 <li key={f.title} className="flex gap-4">
-                  <span aria-hidden className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand-offwhite text-brand-navy ring-1 ring-brand-border">
+                  <span
+                    aria-hidden
+                    className={`inline-flex size-10 shrink-0 items-center justify-center rounded-lg ring-1 ${i % 2 === 0 ? "bg-brand-offwhite text-brand-navy ring-brand-border" : "bg-brand-marigold-light text-brand-marigold-ink ring-brand-marigold/20"}`}
+                  >
                     <f.icon size={19} strokeWidth={1.8} />
                   </span>
                   <div>
@@ -106,7 +163,7 @@ export default async function HomePage() {
         </Container>
       </section>
 
-      {/* 3 · Challenges */}
+      {/* 4 · Challenges */}
       <Section tone="off" label="challenges-title">
         <Container wide>
           <SectionHeader
@@ -117,8 +174,9 @@ export default async function HomePage() {
           />
           <div className="mt-14 grid gap-5 md:grid-cols-2">
             {CHALLENGES.map((c, i) => (
-              <div key={c.title} className="flex gap-5 rounded-2xl border border-brand-border bg-white p-7">
-                <span className="font-plexmono text-[0.85rem] text-brand-emerald-ink">{String(i + 1).padStart(2, "0")}</span>
+              <div key={c.title} className="relative flex gap-5 overflow-hidden rounded-2xl border border-brand-border bg-white p-7">
+                <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-brand-marigold to-brand-marigold/0" />
+                <span className="font-heading text-[1.6rem] font-semibold leading-none text-brand-marigold-ink">{String(i + 1).padStart(2, "0")}</span>
                 <div>
                   <h3 className="font-heading text-[1.2rem] font-semibold leading-snug text-brand-text">{c.title}</h3>
                   <p className="mt-2 leading-relaxed text-brand-body">{c.body}</p>
@@ -129,7 +187,7 @@ export default async function HomePage() {
         </Container>
       </Section>
 
-      {/* 4 · Solutions */}
+      {/* 5 · Solutions */}
       <Section label="solutions-title">
         <Container wide>
           <div className="flex flex-wrap items-end justify-between gap-6">
@@ -153,36 +211,71 @@ export default async function HomePage() {
         </Container>
       </Section>
 
-      {/* 5 · Capabilities */}
-      <Section tone="off" label="capabilities-title">
+      {/* 6 · Live from the floor */}
+      <Section tone="warm" label="live-title" className="overflow-hidden">
         <Container wide>
           <SectionHeader
-            id="capabilities-title"
-            eyebrow="Product capabilities"
-            title="What BunonBrain does today."
-            lead="Every module is labelled with its status, so you know exactly what is available, what is a demonstration and what is planned."
+            id="live-title"
+            eyebrow="Live from the floor"
+            title="See the building, the machines and the cameras in one place."
+            lead="Status is rolled up from real records: alerts, machine sensors, piece counters and attendance. Simulated data is always labelled and never sets a status."
           />
-          <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {capabilities.map((m) => (
-              <Card key={m.slug} href={`/product/${m.slug}`} className="p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <IconTile name={m.icon} />
-                  <StatusBadge status={m.status} />
-                </div>
-                <h3 className="mt-5 font-heading text-[1.12rem] font-semibold text-brand-text">{m.name}</h3>
-                <p className="mt-2 text-[0.94rem] leading-relaxed text-brand-body">{m.short}</p>
-              </Card>
-            ))}
+          <div className="mt-14 grid items-start gap-10 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)]">
+            <ScreenFrame src="/site/screens/floor-map.jpg" alt="BunonBrain live floor map: three production floors with status, checked-in workers, machines, open alerts and cameras" caption="Live floor map · sample factory data" />
+            <ul className="grid gap-4">
+              {LIVE.map((l) => (
+                <li key={l.title}>
+                  <Link href={l.href} className="group flex gap-4 rounded-2xl border border-brand-border bg-white/90 p-5 transition-[border-color,box-shadow] hover:border-brand-marigold/40 hover:shadow-[0_12px_32px_-16px_rgba(180,83,9,0.35)]">
+                    <IconTile name={l.icon} tone="warm" />
+                    <div>
+                      <h3 className="font-heading text-[1.05rem] font-semibold text-brand-text">{l.title}</h3>
+                      <p className="mt-1 text-[0.93rem] leading-relaxed text-brand-body">{l.body}</p>
+                      <span className="mt-2 inline-flex items-center gap-1 text-[0.85rem] font-medium text-brand-emerald-ink">
+                        Learn more <ArrowRight size={13} aria-hidden className="transition-transform group-hover:translate-x-0.5" />
+                      </span>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
-          <div className="mt-10 text-center">
-            <ButtonLink href="/product/features" variant="secondary" arrow>
-              See all features
-            </ButtonLink>
+          <div className="mt-12 grid gap-8 md:grid-cols-2">
+            <ScreenFrame src="/site/screens/brain.jpg" alt="Factory Brain graph linking floors, lines, machines, orders, buyers, styles and targets" caption="Factory Brain · sample factory data" />
+            <ScreenFrame src="/site/screens/monitoring.jpg" alt="Monitoring room with cameras, devices, active alerts and a live event feed, simulated events labelled" caption="Monitoring room · simulated events are labelled" />
           </div>
         </Container>
       </Section>
 
-      {/* 6 · How it works */}
+      {/* 7 · Capabilities */}
+      <Section tone="off" label="capabilities-title">
+        <Container wide>
+          <div className="flex flex-wrap items-end justify-between gap-6">
+            <SectionHeader
+              id="capabilities-title"
+              eyebrow="Product capabilities"
+              title="What BunonBrain does today."
+              lead="Every module is labelled with its status, so you know exactly what is available and what is planned."
+            />
+            <ButtonLink href="/product/features" variant="secondary" arrow>
+              See all features
+            </ButtonLink>
+          </div>
+          <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {available.map((m, i) => (
+              <Card key={m.slug} href={`/product/${m.slug}`} className="p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <IconTile name={m.icon} tone={i % 4 === 3 ? "warm" : "light"} />
+                  <StatusBadge status={m.status} />
+                </div>
+                <h3 className="mt-5 font-heading text-[1.08rem] font-semibold text-brand-text">{m.name}</h3>
+                <p className="mt-2 text-[0.92rem] leading-relaxed text-brand-body">{m.short}</p>
+              </Card>
+            ))}
+          </div>
+        </Container>
+      </Section>
+
+      {/* 8 · How it works */}
       <Section label="how-title">
         <Container wide>
           <SectionHeader id="how-title" eyebrow="How it works" title="From the records you keep to decisions you can stand behind." align="center" />
@@ -192,8 +285,8 @@ export default async function HomePage() {
           <div className="mt-16">
             <Steps
               items={[
-                { title: "Connect", body: "Start with output records, order documents and inspection photos. Add machine readings when you are ready." },
-                { title: "See", body: "Line status, quality and order risk are calculated from those records and shared by role." },
+                { title: "Connect", body: "Start with output records, order documents and inspection photos. Add sensors, counters and cameras when you are ready." },
+                { title: "See", body: "Floor, line, machine, quality and order status are calculated from those records and shared by role." },
                 { title: "Decide", body: "Agents and models propose; authorised people approve or reject in one queue." },
                 { title: "Record", body: "Decisions and access changes are written to an audit log that can't be edited." },
               ]}
@@ -207,49 +300,50 @@ export default async function HomePage() {
         </Container>
       </Section>
 
-      {/* 7 · Workforce intelligence */}
+      {/* 9 · Workforce */}
       <Section tone="mint" label="workforce-title">
         <Container wide className="grid items-center gap-14 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <div>
             <SectionHeader
               id="workforce-title"
-              eyebrow="Workforce intelligence"
+              eyebrow="Workforce and attendance"
               title="People are the plant. Their records belong next to the lines they run."
-              lead="Worker profiles, line and workstation assignments and sign-in accounts live in the same system as production, under the same access rules."
+              lead="Worker profiles, workstation assignments, attendance, leave and overtime live in the same system as production, under the same access rules."
             />
             <CheckList
               className="mt-8"
               items={[
-                "Worker profiles with employment details visible only to permitted roles",
-                "Workstation assignment within each manager's scope",
-                "Workers see their own record through a linked account",
-                <>
-                  Roll-call, leave, overtime, skills and wellbeing as an interactive demo on sample data{" "}
-                  <StatusBadge status="demo" className="ml-1 align-middle" />
-                </>,
+                "Worker register with employment details visible only to permitted roles",
+                "RFID check-in and check-out, shifts, breaks and holidays",
+                "Overtime requested and approved; leave recorded as approved documents",
+                "Workstation assignment within each manager's scope, with full history",
+                "A Workforce hub with headcount, today's attendance and performance",
               ]}
             />
-            <div className="mt-8">
-              <ButtonLink href="/solutions/workforce-management" arrow>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <ButtonLink href="/product/workforce" arrow>
                 Workforce management
+              </ButtonLink>
+              <ButtonLink href="/product/attendance-shifts" variant="secondary">
+                Attendance & shifts
               </ButtonLink>
             </div>
           </div>
           <ScreenFrame
             src="/site/screens/workforce.jpg"
-            alt="Workforce, HR and wellbeing demo: headcount, attendance, overtime, grievances and leave approvals on browser-only sample data"
-            caption="Workforce demo · browser-only sample data, not connected to the API"
+            alt="BunonBrain Workforce hub: active workers, present today, overtime awaiting approval and headcount by department and line"
+            caption="Workforce hub · sample factory data"
           />
         </Container>
       </Section>
 
-      {/* 8 · Factory operations */}
+      {/* 10 · Factory operations */}
       <Section tone="navy" label="ops-title" className="overflow-hidden">
         <div aria-hidden className="site-weave pointer-events-none absolute inset-0 opacity-50" />
         <Container wide className="relative grid items-center gap-14 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-          <ScreenFrame src="/site/screens/overview.jpg" alt="BunonBrain overview with floor status, key measures and the line status board on simulated data" caption="" className="order-last lg:order-first" />
+          <ScreenFrame src="/site/screens/overview.jpg" alt="BunonBrain overview with floor status, key measures and the line status board" caption="" className="order-last lg:order-first" />
           <div>
-            <Eyebrow className="text-[rgb(var(--brand-emerald-on-dark))]">Factory operations</Eyebrow>
+            <Eyebrow>Factory operations</Eyebrow>
             <h2 id="ops-title" className="mt-3 font-heading text-[2rem] font-semibold leading-[1.1] tracking-[-0.02em] sm:text-[2.5rem]">
               Every line, every alert, one shared view.
             </h2>
@@ -260,7 +354,12 @@ export default async function HomePage() {
             <CheckList
               tone="dark"
               className="mt-8"
-              items={["Line status flagged on track, watch or critical", "Real-time floor alerts shared across the team", "Machine, energy and RFID readings through the ingest API", "A morning brief of top issues and pending decisions"]}
+              items={[
+                "Line status flagged on track, watch or critical",
+                "Real-time floor alerts shared across the team",
+                "Machine states and piece counts from sensors over MQTT",
+                "A morning brief of top issues and pending decisions",
+              ]}
             />
             <div className="mt-9 flex flex-wrap gap-3">
               <ButtonLink href="/solutions/factory-operations" arrow>
@@ -274,7 +373,36 @@ export default async function HomePage() {
         </Container>
       </Section>
 
-      {/* 9 · Why BunonBrain */}
+      {/* 11 · Made for Bangladesh */}
+      <Section tone="warm" label="local-title">
+        <Container wide className="grid items-center gap-12 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+          <div>
+            <Eyebrow>Made for Bangladesh</Eyebrow>
+            <h2 id="local-title" className="mt-3 font-heading text-[2rem] font-semibold leading-[1.1] tracking-[-0.02em] text-brand-text sm:text-[2.5rem]">
+              <span lang="bn">বুনন</span> means weaving.
+              <span className="block text-brand-emerald-ink">The brain is the people who run the floor.</span>
+            </h2>
+            <p className="mt-5 max-w-[34rem] text-[1.05rem] leading-relaxed text-brand-body">
+              BunonBrain is designed around a Bangladeshi export plant: knit and woven lines, cutting and finishing
+              sections, buyer documents and a workforce in the thousands.
+            </p>
+            <p className="mt-6 font-plexmono text-[0.78rem] uppercase tracking-[0.16em] text-brand-marigold-ink">Smart Workforce. Stronger RMG.</p>
+          </div>
+          <ul className="grid gap-4 sm:grid-cols-2">
+            {LOCAL.map((l) => (
+              <li key={l.title} className="rounded-2xl border border-brand-marigold/20 bg-white/90 p-6">
+                <span aria-hidden className="inline-flex size-10 items-center justify-center rounded-lg bg-brand-marigold-light text-brand-marigold-ink ring-1 ring-brand-marigold/20">
+                  <l.icon size={19} strokeWidth={1.8} />
+                </span>
+                <h3 className="mt-4 font-heading text-[1.05rem] font-semibold text-brand-text">{l.title}</h3>
+                <p className="mt-1.5 text-[0.93rem] leading-relaxed text-brand-body">{l.body}</p>
+              </li>
+            ))}
+          </ul>
+        </Container>
+      </Section>
+
+      {/* 12 · Why BunonBrain */}
       <Section label="why-title">
         <Container wide>
           <div className="grid gap-12 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
@@ -286,8 +414,8 @@ export default async function HomePage() {
             />
             <div className="grid gap-5">
               {WHY.map((w) => (
-                <div key={w.title} className="flex gap-5 rounded-2xl border border-brand-border p-6">
-                  <span aria-hidden className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-navy text-white">
+                <div key={w.title} className="flex gap-5 rounded-2xl border border-brand-border p-6 transition-colors hover:border-brand-marigold/35">
+                  <span aria-hidden className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-navy text-brand-marigold-on-dark">
                     <w.icon size={20} strokeWidth={1.8} />
                   </span>
                   <div>
@@ -304,26 +432,27 @@ export default async function HomePage() {
         </Container>
       </Section>
 
-      {/* 10 · Interface showcase */}
+      {/* 13 · Interface showcase */}
       <Section tone="off" label="showcase-title">
         <Container wide>
-          <SectionHeader id="showcase-title" eyebrow="Product interface" title="Clear screens for busy people." lead="Real screens from the BunonBrain application, running on simulated data." align="center" />
-          <div className="mt-14 grid gap-10 lg:grid-cols-2">
-            <div>
-              <ScreenFrame src="/site/screens/approvals.jpg" alt="Approvals queue: pending vision repair recommendations with reasoning, recommended actions and approve or reject buttons" caption="" />
-              <h3 className="mt-6 font-heading text-[1.2rem] font-semibold text-brand-text">Approvals</h3>
-              <p className="mt-1.5 leading-relaxed text-brand-body">Recommendations with their reasoning and a clear decision for an accountable person.</p>
-            </div>
-            <div>
-              <ScreenFrame src="/site/screens/qc.jpg" alt="Quality inspections list with reference, stage, status, predictions and verified defects" caption="" />
-              <h3 className="mt-6 font-heading text-[1.2rem] font-semibold text-brand-text">Quality inspections</h3>
-              <p className="mt-1.5 leading-relaxed text-brand-body">Model predictions next to inspectors&apos; verified outcomes, inspection by inspection.</p>
-            </div>
+          <SectionHeader id="showcase-title" eyebrow="Product interface" title="Clear screens for busy people." lead="Real screens from the BunonBrain application, running on sample factory data." align="center" />
+          <div className="mt-14 grid gap-10 lg:grid-cols-3">
+            {[
+              { src: "/site/screens/approvals.jpg", alt: "Approvals queue: recommendations with reasoning, recommended actions and approve or reject buttons", title: "Approvals", body: "Recommendations with their reasoning and a clear decision for an accountable person." },
+              { src: "/site/screens/qc.jpg", alt: "Quality inspections list with reference, stage, status, predictions and verified defects", title: "Quality inspections", body: "Model predictions next to inspectors' verified outcomes, inspection by inspection." },
+              { src: "/site/screens/integrations.jpg", alt: "Integrations page with RFID readers, attendance card readers, machine sensors and production counters", title: "Integrations", body: "Every data source with its devices, records and when the last one arrived." },
+            ].map((x) => (
+              <div key={x.title}>
+                <ScreenFrame src={x.src} alt={x.alt} caption="" />
+                <h3 className="mt-6 font-heading text-[1.2rem] font-semibold text-brand-text">{x.title}</h3>
+                <p className="mt-1.5 leading-relaxed text-brand-body">{x.body}</p>
+              </div>
+            ))}
           </div>
         </Container>
       </Section>
 
-      {/* 11 · FAQ */}
+      {/* 14 · FAQ */}
       <Section label="faq-title">
         <Container className="grid gap-12 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
           <div>
@@ -336,7 +465,7 @@ export default async function HomePage() {
         </Container>
       </Section>
 
-      {/* 12 · Demo CTA */}
+      {/* 15 · Demo CTA */}
       <CtaBand />
     </>
   );

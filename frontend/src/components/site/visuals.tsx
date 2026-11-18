@@ -104,12 +104,12 @@ export function Steps({ items, tone = "light" }: { items: { title: string; body:
             <span
               className={cn(
                 "inline-flex size-9 shrink-0 items-center justify-center rounded-full font-plexmono text-[0.8rem] font-medium",
-                tone === "light" ? "bg-brand-navy text-white" : "bg-white/10 text-[rgb(var(--brand-emerald-on-dark))] ring-1 ring-white/15",
+                tone === "light" ? "bg-brand-navy text-white ring-4 ring-brand-marigold-light" : "bg-white/10 text-brand-marigold-on-dark ring-1 ring-white/15",
               )}
             >
               {String(i + 1).padStart(2, "0")}
             </span>
-            <span aria-hidden className={cn("h-px flex-1", tone === "light" ? "bg-brand-border" : "bg-white/15", i === items.length - 1 && "lg:hidden")} />
+            <span aria-hidden className={cn("h-px flex-1 bg-gradient-to-r", tone === "light" ? "from-brand-marigold/50 to-brand-border" : "from-brand-marigold-on-dark/40 to-white/15", i === items.length - 1 && "lg:hidden")} />
           </div>
           <h3 className={cn("mt-5 font-heading text-[1.2rem] font-semibold", tone === "light" ? "text-brand-text" : "text-white")}>{s.title}</h3>
           <p className={cn("mt-2 leading-relaxed", tone === "light" ? "text-brand-body" : "text-white/70")}>{s.body}</p>

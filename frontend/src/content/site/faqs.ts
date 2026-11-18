@@ -14,7 +14,7 @@ export const FAQS: Faq[] = [
   {
     category: "Product",
     q: "Which parts of the product are available today?",
-    a: "Production planning, the line board and floor alerts, quality inspection, merchandising, approvals, Ask BunonBrain, agents, reports, role-based access control, worker profiles and the sensor ingest API are available. The HR, roll-call and wellbeing screens run as a browser-only demonstration, and server-side attendance, shift, leave and overtime management is planned. Each product page shows its status.",
+    a: "Production planning, the line board and floor alerts, the monitoring room with camera AI, machine monitoring over MQTT, the floor map and Factory Brain, quality inspection, merchandising, document automation, approvals, Ask BunonBrain, agents, reports, role-based access control, worker profiles, and attendance with shifts, leave and overtime are available. Direct PLC and Modbus connectors are planned. Each product page shows its status.",
   },
   {
     category: "Getting started",

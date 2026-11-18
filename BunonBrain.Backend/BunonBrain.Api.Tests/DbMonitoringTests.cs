@@ -270,8 +270,11 @@ public sealed class DbMonitoringTests
         // The contract is published for producers.
         var contract = await Get("/api/monitoring/contract", s.Devices.Token);
         Is(HttpStatusCode.OK, contract);
-        // 12 VISION + 5 SYSTEM types (the two machine types arrived with IoT machine monitoring), as MONITORING_EVENTS.md lists them.
-        Assert.Equal(17, contract.Body.GetProperty("eventTypes").GetArrayLength());
+        // 14 VISION + 6 SYSTEM types (the two machine types arrived with IoT machine monitoring; ACTIVITY_CHANGED, PPE_VIOLATION
+        // and DETECTION_UNAVAILABLE with the camera AI), as MONITORING_EVENTS.md lists them.
+        Assert.Equal(20, contract.Body.GetProperty("eventTypes").GetArrayLength());
+        Assert.Contains("PPE_VIOLATION", contract.Raw);
+        Assert.Contains("DETECTION_UNAVAILABLE", contract.Raw);
         Assert.Equal(BunonBrain.Application.Monitoring.MonitoringEventTypes.All.Length, contract.Body.GetProperty("eventTypes").GetArrayLength());
         Assert.Contains("MACHINE_STATE_CHANGED", contract.Raw);
         Assert.Contains("MACHINE_CONDITION", contract.Raw);

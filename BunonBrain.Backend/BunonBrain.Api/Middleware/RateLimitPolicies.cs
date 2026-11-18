@@ -17,6 +17,8 @@ public static class RateLimitPolicies
     public const string Inquiry          = "inquiry";
     /// <summary>Per device (X-Device-Id) and IP budget on the device-key IoT endpoint, before the key is checked.</summary>
     public const string IotDevice        = "iot-device";
+    /// <summary>Per-user budget on camera AI sessions and frames (/api/monitoring/sessions); the session service also enforces its own frame interval.</summary>
+    public const string CameraAi         = "camera-ai";
 
     public const int DefaultLoginPerMinute     = 5;
     public const int SensorSimulationPerMinute = 20;
@@ -24,6 +26,8 @@ public static class RateLimitPolicies
     public const int QcUploadPerMinute         = 30;
     public const int InquiryPerMinute          = 3;
     public const int IotDevicePerMinute        = 1200;
+    /// <summary>1 frame per second plus starts, stops and status reads, with headroom for a second tab.</summary>
+    public const int CameraAiPerMinute         = 180;
 
     /// <summary>
     /// Login attempts per client IP per minute: <c>LOGIN_RATE_LIMIT_PER_MINUTE</c>

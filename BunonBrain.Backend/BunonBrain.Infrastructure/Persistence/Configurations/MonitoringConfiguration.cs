@@ -23,14 +23,16 @@ public class MonitoringEventConfiguration : IEntityTypeConfiguration<MonitoringE
         b.ToTable("monitoring_events", t =>
         {
             t.HasCheckConstraint("CK_monitoring_events_type",
-                "\"EventType\" IN ('PERSON_DETECTED','TRACK_UPDATED','PERSON_LOST','ZONE_ENTERED','ZONE_EXITED','ACTIVITY_CLASSIFIED','ACTIVITY_STATE_CHANGED','ACTIVITY_UNCERTAIN','GARMENT_ACTIVITY_CLASSIFIED','GARMENT_ACTIVITY_CHANGED','GARMENT_ACTIVITY_UNCERTAIN','UNCERTAIN_DETECTION','CAMERA_STATUS_CHANGED','DEVICE_STATUS_CHANGED','MODEL_STATUS_CHANGED','MACHINE_STATE_CHANGED','MACHINE_CONDITION')");
+                "\"EventType\" IN ('PERSON_DETECTED','TRACK_UPDATED','PERSON_LOST','ZONE_ENTERED','ZONE_EXITED','ACTIVITY_CLASSIFIED','ACTIVITY_STATE_CHANGED','ACTIVITY_UNCERTAIN','GARMENT_ACTIVITY_CLASSIFIED','GARMENT_ACTIVITY_CHANGED','GARMENT_ACTIVITY_UNCERTAIN','UNCERTAIN_DETECTION','CAMERA_STATUS_CHANGED','DEVICE_STATUS_CHANGED','MODEL_STATUS_CHANGED','MACHINE_STATE_CHANGED','MACHINE_CONDITION','ACTIVITY_CHANGED','PPE_VIOLATION','DETECTION_UNAVAILABLE')");
             t.HasCheckConstraint("CK_monitoring_events_category", "\"Category\" IN ('VISION','SYSTEM')");
             t.HasCheckConstraint("CK_monitoring_events_source", "\"SourceType\" IN ('SIMULATED','REAL')");
-            t.HasCheckConstraint("CK_monitoring_events_producer", "\"Producer\" IN ('API','SIMULATOR','DEVICE_PIPELINE','CAMERA_SERVICE','CV_SERVICE','IOT_PIPELINE')");
+            t.HasCheckConstraint("CK_monitoring_events_producer", "\"Producer\" IN ('API','SIMULATOR','DEVICE_PIPELINE','CAMERA_SERVICE','CV_SERVICE','IOT_PIPELINE','CAMERA_AI')");
             t.HasCheckConstraint("CK_monitoring_events_producer_source",
-                "(\"Producer\" <> 'SIMULATOR' OR \"SourceType\" = 'SIMULATED') AND (\"Producer\" NOT IN ('API','CV_SERVICE') OR \"SourceType\" = 'REAL')");
+                "(\"Producer\" <> 'SIMULATOR' OR \"SourceType\" = 'SIMULATED') AND (\"Producer\" NOT IN ('API','CV_SERVICE','CAMERA_AI') OR \"SourceType\" = 'REAL')");
             // The computer-vision service never names a worker.
             t.HasCheckConstraint("CK_monitoring_events_cv_anonymous", "\"Producer\" <> 'CV_SERVICE' OR \"WorkerId\" IS NULL");
+            // Neither does the camera AI (OpenAI vision on browser webcam frames).
+            t.HasCheckConstraint("CK_monitoring_events_camera_ai_anonymous", "\"Producer\" <> 'CAMERA_AI' OR \"WorkerId\" IS NULL");
             t.HasCheckConstraint("CK_monitoring_events_severity", "\"Severity\" IN ('INFO','WARNING','CRITICAL')");
             t.HasCheckConstraint("CK_monitoring_events_confidence", "\"Confidence\" IS NULL OR (\"Confidence\" >= 0 AND \"Confidence\" <= 1)");
             t.HasCheckConstraint("CK_monitoring_events_worker_verified",

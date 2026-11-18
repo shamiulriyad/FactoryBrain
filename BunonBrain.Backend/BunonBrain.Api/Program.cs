@@ -49,6 +49,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.SignalR;
 using System.Threading.RateLimiting;
 using System.IdentityModel.Tokens.Jwt;
@@ -463,6 +464,10 @@ builder.Services.AddRateLimiter(o =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: RateLimitPolicies.UserPartition(httpContext),
             factory: _ => FixedWindow(RateLimitPolicies.QcUploadPerMinute)));
+    o.AddPolicy(RateLimitPolicies.CameraAi, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: RateLimitPolicies.UserPartition(httpContext),
+            factory: _ => FixedWindow(RateLimitPolicies.CameraAiPerMinute)));
 
     // 429 response shape: RFC 7807 ProblemDetails + Retry-After. Matches
     // the rest of the API's error envelope.
@@ -598,6 +603,21 @@ builder.Services.AddSingleton<BunonBrain.Infrastructure.Monitoring.MonitoringSim
 builder.Services.AddSingleton<BunonBrain.Api.Hubs.MonitoringConnections>();
 if (!builder.Environment.IsEnvironment("Testing"))
     builder.Services.AddHostedService<BunonBrain.Infrastructure.Monitoring.MonitoringSimulatorWorker>();
+
+// Camera AI: browser webcam frames analysed by the OpenAI vision API on the
+// server (no detection model is hosted). Sessions live in memory; their
+// events go through the monitoring pipeline above as producer CAMERA_AI and
+// every OpenAI call is logged to ai_api_usage. Settings: CAMERA_AI_* (CAMERA_AI.md).
+builder.Services.AddSingleton(BunonBrain.Application.CameraAi.CameraAiOptions.FromEnvironment(Environment.GetEnvironmentVariable));
+builder.Services.TryAddSingleton(TimeProvider.System);
+builder.Services.AddHttpClient(BunonBrain.Infrastructure.CameraAi.OpenAiVisionClient.HttpClientName);
+builder.Services.AddSingleton<BunonBrain.Infrastructure.CameraAi.ICameraVisionAnalyzer, BunonBrain.Infrastructure.CameraAi.OpenAiVisionClient>();
+builder.Services.AddSingleton<BunonBrain.Infrastructure.CameraAi.ICameraAiCameraLookup, BunonBrain.Infrastructure.CameraAi.DbCameraAiCameraLookup>();
+builder.Services.AddSingleton<BunonBrain.Infrastructure.CameraAi.ICameraAiEventSink, BunonBrain.Infrastructure.CameraAi.MonitoringCameraAiEventSink>();
+builder.Services.AddSingleton<BunonBrain.Infrastructure.CameraAi.ICameraAiUsageStore, BunonBrain.Infrastructure.CameraAi.DbCameraAiUsageStore>();
+builder.Services.AddSingleton<BunonBrain.Infrastructure.CameraAi.CameraAiSessionService>();
+if (!builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddHostedService<BunonBrain.Infrastructure.CameraAi.CameraAiWatchdog>();
 // Verified worker identity association: RFID reads (readers, integrations,
 // the simulator) + reader mappings + workstation assignments + camera zone
 // track observations → VERIFIED / AMBIGUOUS / UNVERIFIED, with manual review.

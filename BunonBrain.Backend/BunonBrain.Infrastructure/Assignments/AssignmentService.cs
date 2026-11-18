@@ -233,7 +233,8 @@ public sealed class AssignmentService : IAssignmentService
     public async Task<AccessResult<AssignmentDto>> CreateAsync(AccessContext caller, CreateAssignmentRequest r, string? traceId, CancellationToken ct)
     {
         var now = Now;
-        var startAt = r.StartAt ?? now;
+        // Clients may send local times (+06:00); PostgreSQL timestamptz only takes UTC.
+        var startAt = r.StartAt?.ToUniversalTime() ?? now;
         if (AssignmentRules.EffectiveTimeProblem(startAt, now) is { } timeProblem)
             return AccessResult<AssignmentDto>.Invalid("invalid_start_time", timeProblem);
 
@@ -277,7 +278,7 @@ public sealed class AssignmentService : IAssignmentService
         var existing = await _db.Assignments.AsNoTracking().FirstOrDefaultAsync(a => a.Id == assignmentId, ct);
         if (existing is null || !await Visible(caller).AnyAsync(a => a.Id == assignmentId, ct)) return AssignmentNotFound<TransferResult>();
         var now = Now;
-        var at = r.EffectiveAt ?? now;
+        var at = r.EffectiveAt?.ToUniversalTime() ?? now;
 
         Guid openedId = Guid.Empty;
         var result = await InTransactionAsync(async () =>
@@ -337,7 +338,7 @@ public sealed class AssignmentService : IAssignmentService
         var existing = await _db.Assignments.AsNoTracking().FirstOrDefaultAsync(a => a.Id == assignmentId, ct);
         if (existing is null || !await Visible(caller).AnyAsync(a => a.Id == assignmentId, ct)) return AssignmentNotFound<AssignmentDto>();
         var now = Now;
-        var endAt = r.EndAt ?? now;
+        var endAt = r.EndAt?.ToUniversalTime() ?? now;
 
         var result = await InTransactionAsync(async () =>
         {

@@ -178,6 +178,26 @@ public sealed class DbAssignmentTests
     }
 
     [DockerFact]
+    public async Task Local_times_with_an_offset_are_accepted_and_stored_as_utc()
+    {
+        // Clients in Bangladesh may send +06:00 times; PostgreSQL timestamptz only takes UTC (this used to be a 500).
+        var s = await NewSite();
+        var ws1 = await Workstation(s, s.Line1);
+        var ws2 = await Workstation(s, s.Line1);
+        var worker = await Worker(s, s.Line1);
+        var dhaka = TimeSpan.FromHours(6);
+        var start = DateTimeOffset.UtcNow.AddHours(-3).ToOffset(dhaka);
+        var a = await Post("/api/assignments", s.Admin.Token, new { workerId = worker, workstationId = ws1, startAt = start.ToString("yyyy-MM-ddTHH:mm:sszzz"), reason = "Placement" });
+        Is(HttpStatusCode.Created, a);
+        Assert.Equal(start.ToUnixTimeSeconds(), DateTimeOffset.Parse(a.Str("startAt")).ToUnixTimeSeconds());
+        var moved = start.AddHours(1);
+        var t = await Post($"/api/assignments/{a.Id}/transfer", s.Admin.Token, new { workstationId = ws2, reason = "Balance", effectiveAt = moved.ToString("yyyy-MM-ddTHH:mm:sszzz") });
+        Is(HttpStatusCode.OK, t);
+        var opened = t.Body.GetProperty("opened").GetProperty("id").GetString()!;
+        Is(HttpStatusCode.OK, await Post($"/api/assignments/{opened}/end", s.Admin.Token, new { reason = "Shift over", endAt = moved.AddHours(1).ToString("yyyy-MM-ddTHH:mm:sszzz") }));
+    }
+
+    [DockerFact]
     public async Task Invalid_worker_workstation_and_machine_relationships_are_refused()
     {
         var (s, other) = (await NewSite(), await NewSite());

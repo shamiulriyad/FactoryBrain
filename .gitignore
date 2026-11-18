@@ -21,8 +21,25 @@ obj/
 skills-lock.json
 promt/
 /docs/
+/database/
+# YOLO (Ultralytics) prediction output, created wherever a model is run
+runs/
 
 PROJECT_WORK_SUMMARY.txt
+
+# Project notes kept locally, not in the repository
+ACCESS_CONTROL.md
+ANALYTICS.md
+ARCHITECTURE.md
+CAMERA_AI.md
+COMPETITION.md
+DEPLOY_RENDER.md
+DOCUMENTS.md
+IDENTITY_ASSOCIATION.md
+IOT_INTEGRATION.md
+MAIN_FEATURES.md
+MONITORING_EVENTS.md
+PLANNING.md
 
 # QC inspection images (default store: BunonBrain.Api/App_Data/qc-images)
 App_Data/

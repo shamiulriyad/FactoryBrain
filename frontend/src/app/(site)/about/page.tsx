@@ -43,7 +43,7 @@ export default function AboutPage() {
             </p>
             <p>
               It is designed around a typical Bangladeshi export plant: knit and woven lines, a cutting section, finishing
-              sections and a workforce in the thousands. The name joins <span lang="bn">বুনন</span> (bunon), weaving, with the
+              sections and a workforce in the thousands. The name joins <i>bunon</i>, weaving, with the
               intelligence the system adds alongside the people who do the work.
             </p>
           </div>

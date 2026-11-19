@@ -438,7 +438,7 @@ function BrainInner() {
                     >
                       <Icon size={12} />
                     </span>
-                    <p className="text-body text-fg-primary truncate">{locale === "bn" ? entity.labelBn : entity.label}</p>
+                    <p className="text-body text-fg-primary truncate">{entity.label}</p>
                   </div>
                   <p className="mt-1 mono-pill text-fg-tertiary">{entity.kind}</p>
                   {entity.meta && Object.keys(entity.meta).length > 0 && (
@@ -489,7 +489,7 @@ function BrainInner() {
                     />
                     <span className="mono-pill text-fg-tertiary">{selected.kind}</span>
                   </div>
-                  <p className="mt-2 text-title text-fg-primary">{locale === "bn" ? selected.labelBn : selected.label}</p>
+                  <p className="mt-2 text-title text-fg-primary">{selected.label}</p>
                   {selected.meta && Object.keys(selected.meta).length > 0 && (
                     <ul className="mt-3 space-y-1">
                       {Object.entries(selected.meta).map(([k, v]) => (
@@ -531,7 +531,7 @@ function BrainInner() {
                         transition={{ type: "spring", stiffness: 420, damping: 30 }}
                         className="h-7 px-2 rounded-md border border-border-subtle bg-surface-2 text-caption text-fg-secondary hover:text-fg-primary hover:border-border-strong transition-colors"
                       >
-                        {locale === "bn" ? n.labelBn : n.label}
+                        {n.label}
                       </motion.button>
                     ))}
                   </div>

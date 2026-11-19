@@ -203,7 +203,7 @@ export default function OverviewPage() {
   }
 
   const factoryName = ctx.data ? `${ctx.data.factoryName}` : factories?.find((x) => x.id === f)?.name ?? "Factory overview";
-  const dateLabel = new Date(`${today}T00:00:00`).toLocaleDateString(locale === "bn" ? "bn-BD" : "en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const dateLabel = new Date(`${today}T00:00:00`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const periodText = period === "week" ? `${range.from} – ${range.to}` : range.from;
 
   return (

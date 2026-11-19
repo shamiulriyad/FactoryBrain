@@ -51,9 +51,4 @@ export const FAQS: Faq[] = [
     q: "Where is our data stored?",
     a: "Application data is stored in a PostgreSQL database chosen when BunonBrain is deployed. Uploaded inspection images and order documents are stored in the file storage configured for the deployment. Hosting location and arrangements are agreed for each customer.",
   },
-  {
-    category: "Product",
-    q: "Does it work in Bangla?",
-    a: "Yes. The application interface is available in English and বাংলা, and users can switch between them.",
-  },
 ];

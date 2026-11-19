@@ -168,7 +168,7 @@ export default function FloorAlertsPage() {
                   />
                   <div className="min-w-0 flex-1">
                     <p className={cn("text-body whitespace-pre-line", a.read ? "text-fg-secondary" : "text-fg-primary font-medium")}>
-                      {locale === "bn" ? a.bodyBn : a.bodyEn}
+                      {a.bodyEn}
                     </p>
                     <div className="mt-1.5 flex flex-wrap items-center gap-2 text-caption text-fg-tertiary">
                       <Badge tone={SEVERITY_TONE[a.severity]}>{a.severity}</Badge>

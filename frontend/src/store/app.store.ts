@@ -21,7 +21,6 @@ type AppState = {
   tourDismissed: boolean;
   /** Recent global-search queries (most-recent first, max 8). */
   recentSearches: string[];
-  setLocale: (l: Locale) => void;
   setTheme: (t: Theme) => void;
   applyTheme: () => void;
   openCommandPalette: (seed?: string) => void;
@@ -38,7 +37,8 @@ type AppState = {
 const safeGet = <T,>(key: string, fallback: T): T => storage.get<T>(key, fallback);
 
 export const useAppStore = create<AppState>((set, get) => ({
-  locale: safeGet<Locale>("bunonbrain:locale", defaultLocale),
+  // English only; any language saved by an older build is ignored.
+  locale: defaultLocale,
   theme: safeGet<Theme>("bunonbrain:theme", "light"),
   commandPaletteOpen: false,
   paletteSeed: "",
@@ -47,10 +47,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   tourCompleted: safeGet<boolean>("bunonbrain:tourCompleted", false),
   tourDismissed: safeGet<boolean>("bunonbrain:tourDismissed", false),
   recentSearches: safeGet<string[]>("bunonbrain:recentSearches", []),
-  setLocale: (l) => {
-    storage.set("bunonbrain:locale", l);
-    set({ locale: l });
-  },
   setTheme: (t) => {
     storage.set("bunonbrain:theme", t);
     set({ theme: t });

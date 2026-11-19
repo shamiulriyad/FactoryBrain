@@ -472,7 +472,7 @@ export const MODULES: ProductModule[] = [
     capabilities: [
       { title: "38 document types", body: "Production, quality, store, HR and compliance documents." },
       { title: "Review and approval", body: "Versioned documents with a review and approval workflow." },
-      { title: "PDF, Excel, Word", body: "Exports in the format the reader needs; Bangla text renders correctly in PDFs." },
+      { title: "PDF, Excel, Word", body: "Exports in the format the reader needs." },
     ],
     related: ["merchandising", "reports-analytics"],
   },

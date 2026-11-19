@@ -282,7 +282,6 @@ export const en = {
   ask: {
     title: "Ask BunonBrain",
     placeholder: "Ask anything about your factory…",
-    placeholderBn: "বাংলায় লিখুন অথবা ইংরেজি — যেটা আপনার সুবিধা।",
     submit: "Ask",
     suggestions: "Try one of these",
     newQuestion: "Ask another question",
@@ -629,14 +628,14 @@ export const en = {
       overviewImportant: { title: "Important today", body: "Top insights by risk and confidence. Click any row to jump into the insight." },
       overviewActions: { title: "Decisions waiting", body: "The newest items in the server approval queue. Open one to approve or reject it." },
       knowledge: { title: "Knowledge base", body: "The manuals and SOPs Ask searches. Admins add documents and review reindex plans here." },
-      ask: { title: "Ask in Bangla or English", body: "Every answer carries evidence. Bangla questions get Bangla answers." },
+      ask: { title: "Ask your factory", body: "Every answer carries evidence and cites its sources." },
       brain: { title: "Factory Brain", body: "A graph of what Factory Brain has understood about your floor. Hover to inspect, click for the full record." },
       insights: { title: "Insights pipeline", body: "Each insight walks the stages. Filter by agent or risk." },
       agents: { title: "Agents", body: "The agents registered on the server. Operators can run one; results land in Approvals and Floor alerts." },
       approvals: { title: "Approvals with risk tiers", body: "Approve, or reject with a reason. High-risk items need an Admin. Keyboard: a, r, j, k." },
       activity: { title: "Floor alerts", body: "Alerts raised by agent runs and vision analyses. Operators mark them as read." },
       integrations: { title: "Sources", body: "Every data source of the factory with its devices, record counts and when the last record arrived." },
-      settings: { title: "Settings", body: "Language model and embeddings, users and roles (Admin), theme and language." },
+      settings: { title: "Settings", body: "Language model and embeddings, users and roles (Admin), and theme." },
       search: { title: "Jump anywhere", body: "Ctrl+K (⌘K) opens any page or setting your role can use, or sends the text to Ask." }
     }
   },
@@ -644,7 +643,7 @@ export const en = {
     eyebrow: "Factory Brain · mid-tier BD RMG",
     headlineLead: "Factory Brain understands your floor,",
     headlineAccent: "then runs it for you.",
-    subhead: "BunonBrain is the operations layer for a mid-tier Bangladeshi garment plant. Connect your sensor feeds, watch the Factory Brain graph form, then ask the floor in Bangla or English. Every answer carries evidence. Every high-risk action waits for your sign-off.",
+    subhead: "BunonBrain is the operations layer for a mid-tier Bangladeshi garment plant. Connect your sensor feeds, watch the Factory Brain graph form, then ask the floor in plain English. Every answer carries evidence. Every high-risk action waits for your sign-off.",
     ctaPrimary: "Enter demo",
     ctaPrimaryHint: "Skip onboarding, jump straight into the live demo plant.",
     ctaSecondary: "Tour in 2 min",
@@ -659,9 +658,9 @@ export const en = {
         title: "Bottleneck & floor alerts",
         body: "Maintenance, line-throughput and manager agents surface the bottleneck, the failing machine, and the order at risk — before your floor manager sees it on paper."
       },
-      bangla: {
-        title: "Ask in Bangla, answer in Bangla",
-        body: "Type \"লাইন ৩ এর efficiency কত?\" and get a Bangla finding with the same evidence the English answer carries. Manual pages, sensor data and policies are all in scope."
+      ask: {
+        title: "Ask, with evidence",
+        body: "Type \"What is the efficiency of Line 3?\" and get a finding with the evidence behind it. Manual pages, sensor data and policies are all in scope."
       }
     },
     socialProof: {
@@ -670,7 +669,7 @@ export const en = {
       pillars: [
         "Woven, knit & denim lines",
         "BDT currency · 12-hour shifts",
-        "Bangla + English operations",
+        "Role-based operations",
         "Manual-corpus grounded answers"
       ]
     },
@@ -679,7 +678,7 @@ export const en = {
       steps: [
         "Connect · Ingest sensor feeds, ERP exports, manual PDFs and the daily WhatsApp queue. Demo mode simulates every source so the rest of the app stays honest.",
         "Understand · The Factory Brain builds a graph of lines, machines, orders and suppliers. Every insight cites the records it came from.",
-        "Act · Ask in Bangla, route to the right agent, approve the high-risk items. Every decision lands in the activity log."
+        "Act · Ask a question, route to the right agent, approve the high-risk items. Every decision lands in the activity log."
       ]
     },
     honesty: {
@@ -773,7 +772,6 @@ export const en = {
     loading: "Loading…",
     comingSoon: "Coming soon",
     backToActivity: "Back to activity",
-    banglaHint: "আপনি বাংলায় লিখতে পারেন।",
     searchHint: "Try a product name, insight title or setting",
     noResults: "Nothing matched.",
     noResultsHint: "Search across agents, insights, products, customers, suppliers, policies, integrations and settings.",
@@ -829,11 +827,10 @@ export const en = {
   },
   vision: {
     title: "Vision-to-repair",
-    body: "Upload a defect photo to get a short repair instruction in Bangla + English. Demo data only.",
+    body: "Upload a defect photo to get a short repair instruction. Demo data only.",
     upload: "Upload a defect photo",
     choose: "Choose one of the staged images",
     resultEn: "Repair instruction (English)",
-    resultBn: "Repair instruction (Bangla)",
     repairTitle: "Repair instruction",
     none: "No image selected yet.",
     simulatedPill: "Simulated — demo VLM mapping",
@@ -998,7 +995,7 @@ export const en = {
       policyCardSubtitle: "Read from src/data/workforce/policy.ts."
     },
     workers: {
-      searchPlaceholder: "Search by name (English or বাংলা) or ID (e.g. W-0045)…",
+      searchPlaceholder: "Search by name or ID (e.g. W-0045)…",
       filterLine: "Line",
       filterRole: "Role",
       filterGrade: "Grade",
@@ -1044,7 +1041,6 @@ export const en = {
       modalAddTitle: "Add worker (demo)",
       modalEditTitle: "Edit worker record",
       fieldNameEn: "Full name (English)",
-      fieldNameBn: "Full name (বাংলা)",
       fieldGender: "Gender",
       genderFemale: "Female",
       genderMale: "Male",
@@ -1149,7 +1145,6 @@ export const en = {
       fieldEndDate: "End date",
       fieldDays: "Number of working days",
       fieldReasonEn: "Reason (English)",
-      fieldReasonBn: "Reason (বাংলা, optional)",
       balancePreview: "Entitled: {entitled}d · Used: {used}d · Remaining: {remaining}d",
       errOverdrawn: "Cannot submit: requested {days} days exceeds remaining balance ({remaining} days available).",
       errIneligibleMaternity: "Maternity leave (16 weeks) applies to female workers only.",
@@ -1182,7 +1177,7 @@ export const en = {
       colDhu: "Avg DHU %",
       colAttendance30d: "30d attendance %",
       bonusPanelTitle: "Incentive, overtime & festival bonus preview",
-      bonusPanelSubtitle: "Deterministic rules from src/data/workforce/policy.ts: Attendance bonus (≥96% attendance = ৳850), Efficiency Tier 1 (≥78% eff & ≤2.2% DHU = ৳600), Tier 2 (≥85% eff & ≤1.5% DHU = ৳1,200), Festival bonus (100% basic).",
+      bonusPanelSubtitle: "Deterministic rules from src/data/workforce/policy.ts: Attendance bonus (≥96% attendance = BDT 850), Efficiency Tier 1 (≥78% eff & ≤2.2% DHU = BDT 600), Tier 2 (≥85% eff & ≤1.5% DHU = BDT 1,200), Festival bonus (100% basic).",
       bonusHiddenNotice: "Salary, overtime pay and bonus BDT amounts are restricted to the Admin role. Sign in as Admin to inspect per-worker BDT figures.",
       colGrossWage: "Gross monthly",
       colBasicWage: "Basic",
@@ -1207,7 +1202,6 @@ export const en = {
       colCompleted: "Completed",
       modalBatchTitle: "Create training batch",
       fieldBatchTitleEn: "Batch title (English)",
-      fieldBatchTitleBn: "Batch title (বাংলা, optional)",
       fieldBatchSkill: "Target machine skill",
       fieldBatchLine: "Target line",
       fieldInstructorEn: "Instructor name",
@@ -1231,7 +1225,6 @@ export const en = {
       modalCreateTitle: "Submit floor grievance (named or anonymous)",
       fieldAnonymous: "Submit anonymously (do not record worker ID)",
       fieldSubjectEn: "Subject (English)",
-      fieldSubjectBn: "Subject (বাংলা, optional)",
       fieldDetailEn: "Details",
       resolutionPlaceholder: "Add investigation / resolution note…",
       grievanceCreatedToast: "Submitted grievance {ticket}.",

@@ -410,7 +410,7 @@
   html, body {
     background: var(--bg-canvas);
     color: var(--fg-primary);
-    font-family: Inter, "Segoe UI", "Hind Siliguri", system-ui, sans-serif;
+    font-family: Inter, "Segoe UI", system-ui, sans-serif;
     font-variant-numeric: tabular-nums;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -651,7 +651,7 @@
   }
   .react-flow__handle { opacity: 0; }
   .react-flow__node {
-    font-family: Inter, "Hind Siliguri", system-ui, sans-serif;
+    font-family: Inter, system-ui, sans-serif;
   }
   .react-flow__controls {
     background: var(--bg-surface-2);

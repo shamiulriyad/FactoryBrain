@@ -6,7 +6,7 @@ export const VALUES = [
   { title: "Accountable automation", body: "Software can recommend. A named person decides, and the decision is recorded." },
   { title: "Honesty in what we show", body: "Simulated data, demo screens and planned features are always labelled as such, in the product and on this website." },
   { title: "Privacy by role", body: "People see what their job requires and nothing more. Personal information is protected by default." },
-  { title: "Built for Bangladesh", body: "Bangla and English, local working patterns, and the realities of export production shape every decision." },
+  { title: "Built for Bangladesh", body: "Local working patterns, plant time zones and the realities of export production shape every decision." },
 ];
 
 export const WORKING_PRINCIPLES = [
@@ -15,7 +15,7 @@ export const WORKING_PRINCIPLES = [
   { title: "Small, safe steps", body: "We ship in increments that a plant can adopt without disrupting production." },
   { title: "Say what is not done", body: "We label planned work clearly and don't promise dates we can't keep." },
   { title: "Security is everyone's job", body: "Permissions, audit trails and data handling are reviewed with every change." },
-  { title: "Clear language", body: "Plain words in the product, the documentation and this website, in Bangla and English." },
+  { title: "Clear language", body: "Plain words in the product, the documentation and this website." },
 ];
 
 /** Product milestones, taken from the application's database migration history. */

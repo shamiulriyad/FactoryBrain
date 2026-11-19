@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, Box, Clock3, FileSpreadsheet, Languages, ScrollText, ShieldCheck, Users2, Workflow } from "lucide-react";
+import { ArrowRight, BadgeCheck, Box, Clock3, FileSpreadsheet, MonitorSmartphone, ScrollText, ShieldCheck, Users2, Workflow } from "lucide-react";
 import { ButtonLink, Card, CheckList, Container, CtaBand, Eyebrow, IconTile, Section, SectionHeader, StatusBadge } from "@/components/site/ui";
 import { FaqList, PlatformDiagram, ScreenFrame, Steps } from "@/components/site/visuals";
 import { HeroProduct } from "@/components/site/HeroProduct";
@@ -21,7 +21,7 @@ const FACTS = [
   { icon: Users2, title: "Eight roles", body: "From Super Admin to Worker, scoped by factory and line." },
   { icon: ScrollText, title: "Every decision audited", body: "Approvals and access changes go to an append-only log." },
   { icon: Box, title: "Starts with your records", body: "Output files, documents and photos. Sensors when you are ready." },
-  { icon: Languages, title: "English and বাংলা", body: "One interface for the office and the floor." },
+  { icon: MonitorSmartphone, title: "Runs in a browser", body: "Nothing to install for the office or the floor." },
 ];
 
 const CHALLENGES = [
@@ -45,7 +45,7 @@ const WHY = [
 ];
 
 const LOCAL = [
-  { icon: Languages, title: "বাংলা and English", body: "Switch the whole interface with one click; Bangla renders correctly in exported PDFs." },
+  { icon: MonitorSmartphone, title: "Low cost to adopt", body: "Runs in a browser, with low-cost ESP32 sensors and the CCTV cameras a plant already has." },
   { icon: Clock3, title: "Dhaka time by default", body: "Work dates, lateness and overtime follow each factory's time zone." },
   { icon: FileSpreadsheet, title: "The paperwork plants file", body: "AQL, GRN, packing lists and attendance sheets generated from the records." },
   { icon: BadgeCheck, title: "Roles of an RMG plant", body: "Merchandiser, QC, HR, supervisor and manager, each with their own menu." },
@@ -59,7 +59,7 @@ export default async function HomePage() {
     { value: String(available.length), label: "modules in production", note: "each with its status on its page" },
     { value: "8", label: "roles", note: "scoped by factory and line" },
     { value: "38", label: "factory documents", note: "generated from your records" },
-    { value: "2", label: "languages", note: "English and বাংলা" },
+    { value: "0", label: "installs", note: "runs in a web browser" },
   ];
 
   return (
@@ -85,7 +85,7 @@ export default async function HomePage() {
               </ButtonLink>
             </div>
             <ul className="mt-10 flex max-w-[34rem] flex-wrap gap-x-6 gap-y-3 border-t border-brand-border pt-6 text-[0.9rem] text-brand-body">
-              {["Role-based access", "English and বাংলা", "Every decision audited"].map((t) => (
+              {["Role-based access", "Runs in a browser", "Every decision audited"].map((t) => (
                 <li key={t} className="inline-flex items-center gap-2 whitespace-nowrap">
                   <BadgeCheck size={16} aria-hidden className="shrink-0 text-brand-emerald" />
                   {t}
@@ -398,7 +398,7 @@ export default async function HomePage() {
           <div>
             <Eyebrow>Made for Bangladesh</Eyebrow>
             <h2 id="local-title" className="mt-3 font-heading text-[2rem] font-semibold leading-[1.1] tracking-[-0.02em] text-brand-text sm:text-[2.5rem]">
-              <span lang="bn">বুনন</span> means weaving.
+              <i>Bunon</i> means weaving.
               <span className="block text-brand-emerald-ink">The brain is the people who run the floor.</span>
             </h2>
             <p className="mt-5 max-w-[34rem] text-[1.05rem] leading-relaxed text-brand-body">

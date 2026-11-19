@@ -25,7 +25,7 @@ export function InsightCard({ insight, focused }: { insight: InsightPublic; focu
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="text-caption text-fg-tertiary">{insight.agentLabel}</p>
-            <p className="mt-0.5 text-body text-fg-primary">{locale === "bn" ? insight.titleBn : insight.title}</p>
+            <p className="mt-0.5 text-body text-fg-primary">{insight.title}</p>
           </div>
           <div className="flex flex-col items-end gap-1.5 shrink-0">
             <RiskPill tier={insight.recommendation.riskTier} label={t(`risk.${insight.recommendation.riskTier}`)} />
@@ -34,7 +34,7 @@ export function InsightCard({ insight, focused }: { insight: InsightPublic; focu
         </div>
 
         <p className="mt-2 text-caption text-fg-secondary line-clamp-2">
-          {locale === "bn" ? insight.findingBn : insight.finding}
+          {insight.finding}
         </p>
 
         <div className="mt-3 flex items-center justify-between">
@@ -66,8 +66,8 @@ export function InsightCard({ insight, focused }: { insight: InsightPublic; focu
                   <ul className="space-y-1">
                     {insight.factors.map((f, i) => (
                       <li key={i} className="flex items-center justify-between text-caption">
-                        <span className="text-fg-secondary">{locale === "bn" ? f.labelBn : f.label}</span>
-                        <span className="text-fg-primary mono-pill">{locale === "bn" ? f.magnitudeBn : f.magnitude}</span>
+                        <span className="text-fg-secondary">{f.label}</span>
+                        <span className="text-fg-primary mono-pill">{f.magnitude}</span>
                       </li>
                     ))}
                   </ul>
@@ -76,8 +76,8 @@ export function InsightCard({ insight, focused }: { insight: InsightPublic; focu
               <EvidenceBlock refs={insight.evidence} />
               <div className="surface p-3">
                 <p className="mono-pill text-fg-tertiary mb-1">Recommended action</p>
-                <p className="text-body text-fg-primary">{locale === "bn" ? insight.recommendation.titleBn : insight.recommendation.title}</p>
-                <p className="mt-1 text-caption text-fg-secondary">{locale === "bn" ? insight.recommendation.actionBn : insight.recommendation.action}</p>
+                <p className="text-body text-fg-primary">{insight.recommendation.title}</p>
+                <p className="mt-1 text-caption text-fg-secondary">{insight.recommendation.action}</p>
               </div>
             </div>
           </motion.div>

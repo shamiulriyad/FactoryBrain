@@ -73,11 +73,11 @@ export function RunResult({ record }: { record: RunRecord }) {
         <Badge tone="info" title="Answered by the Python RAG service from the indexed PDFs">{r.source === "rag" ? "RAG answer" : r.source}</Badge>
         <Badge tone={RISK_TONE[ins.riskTier]}>{t(`risk.${ins.riskTier}`)}</Badge>
         {r.approvalPending ? <Badge tone="warning" dot>Approval pending</Badge> : <Badge tone="success" dot>No approval needed</Badge>}
-        <span className="text-caption text-fg-tertiary">{new Date(record.at).toLocaleTimeString(locale === "bn" ? "bn-BD" : "en-GB")}</span>
+        <span className="text-caption text-fg-tertiary">{new Date(record.at).toLocaleTimeString("en-GB")}</span>
       </div>
       <div>
-        <p className="text-body font-medium text-fg-primary">{locale === "bn" ? ins.titleBn : ins.title}</p>
-        <p className="mt-0.5 text-caption text-fg-secondary whitespace-pre-wrap">{locale === "bn" ? ins.findingBn : ins.finding}</p>
+        <p className="text-body font-medium text-fg-primary">{ins.title}</p>
+        <p className="mt-0.5 text-caption text-fg-secondary whitespace-pre-wrap">{ins.finding}</p>
         {ins.recommendationAction && <p className="mt-1 text-caption text-fg-primary">→ {ins.recommendationAction}</p>}
         <p className="mt-1 text-[11px] text-fg-tertiary">Best source match {Math.round(ins.confidence * 100)}%</p>
       </div>

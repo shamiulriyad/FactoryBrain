@@ -100,7 +100,7 @@ export default function IntegrationsPage() {
             <StatCard label="Devices" value={devices} href="/app/cameras-devices/devices" />
             <StatCard label="Devices offline" value={offline} tone={offline > 0 ? "warn" : "neutral"} href="/app/cameras-devices/health" />
           </div>
-          <p className="mt-3 text-caption text-fg-tertiary">{d.factoryCode} · updated {formatDateTime(d.generatedAt, locale as "en" | "bn")}</p>
+          <p className="mt-3 text-caption text-fg-tertiary">{d.factoryCode} · updated {formatDateTime(d.generatedAt, locale)}</p>
 
           <div className="mt-6 space-y-6">
             {GROUPS.map((g) => {
@@ -124,7 +124,7 @@ export default function IntegrationsPage() {
                             )}
                             {(s.records > 0 || s.devices === 0) && <span>{n(s.records)} {t("integrations.records")}</span>}
                             {s.records24h > 0 && <span>{n(s.records24h)} in 24 h</span>}
-                            <span>{s.lastRecordAt ? `Last: ${formatRelative(s.lastRecordAt, locale as "en" | "bn")}` : "Nothing received yet"}</span>
+                            <span>{s.lastRecordAt ? `Last: ${formatRelative(s.lastRecordAt, locale)}` : "Nothing received yet"}</span>
                           </p>
                           {s.note && <p className="mt-1 text-caption text-fg-tertiary">{s.note}</p>}
                         </div>

@@ -97,7 +97,7 @@ export function FloorAlertsPanel() {
           </span>
           <div className="min-w-0">
             <p className="text-body text-fg-primary truncate">
-              {locale === "bn" ? "ফ্লোর অ্যালার্ট (whatsapp_sim)" : "Floor alerts (whatsapp_sim)"}
+              {"Floor alerts (whatsapp_sim)"}
             </p>
             <p className="text-caption text-fg-tertiary truncate">{subtitle}</p>
           </div>
@@ -151,7 +151,7 @@ export function FloorAlertsPanel() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="min-w-0 flex-1 whitespace-pre-line">
-                    {locale === "bn" ? a.bodyBn : a.bodyEn}
+                    {a.bodyEn}
                   </p>
                   <span
                     className={`shrink-0 mono-pill border px-2 py-0.5 text-caption ${severityStyles[a.severity]}`}

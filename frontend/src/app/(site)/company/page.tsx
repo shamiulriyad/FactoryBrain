@@ -18,7 +18,7 @@ export default function CompanyPage() {
     ["Industry", "Ready-made garments (RMG) and textile manufacturing"],
     ["Market", "Bangladesh garment exporters"],
     ["Product", `Web application with ${MODULES.length} modules (${available} available today)`],
-    ["Languages", "English and বাংলা"],
+    ["Language", "English"],
     ["Tagline", SITE.tagline],
     ["Registered office", SITE.legal.registeredAddress ?? <span className="site-tbc">To be published</span>],
   ];

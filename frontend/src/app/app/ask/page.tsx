@@ -9,7 +9,6 @@ import {
   Copy,
   FileText,
   History,
-  Languages,
   Loader2,
   MessageSquarePlus,
   MessageSquareText,
@@ -288,7 +287,7 @@ export default function AskPage() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void ask(query); }
                 }}
-                placeholder={activeId ? "Ask a follow-up question…" : locale === "bn" ? t("ask.placeholderBn") : t("ask.placeholder")}
+                placeholder={activeId ? "Ask a follow-up question…" : t("ask.placeholder")}
                 data-testid="ask-input"
                 rows={1}
                 className="flex-1 resize-none bg-transparent border-0 outline-none text-body text-fg-primary placeholder:text-fg-tertiary max-h-40 py-2"
@@ -298,7 +297,7 @@ export default function AskPage() {
               </Button>
             </form>
             <p className="mt-1.5 text-caption text-fg-tertiary flex justify-between gap-3">
-              <span>English, বাংলা or Banglish · Enter to send, Shift + Enter for a new line</span>
+              <span>Enter to send, Shift + Enter for a new line</span>
               {query.length > MAX_QUERY * 0.8 && <span>{query.length}/{MAX_QUERY}</span>}
             </p>
           </div>
@@ -335,7 +334,7 @@ function HistoryList({
   loading: boolean;
   error: string | null;
   activeId: string | null;
-  locale: "en" | "bn";
+  locale: "en";
   onNew: () => void;
   onOpen: (id: string) => void;
   onDelete: (c: AskConversationSummary) => void;
@@ -420,7 +419,7 @@ function Welcome({ onPick, disabled }: { onPick: (q: string) => void; disabled: 
 
       <ul className="mt-8 grid gap-3 sm:grid-cols-2 text-caption text-fg-secondary">
         <Feature icon={<BookOpenText size={14} />} title="Only from your documents">Answers use the indexed PDFs, with page references. If they don&apos;t cover it, it says so.</Feature>
-        <Feature icon={<Languages size={14} />} title="Your language">Ask in English, বাংলা or Banglish; the answer comes in the same language.</Feature>
+        <Feature icon={<MessageSquareText size={14} />} title="Plain questions">Ask the way you would ask a colleague; no special keywords needed.</Feature>
         <Feature icon={<Recycle size={14} />} title="Repeated questions are instant">The same question asked again reuses the earlier answer, without AI cost. &quot;Ask fresh&quot; gets a new one.</Feature>
         <Feature icon={<ShieldCheck size={14} />} title="Saved to your account">Your chats appear under &quot;Your chats&quot;; only you can see them.</Feature>
       </ul>
@@ -438,7 +437,7 @@ function Feature({ icon, title, children }: { icon: React.ReactNode; title: stri
 }
 
 function Turn({ m, locale, onRetry, onFresh, busy }: {
-  m: MessageView; locale: "en" | "bn"; onRetry: () => void; onFresh: () => void; busy: boolean;
+  m: MessageView; locale: "en"; onRetry: () => void; onFresh: () => void; busy: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const mode = m.mode as AskMode;
@@ -528,7 +527,7 @@ function Turn({ m, locale, onRetry, onFresh, busy }: {
                 <RefreshCw size={13} /> Ask fresh
               </Button>
             )}
-            <span className="ml-auto">{new Date(m.createdAt).toLocaleString(locale === "bn" ? "bn-BD" : "en-GB", { dateStyle: "medium", timeStyle: "short" })}</span>
+            <span className="ml-auto">{new Date(m.createdAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</span>
           </div>
         </article>
       )}
@@ -558,7 +557,7 @@ function SourceChip({ source }: { source: AskMode }) {
   );
 }
 
-function relativeTime(iso: string, locale: "en" | "bn"): string {
+function relativeTime(iso: string, locale: "en"): string {
   const then = new Date(iso).getTime();
   const minutes = Math.round((Date.now() - then) / 60_000);
   if (minutes < 1) return "just now";
@@ -567,5 +566,5 @@ function relativeTime(iso: string, locale: "en" | "bn"): string {
   if (hours < 24) return `${hours} h ago`;
   const days = Math.round(hours / 24);
   if (days < 7) return `${days} d ago`;
-  return new Date(iso).toLocaleDateString(locale === "bn" ? "bn-BD" : "en-GB", { day: "numeric", month: "short" });
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }

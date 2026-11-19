@@ -47,7 +47,7 @@ export function DecisionsPanel({ limit = 4 }: { limit?: number }) {
                   <Link href={`/app/approvals?focus=${a.id}`} className="relative flex items-center gap-3 pl-5 pr-4 py-3 group hover:bg-surface-2 transition-colors" data-testid="overview-decision">
                     <span className={cn("absolute left-0 top-2 bottom-2 w-[3px] rounded-r", RISK_STRIPE[a.riskTier])} aria-hidden />
                     <div className="min-w-0 flex-1">
-                      <p className="text-body font-medium text-fg-primary line-clamp-2 group-hover:text-accent">{locale === "bn" ? a.titleBn || a.title : a.title}</p>
+                      <p className="text-body font-medium text-fg-primary line-clamp-2 group-hover:text-accent">{a.title}</p>
                       <p className="mt-0.5 text-caption text-fg-tertiary truncate">{ins.agentLabel} · raised {formatRelative(a.createdAt, locale)}</p>
                     </div>
                     <Badge tone={RISK_TONE[a.riskTier]}>{t(`risk.${a.riskTier}`)}</Badge>

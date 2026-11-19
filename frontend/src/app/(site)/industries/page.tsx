@@ -84,7 +84,7 @@ export default function IndustriesPage() {
           <SectionHeader id="bd-title" eyebrow="Made for Bangladesh" title="Local by design." />
           <div className="space-y-5 text-[1.05rem] leading-relaxed text-brand-body">
             <p>
-              The interface is available in English and বাংলা. Production dates follow the plant&apos;s own time zone, and the
+              Production dates follow the plant&apos;s own time zone, and the
               roles mirror how Bangladeshi plants are organised, from factory administration and HR to line supervisors and
               workers.
             </p>

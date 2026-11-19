@@ -11,7 +11,6 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Callout } from "@/components/ui/Callout";
 import { ConfirmDialog } from "@/components/ui/Modal";
-import { LanguageToggle } from "@/components/ui/LanguageToggle";
 import { LlmSettingsPanel } from "@/components/settings/LlmSettingsPanel";
 import { EmbeddingSettingsPanel } from "@/components/settings/EmbeddingSettingsPanel";
 import { UsersAccessPanel } from "@/components/settings/UsersPanel";
@@ -209,9 +208,6 @@ function AppearanceSection() {
   ];
   return (
     <Panel title={t("settings.appearance")} subtitle={LOCAL_NOTE}>
-      <Row label={t("settings.language")}>
-        <LanguageToggle />
-      </Row>
       <Row label={t("settings.theme")} hint="Light, dark, or follow your system">
         <div className="inline-flex rounded-[var(--radius-control)] border border-border-subtle p-0.5 bg-surface-2" role="radiogroup" aria-label={t("settings.theme")}>
           {options.map((o) => (

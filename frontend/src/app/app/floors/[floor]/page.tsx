@@ -100,7 +100,7 @@ function FloorPage() {
                 <li key={a.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
                   <Badge tone={SEVERITY_TONE[a.severity] ?? "neutral"}>{a.severity.toLowerCase()}</Badge>
                   <Link className="flex-1 min-w-0 truncate text-body text-fg-primary hover:text-[var(--accent)]" href={`/app/monitoring/alerts/${a.id}`}>#{a.number} {a.title}</Link>
-                  <span className="text-caption text-fg-tertiary">{a.status.toLowerCase()} · {formatRelative(a.lastOccurredAt, locale as "en" | "bn")}</span>
+                  <span className="text-caption text-fg-tertiary">{a.status.toLowerCase()} · {formatRelative(a.lastOccurredAt, locale)}</span>
                 </li>
               ))}
             </ul>

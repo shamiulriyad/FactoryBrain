@@ -1,12 +1,12 @@
 import { en } from "./en";
-import { bn } from "./bn";
 import type { Dict } from "./en";
 
-export type Locale = "en" | "bn";
+/** The interface is English only. */
+export type Locale = "en";
 
-const dicts: Record<Locale, Dict> = { en, bn };
+const dict: Dict = en;
 
-function lookup(dict: Dict, segments: string[]): unknown {
+function lookup(segments: string[]): unknown {
   let value: any = dict;
   for (const seg of segments) {
     if (value == null) return undefined;
@@ -15,32 +15,17 @@ function lookup(dict: Dict, segments: string[]): unknown {
   return value;
 }
 
-export function t(locale: Locale, path: string, params?: Record<string, string | number>): string {
-  const segments = path.split(".");
-  let value = lookup(dicts[locale], segments);
-  // A key not yet translated falls back to English rather than showing its path.
-  if (typeof value !== "string" && locale !== "en") value = lookup(dicts.en, segments);
+export function t(_locale: Locale, path: string, params?: Record<string, string | number>): string {
+  const value = lookup(path.split("."));
   if (typeof value !== "string") return path;
   if (!params) return value;
   return value.replace(/\{(\w+)\}/g, (_, k) => String(params[k] ?? `{${k}}`));
 }
 
-export function tArray(locale: Locale, path: string): string[] {
-  const segments = path.split(".");
-  let value: any = dicts[locale];
-  for (const seg of segments) {
-    if (value == null) return [];
-    value = value[seg];
-  }
-  if (Array.isArray(value)) return value as string[];
-  // Fallback to English so the UI never breaks in the alternate locale.
-  let en: any = dicts.en;
-  for (const seg of segments) {
-    if (en == null) return [];
-    en = en[seg];
-  }
-  return Array.isArray(en) ? (en as string[]) : [];
+export function tArray(_locale: Locale, path: string): string[] {
+  const value = lookup(path.split("."));
+  return Array.isArray(value) ? (value as string[]) : [];
 }
 
-export const availableLocales: Locale[] = ["en", "bn"];
+export const availableLocales: Locale[] = ["en"];
 export const defaultLocale: Locale = "en";

@@ -45,6 +45,10 @@ public sealed class PyRagClient : IPyRagClient
             {
                 var detail = await DetailAsync(resp, ct);
                 _log.LogWarning("RAG service query failed: status={Status}.", (int)resp.StatusCode);
+                if (resp.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+                    throw new PyRagUnavailableException(
+                        "The RAG service rejected this API's key: PYRAG_API_KEY on the API must be exactly the same as PYRAG_API_KEY on the RAG service.",
+                        (int)resp.StatusCode);
                 throw new PyRagUnavailableException($"The RAG service returned {(int)resp.StatusCode}: {detail}", (int)resp.StatusCode);
             }
 

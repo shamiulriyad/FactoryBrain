@@ -150,7 +150,9 @@ export default function AskPage() {
         isApiError(e) && e.kind === "rate_limited" ? { title: "Too many questions", body: e.message }
         : isApiError(e) && e.kind === "validation" ? { title: "Question not accepted", body: e.message }
         : isApiError(e) && (e.kind === "unavailable" || e.kind === "server")
-          ? { title: "The RAG service is unavailable", body: `${e.message} If it was asleep it is waking up now; try again in a minute.` }
+          ? e.message.includes("PYRAG_API_KEY")
+            ? { title: "The RAG service key doesn't match", body: `${e.message} An administrator has to fix this in the hosting settings; retrying won't help.` }
+            : { title: "The RAG service is unavailable", body: `${e.message} If it was asleep it is waking up now; try again in a minute.` }
         : { title: "No answer", body: errorMessage(e) };
       setMessages((cur) => cur.map((m) => (m.id === tempId ? { ...m, pending: false, error } : m)));
     }

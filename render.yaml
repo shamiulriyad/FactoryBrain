@@ -94,11 +94,11 @@ services:
       # Python RAG service (public URL, protected by the generated key).
       - key: PYRAG_SERVICE_URL
         value: https://bunonbrain-rag.onrender.com
+      # Must be exactly the same value as PYRAG_API_KEY on bunonbrain-rag. Set by
+      # hand on both (never generated): a generated key changes whenever the RAG
+      # service is created again, and then every Ask fails with 401.
       - key: PYRAG_API_KEY
-        fromService:
-          type: web
-          name: bunonbrain-rag
-          envVarKey: PYRAG_API_KEY
+        sync: false
       - key: PYRAG_COLLECTION_NAME
         value: pdf_rag
       - key: PYRAG_TIMEOUT_SECONDS   # leaves room for the RAG service to wake up
@@ -164,7 +164,7 @@ services:
     name: bunonbrain-rag
     runtime: docker
     region: singapore
-    plan: free               # public, so PYRAG_API_KEY (generated below) must stay set
+    plan: free               # public, so PYRAG_API_KEY (below) must stay set
     dockerContext: ./rag
     dockerfilePath: ./rag/Dockerfile
     healthCheckPath: /health
@@ -174,8 +174,9 @@ services:
     envVars:
       - key: PORT
         value: "8000"
+      # The same value as PYRAG_API_KEY on the API (see there). Set by hand.
       - key: PYRAG_API_KEY
-        generateValue: true
+        sync: false
       # Retrieval: Gemini embeddings (no torch in the image, fits in 512 MB).
       # Changing the embedding model means re-ingesting every PDF.
       - key: PYRAG_EMBEDDING_PROVIDER

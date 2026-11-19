@@ -30,7 +30,7 @@ export default function FloorMapPage() {
       <PageHeader
         title={t("nav.floorMap")}
         description="Each production floor with its people, machines and open alerts. Click a floor for its lines and recent alerts."
-        meta={data ? <span className="text-caption text-fg-tertiary">{data.factoryCode} · updated {formatDateTime(data.generatedAt, locale as "en" | "bn")}</span> : undefined}
+        meta={data ? <span className="text-caption text-fg-tertiary">{data.factoryCode} · updated {formatDateTime(data.generatedAt, locale)}</span> : undefined}
         actions={
           <div className="flex flex-wrap items-end gap-2">
             <FloorFactoryPicker value={data?.factoryId ?? ""} />

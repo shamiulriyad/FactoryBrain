@@ -94,8 +94,7 @@ const config: Config = {
         }
       },
       fontFamily: {
-        sans: ["Inter", "Hind Siliguri", "system-ui", "sans-serif"],
-        bn: ["Hind Siliguri", "sans-serif"],
+        sans: ["Inter", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono", "ui-monospace", "monospace"],
         display: ["var(--font-display)", "Impact", "sans-serif"],
         plex: ["var(--font-plex)", "system-ui", "sans-serif"],

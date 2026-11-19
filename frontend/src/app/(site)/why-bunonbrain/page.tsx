@@ -1,4 +1,4 @@
-import { Eye, FileCheck2, Languages, Layers, ShieldCheck, Workflow } from "lucide-react";
+import { Eye, FileCheck2, Layers, MapPin, ShieldCheck, Workflow } from "lucide-react";
 import { ButtonLink, Container, CtaBand, PageHero, Section, SectionHeader } from "@/components/site/ui";
 import { pageMeta } from "@/lib/site/seo";
 
@@ -13,7 +13,7 @@ const REASONS = [
   { icon: ShieldCheck, title: "Access enforced on the server", body: "Eight roles, factory scope and line scope are checked by the API on every request. Hiding a button is never the only control." },
   { icon: FileCheck2, title: "Numbers that trace to records", body: "Efficiency, WIP, DHU and delivery risk are calculated from recorded output, reviewed inspections and confirmed order data. Nothing is estimated or filled in." },
   { icon: Eye, title: "Honest about what is real", body: "Simulated data is labelled as simulated, demo screens say they are demos, and AI without a configured provider says so instead of guessing." },
-  { icon: Languages, title: "Designed for Bangladesh", body: "English and বাংলা, plant time zones, and roles that mirror how Bangladeshi garment factories are organised." },
+  { icon: MapPin, title: "Designed for Bangladesh", body: "Plant time zones, the paperwork RMG plants file, and roles that mirror how Bangladeshi garment factories are organised." },
   { icon: Layers, title: "Start small, grow safely", body: "Begin with the records you have on one floor. Add documents, inspections and machine readings when you're ready." },
 ];
 

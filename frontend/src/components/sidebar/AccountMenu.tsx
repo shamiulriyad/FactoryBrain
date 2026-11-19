@@ -1,20 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Check, IdCard, LogOut, UserCircle2 } from "lucide-react";
+import { IdCard, LogOut, UserCircle2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { can, displayName, logout, useAuthStore } from "@/lib/auth";
 import { roleLabel } from "@/lib/access";
-import { useAppStore } from "@/store/app.store";
 import { useT } from "@/lib/useT";
-import type { Locale } from "@/i18n/registry";
 import type { HintHandler } from "./SidebarItem";
 import { menuItem, menuPanel, usePopover } from "./usePopover";
-
-const LANGUAGES: { value: Locale; label: string }[] = [
-  { value: "en", label: "English" },
-  { value: "bn", label: "বাংলা" },
-];
 
 /** "rahim.uddin@x.com" → "RU"; "admin@x.com" → "A". */
 function initialsOf(email: string): string {
@@ -23,7 +16,7 @@ function initialsOf(email: string): string {
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
 }
 
-/** Account button pinned to the bottom of the sidebar, with language and sign-out. */
+/** Account button pinned to the bottom of the sidebar, with sign-out. */
 export function AccountMenu({
   collapsed,
   factoryName,
@@ -34,8 +27,6 @@ export function AccountMenu({
   onHint?: HintHandler;
 }) {
   const user = useAuthStore((s) => s.user);
-  const locale = useAppStore((s) => s.locale);
-  const setLocale = useAppStore((s) => s.setLocale);
   const router = useRouter();
   const { t } = useT();
   const pop = usePopover(collapsed ? "right" : "above");
@@ -126,26 +117,6 @@ export function AccountMenu({
                 <span>{t("nav.me")}</span>
               </button>
             )}
-          </div>
-          <div role="group" aria-label={t("sidebar.language")} className="border-t border-sb-divider pt-1">
-            <p aria-hidden="true" className="px-2.5 pb-1 pt-1.5 font-plexmono text-[11px] uppercase tracking-[0.08em] text-sb-label">
-              {t("sidebar.language")}
-            </p>
-            {LANGUAGES.map((l) => (
-              <button
-                key={l.value}
-                type="button"
-                role="menuitemradio"
-                aria-checked={locale === l.value}
-                tabIndex={-1}
-                lang={l.value}
-                onClick={() => setLocale(l.value)}
-                className={cn(menuItem, locale === l.value && "text-sb-text")}
-              >
-                <span className="flex-1">{l.label}</span>
-                {locale === l.value && <Check size={16} aria-hidden="true" className="text-sb-accent" />}
-              </button>
-            ))}
           </div>
           <div className="mt-1 border-t border-sb-divider pt-1">
             <button type="button" role="menuitem" tabIndex={-1} onClick={() => void signOut()} className={menuItem}>

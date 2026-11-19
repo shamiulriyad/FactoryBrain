@@ -61,7 +61,7 @@ export function FloorAlertsCard({ alerts, limit = 5 }: { alerts: Resource<FloorA
                     <Icon size={15} />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className={cn("text-body line-clamp-2", a.read ? "text-fg-tertiary" : "text-fg-primary font-medium")}>{locale === "bn" ? a.bodyBn : a.bodyEn}</p>
+                    <p className={cn("text-body line-clamp-2", a.read ? "text-fg-tertiary" : "text-fg-primary font-medium")}>{a.bodyEn}</p>
                     <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-fg-tertiary">
                       {!a.read && <span className="inline-flex items-center gap-1 text-accent font-medium"><span className="size-1.5 rounded-full bg-accent" aria-hidden />Unread</span>}
                       <span>{formatRelative(a.createdAt, locale)}</span>

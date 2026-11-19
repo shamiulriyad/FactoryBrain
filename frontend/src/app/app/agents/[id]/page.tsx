@@ -43,10 +43,10 @@ export default function AgentDetailPage() {
             title={
               <span className="inline-flex items-center gap-3">
                 <AgentAvatar agentId={agent.id} size={36} />
-                {locale === "bn" ? agent.nameBn : agent.name}
+                {agent.name}
               </span>
             }
-            description={locale === "bn" ? agent.purposeBn : agent.purpose}
+            description={agent.purpose}
             actions={
               operator ? (
                 <RunButton agent={agent} running={runningId === agent.id} disabled={runningId !== null} onRun={() => void run(agent)} />

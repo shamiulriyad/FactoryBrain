@@ -279,11 +279,11 @@ export const STATUS_TONE: Record<string, "success" | "neutral" | "warning" | "da
 };
 
 /** "2024-03-01" → "1 Mar 2024", without a time-zone shift (these are calendar dates). */
-export function formatDay(day: string | null | undefined, locale: "en" | "bn" = "en"): string {
+export function formatDay(day: string | null | undefined, locale: "en" = "en"): string {
   if (!day) return "—";
   const [y, m, d] = day.split("-").map(Number);
   if (!y || !m || !d) return day;
-  return new Intl.DateTimeFormat(locale === "bn" ? "bn-BD" : "en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
     .format(new Date(Date.UTC(y, m - 1, d)));
 }
 

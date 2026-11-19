@@ -21,7 +21,7 @@ type Item = { id: string; group: string; title: string; hint?: string; href: str
 const SETTINGS: Array<{ section: string; title: string; hint: string; perms: string[]; keywords: string }> = [
   { section: "advanced", title: "AI & models", hint: "Language model, API keys, embeddings, reindex", perms: [P.KnowledgeView, P.PlatformSettingsManage], keywords: "llm openai gemini anthropic key embedding" },
   { section: "users", title: "Users & roles", hint: "Your access, and user administration", perms: [], keywords: "user role admin access permissions" },
-  { section: "appearance", title: "Appearance", hint: "Theme and language", perms: [], keywords: "theme dark light language bangla" },
+  { section: "appearance", title: "Appearance", hint: "Theme", perms: [], keywords: "theme dark light" },
   { section: "profile", title: "Business profile", hint: "Plant name (this browser)", perms: [], keywords: "name city plant" },
   { section: "dataReset", title: "Reset this browser", hint: "Clear local preferences", perms: [], keywords: "reset clear demo" }
 ];

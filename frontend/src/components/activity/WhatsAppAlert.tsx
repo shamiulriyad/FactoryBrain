@@ -15,7 +15,7 @@ type Bubble = {
 
 /** Pure UI; derives chat bubbles from the factory store's recent events. */
 export function WhatsAppAlert() {
-  const { t, locale } = useT();
+  const { t } = useT();
   const enabled = useBusinessStore((s) => s.featureFlags.whatsappAlert);
   const events = useFactoryStore((s) => s.recentEvents);
 
@@ -34,9 +34,7 @@ export function WhatsAppAlert() {
             id: `${e.id}-in`,
             direction: "in",
             text:
-              locale === "bn"
-                ? `⚠️ ${m.id}: কম্পন ${m.vibration} mm/s, তাপমাত্রা ${m.temperature}°C`
-                : `⚠️ ${m.id}: vibration ${m.vibration} mm/s, temperature ${m.temperature}°C`,
+              `⚠️ ${m.id}: vibration ${m.vibration} mm/s, temperature ${m.temperature}°C`,
             timestamp: ts
           });
         }
@@ -49,9 +47,7 @@ export function WhatsAppAlert() {
             id: `${e.id}-in`,
             direction: "in",
             text:
-              locale === "bn"
-                ? `📉 ${l.name}: দক্ষতা ${bn(ePct)}% (লক্ষ্য ${bn(tPct)}%)`
-                : `📉 ${l.name}: efficiency ${ePct}% vs target ${tPct}%`,
+              `📉 ${l.name}: efficiency ${ePct}% vs target ${tPct}%`,
             timestamp: ts
           });
         }
@@ -60,9 +56,7 @@ export function WhatsAppAlert() {
           id: `${e.id}-in`,
           direction: "in",
           text:
-            locale === "bn"
-              ? `🔌 শক্তি রিডিং: ${(e.payload.kwh as number)?.toFixed?.(1) ?? "—"} kWh`
-              : `🔌 Energy reading: ${(e.payload.kwh as number)?.toFixed?.(1) ?? "—"} kWh`,
+            `🔌 Energy reading: ${(e.payload.kwh as number)?.toFixed?.(1) ?? "—"} kWh`,
           timestamp: ts
         });
       }
@@ -72,20 +66,16 @@ export function WhatsAppAlert() {
       id: "auto-ack",
       direction: "out",
       text:
-        locale === "bn"
-          ? "অর্কেস্ট্রেটর: রিলে তৈরি করছে — প্রাসঙ্গিক এজেন্টকে অবহিত করা হচ্ছে।"
-          : "Orchestrator: preparing relay — routing the relevant agent now.",
+        "Orchestrator: preparing relay — routing the relevant agent now.",
       timestamp: new Date().toISOString()
     });
     return out.reverse();
-  }, [events, locale]);
+  }, [events]);
 
   if (!enabled) return null;
 
   const headerEvents = Math.max(bubbles.length - 1, 0);
-  const headerCount = locale === "bn"
-    ? `${headerEvents}টি ইভেন্ট`
-    : `${headerEvents} events`;
+  const headerCount = `${headerEvents} events`;
 
   return (
     <section className="surface p-4" aria-label={t("whatsapp.alert.title") as string}>
@@ -132,9 +122,4 @@ export function WhatsAppAlert() {
       </div>
     </section>
   );
-}
-
-function bn(n: number) {
-  const map: Record<number, string> = { 0: "০", 1: "১", 2: "২", 3: "৩", 4: "৪", 5: "৫", 6: "৬", 7: "৭", 8: "৮", 9: "৯" };
-  return String(n).replace(/[0-9]/g, (d) => map[Number(d)]);
 }

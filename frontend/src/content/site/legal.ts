@@ -284,7 +284,6 @@ export const LEGAL: LegalDoc[] = [
         "Form errors announced and linked to their fields.",
         "Descriptive alternative text for product screenshots and diagrams.",
         "Reduced motion respected where animations are used.",
-        "The application interface in English and বাংলা.",
       ] },
       { t: "h2", text: "Known limitations" },
       { t: "ul", items: ["Some charts in the application may not yet have full text alternatives."] },

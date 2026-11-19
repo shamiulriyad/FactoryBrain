@@ -3,7 +3,6 @@
 import { Search, Moon, Sun, Monitor, HelpCircle, LogOut, Menu } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { logout } from "@/lib/auth";
-import { LanguageToggle } from "@/components/ui/LanguageToggle";
 import { useAppStore, type Theme } from "@/store/app.store";
 import { useT } from "@/lib/useT";
 import { cn } from "@/lib/cn";
@@ -86,8 +85,6 @@ export function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
         </div>
 
         <NotificationBell />
-
-        <LanguageToggle />
 
         <button
           type="button"

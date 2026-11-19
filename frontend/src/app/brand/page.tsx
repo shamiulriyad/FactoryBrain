@@ -113,7 +113,7 @@ function SymbolAnatomy() {
               <span className="text-[#059669]">Brain</span>
             </h3>
             <p className="mt-1 max-w-[52ch] leading-relaxed text-[#334155]">
-              <span lang="bn">বুনন</span> (bunon) means weaving. Navy carries the craft, emerald carries the intelligence
+              <i>Bunon</i> means weaving. Navy carries the craft, emerald carries the intelligence
               that runs alongside it.
             </p>
           </div>

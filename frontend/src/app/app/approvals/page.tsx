@@ -136,7 +136,7 @@ export default function ApprovalsPage() {
     if (q) {
       filtered = filtered.filter((a) => {
         const ins = approvalInsight(a);
-        return [a.title, a.titleBn, ins.finding, ins.recommendation.title, ins.agentLabel, a.id]
+        return [a.title, ins.finding, ins.recommendation.title, ins.agentLabel, a.id]
           .some((s) => s?.toLowerCase().includes(q));
       });
     }
@@ -361,7 +361,7 @@ export default function ApprovalsPage() {
                         <span className="text-caption text-fg-tertiary">{ins.agentLabel}</span>
                         <span className="text-caption text-fg-tertiary" title={formatDateTime(a.createdAt, locale)}>· {formatRelative(a.createdAt, locale)}</span>
                       </div>
-                      <h2 className="mt-2 text-[15px] leading-[22px] font-semibold text-fg-primary">{locale === "bn" ? a.titleBn || a.title : a.title}</h2>
+                      <h2 className="mt-2 text-[15px] leading-[22px] font-semibold text-fg-primary">{a.title}</h2>
                     </div>
                     <Button variant="ghost" size="sm" onClick={() => setDetailId(a.id)} aria-label={`Details for ${a.title}`}>
                       Details <ChevronRight size={13} />
@@ -371,12 +371,12 @@ export default function ApprovalsPage() {
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <div>
                       <p className="eyebrow mb-1">{t("approvals.reasoning")}</p>
-                      <p className="text-body text-fg-secondary line-clamp-3">{(locale === "bn" ? ins.findingBn : ins.finding) || "—"}</p>
+                      <p className="text-body text-fg-secondary line-clamp-3">{ins.finding || "—"}</p>
                     </div>
                     <div>
                       <p className="eyebrow mb-1">Recommended action</p>
-                      <p className="text-body text-fg-primary">{locale === "bn" ? ins.recommendation.titleBn : ins.recommendation.title}</p>
-                      <p className="mt-0.5 text-caption text-fg-secondary">{locale === "bn" ? ins.recommendation.actionBn : ins.recommendation.action}</p>
+                      <p className="text-body text-fg-primary">{ins.recommendation.title}</p>
+                      <p className="mt-0.5 text-caption text-fg-secondary">{ins.recommendation.action}</p>
                     </div>
                   </div>
 
@@ -555,7 +555,7 @@ function ApprovalDetail({ approval: a, admin }: { approval: ServerApproval; admi
           <Badge tone={STATUS_TONE[a.status]} dot>{STATUS_LABEL[a.status]}</Badge>
           <Badge tone={RISK_TONE[a.riskTier]}>{t(`risk.${a.riskTier}`)} risk</Badge>
         </div>
-        <h3 className="mt-2 text-title font-semibold text-fg-primary">{locale === "bn" ? a.titleBn || a.title : a.title}</h3>
+        <h3 className="mt-2 text-title font-semibold text-fg-primary">{a.title}</h3>
         {a.reason && <p className="mt-1 text-caption text-fg-tertiary">Queued because: {a.reason}</p>}
       </div>
 
@@ -576,7 +576,7 @@ function ApprovalDetail({ approval: a, admin }: { approval: ServerApproval; admi
 
       <section>
         <p className="eyebrow mb-1">{t("approvals.reasoning")}</p>
-        <p className="text-body text-fg-secondary leading-6">{(locale === "bn" ? ins.findingBn : ins.finding) || "—"}</p>
+        <p className="text-body text-fg-secondary leading-6">{ins.finding || "—"}</p>
       </section>
 
       {ins.factors.length > 0 && (
@@ -585,8 +585,8 @@ function ApprovalDetail({ approval: a, admin }: { approval: ServerApproval; admi
           <ul className="space-y-1">
             {ins.factors.map((f, i) => (
               <li key={i} className="flex justify-between gap-3 text-caption">
-                <span className="text-fg-secondary">{locale === "bn" ? f.labelBn : f.label}</span>
-                <span className="text-fg-primary font-medium">{locale === "bn" ? f.magnitudeBn : f.magnitude}</span>
+                <span className="text-fg-secondary">{f.label}</span>
+                <span className="text-fg-primary font-medium">{f.magnitude}</span>
               </li>
             ))}
           </ul>
@@ -595,8 +595,8 @@ function ApprovalDetail({ approval: a, admin }: { approval: ServerApproval; admi
 
       <section>
         <p className="eyebrow mb-1">Recommended action</p>
-        <p className="text-body text-fg-primary">{locale === "bn" ? ins.recommendation.titleBn : ins.recommendation.title}</p>
-        <p className="mt-0.5 text-caption text-fg-secondary">{locale === "bn" ? ins.recommendation.actionBn : ins.recommendation.action}</p>
+        <p className="text-body text-fg-primary">{ins.recommendation.title}</p>
+        <p className="mt-0.5 text-caption text-fg-secondary">{ins.recommendation.action}</p>
       </section>
 
       {ins.evidence.length > 0 && <EvidenceBlock refs={ins.evidence} />}

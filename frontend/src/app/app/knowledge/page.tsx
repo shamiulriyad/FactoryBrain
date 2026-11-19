@@ -77,7 +77,7 @@ export default function KnowledgePage() {
     const q = query.trim().toLowerCase();
     const list = docs.data ?? [];
     if (!q) return list;
-    return list.filter((d) => [d.title, d.titleBn ?? "", d.id, ...d.tags].some((s) => s.toLowerCase().includes(q)));
+    return list.filter((d) => [d.title, d.id, ...d.tags].some((s) => s.toLowerCase().includes(q)));
   }, [docs.data, query]);
 
   const counts = useMemo(() => {
@@ -244,8 +244,7 @@ export default function KnowledgePage() {
                       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setSelected(d))}
                     >
                       <td className="max-w-[340px]">
-                        <span className="block text-fg-primary font-medium truncate">{d.title}</span>
-                        {d.titleBn && <span className="block text-[12px] text-fg-tertiary truncate">{d.titleBn}</span>}
+                        <span className="block text-fg-primary font-medium truncate">{d.title}</span>
                         {d.tags.length > 0 && (
                           <span className="mt-1 flex flex-wrap gap-1">
                             {d.tags.slice(0, 4).map((t) => (
@@ -279,8 +278,7 @@ export default function KnowledgePage() {
         {selected && (
           <div className="p-5 space-y-4" data-testid="kb-detail">
             <div>
-              <h3 className="text-title font-semibold text-fg-primary">{selected.title}</h3>
-              {selected.titleBn && <p className="text-caption text-fg-tertiary">{selected.titleBn}</p>}
+              <h3 className="text-title font-semibold text-fg-primary">{selected.title}</h3>
             </div>
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-caption">
               <dt className="text-fg-tertiary">Id</dt><dd className="font-mono text-fg-secondary break-all">{selected.id}</dd>
@@ -312,8 +310,8 @@ export default function KnowledgePage() {
 
 // ── Ingest ──────────────────────────────────────────────────────────────────
 
-type IngestDraft = { title: string; titleBn: string; source: RagSource; tags: string; url: string; content: string };
-const EMPTY: IngestDraft = { title: "", titleBn: "", source: "manual", tags: "", url: "", content: "" };
+type IngestDraft = { title: string; source: RagSource; tags: string; url: string; content: string };
+const EMPTY: IngestDraft = { title: "", source: "manual", tags: "", url: "", content: "" };
 const ACCEPTED_FILES = ".txt,.md,.markdown,.csv,text/plain,text/markdown";
 
 function IngestDialog({ open, onClose, onIngested }: { open: boolean; onClose: () => void; onIngested: () => void }) {
@@ -356,8 +354,7 @@ function IngestDialog({ open, onClose, onIngested }: { open: boolean; onClose: (
   function validate(): boolean {
     const next: Record<string, string> = {};
     if (!draft.title.trim()) next.title = "A title is required.";
-    else if (draft.title.trim().length > 280) next.title = "At most 280 characters.";
-    if (draft.titleBn.trim().length > 280) next.titleBn = "At most 280 characters.";
+    else if (draft.title.trim().length > 280) next.title = "At most 280 characters.";
     if (!draft.content.trim()) next.content = "Paste the document text or load a text file.";
     else if (tooLarge) next.content = "The text is larger than 200 KB.";
     if (tags.length > 32) next.tags = "At most 32 tags.";
@@ -381,8 +378,7 @@ function IngestDialog({ open, onClose, onIngested }: { open: boolean; onClose: (
     const body: RagIngestRequest = {
       title: draft.title.trim(),
       source: draft.source,
-      content: draft.content,
-      ...(draft.titleBn.trim() ? { titleBn: draft.titleBn.trim() } : {}),
+      content: draft.content,
       ...(tags.length ? { tags } : {}),
       ...(draft.url.trim() ? { url: draft.url.trim() } : {})
     };
@@ -444,10 +440,7 @@ function IngestDialog({ open, onClose, onIngested }: { open: boolean; onClose: (
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Title *" error={errors.title}>
               {(p) => <Input id={p.id} aria-describedby={p.describedBy} aria-invalid={p.invalid} value={draft.title} maxLength={280} onChange={(e) => set("title", e.target.value)} data-testid="kb-title" />}
-            </Field>
-            <Field label="Title (Bangla)" error={errors.titleBn}>
-              {(p) => <Input id={p.id} aria-describedby={p.describedBy} aria-invalid={p.invalid} value={draft.titleBn} maxLength={280} onChange={(e) => set("titleBn", e.target.value)} />}
-            </Field>
+            </Field>
             <Field label="Source *" error={errors.source}>
               {(p) => (
                 <Select id={p.id} aria-describedby={p.describedBy} value={draft.source} onChange={(e) => set("source", e.target.value as RagSource)} data-testid="kb-source">

@@ -1,6 +1,5 @@
 "use client";
 
-import { LanguageToggle } from "@/components/ui/LanguageToggle";
 import Link from "next/link";
 import { Logo } from "@/components/brand/Logo";
 
@@ -11,7 +10,6 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
         <Link href="/" className="inline-flex min-h-11 items-center" aria-label="BunonBrain home">
           <Logo height={30} tone="auto" />
         </Link>
-        <LanguageToggle />
       </header>
       <main className="relative z-10">{children}</main>
     </div>

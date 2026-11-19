@@ -24,7 +24,7 @@ export const DOCS: Doc[] = [
       { t: "p", text: "Your administrator creates your account and gives you a temporary password. Sign in at **/login**. If you are asked to change the password at first sign-in, choose one you don't use anywhere else." },
       { t: "p", text: "Sessions use a short-lived access token kept in the browser's memory and a refresh cookie. If you are inactive for a while you may need to sign in again; if an administrator deactivates your account, your sessions end immediately." },
       { t: "h2", text: "Finding your way" },
-      { t: "ul", items: ["The sidebar lists the modules your role can open; items you can't use are not shown.", "Use the factory switcher at the top of the sidebar if you belong to more than one factory.", "Search lines, orders and alerts with **Ctrl K**.", "Switch between English and বাংলা, and between light and dark themes, from the top bar."] },
+      { t: "ul", items: ["The sidebar lists the modules your role can open; items you can't use are not shown.", "Use the factory switcher at the top of the sidebar if you belong to more than one factory.", "Search lines, orders and alerts with **Ctrl K**.", "Switch between light and dark themes from the top bar."] },
       { t: "h2", text: "Simulated and demo data" },
       { t: "p", text: "Screens that show simulated data say so with a label: simulated alerts, events, machine readings and attendance punches are marked wherever they appear, and real data alone sets a floor's status." },
     ],

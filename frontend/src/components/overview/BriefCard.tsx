@@ -30,7 +30,7 @@ export function BriefCard({ tick }: { tick?: number }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick]);
   const b = brief.data;
-  const bullets = b ? (locale === "bn" ? b.bulletsBn : b.bulletsEn) : [];
+  const bullets = b ? b.bulletsEn : [];
   const [headline, ...rest] = bullets;
 
   return (

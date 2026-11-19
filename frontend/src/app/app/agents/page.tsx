@@ -60,10 +60,10 @@ export default function AgentsPage() {
                 <AgentAvatar agentId={a.id} size={40} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-[15px] leading-[22px] font-semibold text-fg-primary">{locale === "bn" ? a.nameBn : a.name}</h2>
+                    <h2 className="text-[15px] leading-[22px] font-semibold text-fg-primary">{a.name}</h2>
                     <Badge tone={a.status === "ready" ? "success" : "neutral"} dot>{a.status}</Badge>
                   </div>
-                  <p className="mt-1 text-body text-fg-secondary">{locale === "bn" ? a.purposeBn : a.purpose}</p>
+                  <p className="mt-1 text-body text-fg-secondary">{a.purpose}</p>
                 </div>
               </div>
               <dl className="grid grid-cols-3 gap-2 text-caption">

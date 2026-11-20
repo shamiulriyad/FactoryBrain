@@ -73,6 +73,10 @@ public sealed class PostgresStack : IAsyncLifetime
     public const string MerchDatabase = "bunonbrain_test_merch";
     /// <summary>Used only by the merchandising tests with automatic extraction turned off.</summary>
     public const string MerchManualDatabase = "bunonbrain_test_merch_manual";
+    /// <summary>Interactive demo tests: the demo's own database (claimed, seeded and reset).</summary>
+    public const string DemoDatabase = "bunonbrain_test_demo";
+    /// <summary>Interactive demo tests: the production database of the same host (seeded accounts, never touched by the demo).</summary>
+    public const string DemoProductionDatabase = "bunonbrain_test_demo_prod";
 
     private PostgreSqlContainer? _container;
     private readonly Lazy<DbApiFactory> _local;
@@ -81,6 +85,7 @@ public sealed class PostgresStack : IAsyncLifetime
     private readonly Lazy<DbApiFactory> _production;
     private readonly Lazy<DbApiFactory> _merch;
     private readonly Lazy<DbApiFactory> _merchManual;
+    private readonly Lazy<DbApiFactory> _demo;
 
     public PostgresStack()
     {
@@ -92,7 +97,23 @@ public sealed class PostgresStack : IAsyncLifetime
         _merch = new(() => Build(DbApiFactory.MerchExtractor(ConnectionStringFor(MerchDatabase))));
         _merchManual = new(() => Build(DbApiFactory.Custom(ConnectionStringFor(MerchManualDatabase),
             new() { ["RAG_EMBEDDING_PROVIDER"] = "local", ["MERCH_EXTRACTION_PROVIDER"] = "none" })));
+        // One host, two databases: production (with the seeded accounts) and the demo's own
+        // database, which must start EMPTY (the host claims it).
+        _demo = new(() => Build(DbApiFactory.Custom(ConnectionStringFor(DemoProductionDatabase), new()
+        {
+            ["RAG_EMBEDDING_PROVIDER"] = "local", ["PRODUCTION_TIME_ZONE"] = "Asia/Dhaka",
+            ["DEMO_MODE"] = "true", ["DEMO_BUNONBRAIN_DB"] = ConnectionStringFor(DemoDatabase),
+            ["DEMO_LOGIN_EMAIL"] = DemoLoginEmail, ["DEMO_LOGIN_PASSWORD"] = DemoLoginPassword,
+            ["DEMO_ADMIN_KEY"] = DemoAdminKey,
+        })));
     }
+
+    public const string DemoLoginEmail = "judge@demo.bunonbrain.test";
+    public static readonly string DemoLoginPassword = TestEnvironment.RandomSecret(16);
+    public static readonly string DemoAdminKey = TestEnvironment.RandomSecret(32);
+
+    /// <summary>API host with the interactive demo on (production database + separate demo database).</summary>
+    public DbApiFactory Demo => _demo.Value.Activate();
 
     /// <summary>API host whose vision provider is the deterministic TEST detector (an http provider answered by the guard).</summary>
     public DbApiFactory Qc => _qc.Value.Activate();
@@ -135,7 +156,7 @@ public sealed class PostgresStack : IAsyncLifetime
         };
         await using var admin = new NpgsqlConnection(adminCs.ConnectionString);
         await admin.OpenAsync();
-        foreach (var name in new[] { MockedDatabase, SettingsDatabase, EmbeddingDatabase, QcDatabase, ProductionDatabase, MerchDatabase, MerchManualDatabase })
+        foreach (var name in new[] { MockedDatabase, SettingsDatabase, EmbeddingDatabase, QcDatabase, ProductionDatabase, MerchDatabase, MerchManualDatabase, DemoDatabase, DemoProductionDatabase })
         {
             await using var create = new NpgsqlCommand($"CREATE DATABASE \"{name}\"", admin);
             await create.ExecuteNonQueryAsync();
@@ -165,6 +186,7 @@ public sealed class PostgresStack : IAsyncLifetime
         if (_production.IsValueCreated) await _production.Value.DisposeAsync();
         if (_merch.IsValueCreated) await _merch.Value.DisposeAsync();
         if (_merchManual.IsValueCreated) await _merchManual.Value.DisposeAsync();
+        if (_demo.IsValueCreated) await _demo.Value.DisposeAsync();
         if (_container is not null) await _container.DisposeAsync();
     }
 }

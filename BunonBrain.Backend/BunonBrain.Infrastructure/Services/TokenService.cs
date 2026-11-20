@@ -45,7 +45,13 @@ public sealed class TokenService : ITokenService
         _opts = opts.Value;
     }
 
-    public string IssueAccessToken(AccessSnapshot access, out int expiresInSeconds)
+    public string IssueAccessToken(AccessSnapshot access, out int expiresInSeconds) =>
+        Issue(access, null, out expiresInSeconds);
+
+    public string IssueDemoAccessToken(AccessSnapshot access, Guid demoSessionId, out int expiresInSeconds) =>
+        Issue(access, demoSessionId, out expiresInSeconds);
+
+    private string Issue(AccessSnapshot access, Guid? demoSessionId, out int expiresInSeconds)
     {
         expiresInSeconds = _opts.AccessTokenLifetimeSeconds;
         var now    = DateTime.UtcNow;
@@ -63,6 +69,7 @@ public sealed class TokenService : ITokenService
         claims.AddRange(access.Permissions.Select(p => new Claim(AccessClaims.Permission, p)));
         claims.AddRange(access.Factories.Select(f => new Claim(AccessClaims.Factory, f.Id.ToString())));
         claims.AddRange(access.LineIds.Select(l => new Claim(AccessClaims.Line, l)));
+        if (demoSessionId is { } dsid) claims.Add(new(AccessClaims.DemoSession, dsid.ToString("N")));
         var key   = new SymmetricSecurityKey(_opts.SigningKeyBytes);
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var token = new JwtSecurityToken(

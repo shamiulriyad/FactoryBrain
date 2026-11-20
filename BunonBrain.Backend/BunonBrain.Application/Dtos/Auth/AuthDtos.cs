@@ -33,6 +33,9 @@ public record UserInfo(
     IReadOnlyList<string> LineIds,
     bool MustChangePassword)
 {
+    /// <summary>Interactive demo only: when the reviewer's demo session ends (absent otherwise).</summary>
+    public DateTimeOffset? DemoSessionExpiresAt { get; init; }
+
     public static UserInfo From(AccessSnapshot s) => new(
         s.UserId, s.Email, s.FullName, AccessCatalog.PrimaryRole(s.Roles), s.Roles, s.Permissions,
         s.Scope.ToString(), s.Factories, s.LineIds, s.MustChangePassword);

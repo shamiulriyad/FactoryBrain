@@ -1,8 +1,10 @@
 "use client";
 
-import { Search, Moon, Sun, Monitor, HelpCircle, LogOut, Menu } from "lucide-react";
+import { Search, Moon, Sun, Monitor, HelpCircle, LogOut, Menu, Repeat } from "lucide-react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { logout } from "@/lib/auth";
+import { logout, useAuthStore } from "@/lib/auth";
+import { roleLabel } from "@/lib/access";
 import { useAppStore, type Theme } from "@/store/app.store";
 import { useT } from "@/lib/useT";
 import { cn } from "@/lib/cn";
@@ -23,6 +25,9 @@ export function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const current = currentNavItem(pathname);
+  // Interactive demo: the reviewer can switch to another role without signing in again.
+  const user = useAuthStore((s) => s.user);
+  const isDemo = !!user?.demoSessionExpiresAt;
 
   return (
     <header className="h-14 shrink-0 border-b border-border-subtle bg-[var(--bg-surface)] sticky top-0 z-20 flex items-center gap-2 px-3 md:px-5">
@@ -84,6 +89,19 @@ export function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
           })}
         </div>
 
+        {isDemo && (
+          <Link
+            href="/explore-demo"
+            data-testid="demo-switch-role"
+            title="Demo: switch to another role"
+            className="inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-control)] border border-border-subtle bg-surface-2 px-2.5 text-caption font-medium text-fg-secondary hover:text-fg-primary hover:border-border-strong"
+          >
+            <Repeat size={14} aria-hidden="true" />
+            <span className="hidden sm:inline">{`Demo · ${roleLabel(String(user?.role ?? ""))}`}</span>
+            <span className="sm:hidden">Role</span>
+          </Link>
+        )}
+
         <NotificationBell />
 
         <button
@@ -98,7 +116,7 @@ export function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
 
         <button
           type="button"
-          onClick={async () => { await logout(); router.replace("/login"); }}
+          onClick={async () => { await logout(); router.replace(isDemo ? "/explore-demo" : "/login"); }}
           aria-label={t("auth.signOut")}
           title={t("auth.signOut")}
           data-testid="topbar-sign-out"

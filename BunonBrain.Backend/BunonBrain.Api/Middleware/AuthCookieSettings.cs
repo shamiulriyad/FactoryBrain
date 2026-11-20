@@ -43,4 +43,34 @@ public static class AuthCookieSettings
     /// </summary>
     public static bool ShouldBeSecure(SameSiteMode sameSite, IHostEnvironment env)
         => sameSite == SameSiteMode.None || !env.IsDevelopment();
+
+    /// <summary>Set the refresh cookie (HttpOnly, path <see cref="CookiePath"/>) until <paramref name="expires"/>.</summary>
+    public static void Stamp(HttpResponse response, string raw, IHostEnvironment env, DateTimeOffset expires)
+    {
+        var sameSite = ParseSameSite(Environment.GetEnvironmentVariable("AUTH_COOKIE_SAMESITE"));
+        response.Cookies.Append(CookieName, raw, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = ShouldBeSecure(sameSite, env),
+            SameSite = sameSite,
+            Path = CookiePath,
+            Expires = expires,
+        });
+        response.Headers["Cache-Control"] = "no-store";
+    }
+
+    /// <summary>Delete the refresh cookie.</summary>
+    public static void Clear(HttpResponse response, IHostEnvironment env)
+    {
+        var sameSite = ParseSameSite(Environment.GetEnvironmentVariable("AUTH_COOKIE_SAMESITE"));
+        response.Cookies.Delete(CookieName, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = ShouldBeSecure(sameSite, env),
+            SameSite = sameSite,
+            Path = CookiePath,
+            Expires = DateTimeOffset.UnixEpoch,
+        });
+        response.Headers["Cache-Control"] = "no-store";
+    }
 }

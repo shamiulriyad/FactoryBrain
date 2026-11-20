@@ -12,7 +12,11 @@ public record ForgotPasswordRequest(string Email);
 public record ResetPasswordRequest(string Token, string Password);
 
 /// <summary>GET /api/auth/options: what the sign-in page may offer.</summary>
-public record AuthOptionsResponse(bool SelfRegistration, bool PasswordReset, int PasswordMinLength);
+public record AuthOptionsResponse(bool SelfRegistration, bool PasswordReset, int PasswordMinLength)
+{
+    /// <summary>True on the interactive demo: sign in at /explore-demo with the shared demo credential instead.</summary>
+    public bool Demo { get; init; }
+}
 
 /// <summary>A message for <see cref="BunonBrain.Application.Abstractions.Interfaces.IEmailSender"/>.</summary>
 public record EmailMessage(string To, string Subject, string TextBody);

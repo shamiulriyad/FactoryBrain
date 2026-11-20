@@ -49,6 +49,16 @@ public static class EndpointMatrix
         ("POST",  "/api/auth/register",         Anon),
         ("POST",  "/api/auth/forgot-password",  Anon),
         ("POST",  "/api/auth/reset-password",   Anon),
+        // Interactive demo (404 unless DEMO_MODE=true): the shared credential and the
+        // reviewer's refresh cookie are checked inside; the operator routes need X-Demo-Admin-Key.
+        ("GET",   "/api/auth/demo",             Anon),
+        ("POST",  "/api/auth/demo/login",       Anon),
+        ("GET",   "/api/auth/demo/session",     Anon),
+        ("POST",  "/api/auth/demo/switch",      Anon),
+        ("GET",   "/api/demo/admin/sessions",   Anon),
+        ("POST",  "/api/demo/admin/sessions/{id}/revoke", Anon),
+        ("POST",  "/api/demo/admin/sessions/revoke-all", Anon),
+        ("POST",  "/api/demo/admin/reset",      Anon),
         ("POST",  "/api/inquiries",             Anon),
         ("GET",   "/api/site-settings/hero",    Anon),
         ("GET",   "/api/site-settings/demo-video", Anon),

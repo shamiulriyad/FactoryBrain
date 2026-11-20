@@ -25,6 +25,8 @@ public static class AccessClaims
     public const string Service = "svc";
     /// <summary>"1" when a service principal may reach every factory.</summary>
     public const string ServiceAllFactories = "svc_all";
+    /// <summary>Interactive demo only: the reviewer's demo session id. Tokens without it are refused in demo mode.</summary>
+    public const string DemoSession = "dsid";
 }
 
 /// <summary>

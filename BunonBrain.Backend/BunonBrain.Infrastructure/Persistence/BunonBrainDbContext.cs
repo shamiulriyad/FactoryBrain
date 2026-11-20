@@ -37,6 +37,10 @@ public class BunonBrainDbContext : DbContext
     public DbSet<SupplierRecord>    Suppliers          => Set<SupplierRecord>();
     public DbSet<InventoryRecord>   Inventory          => Set<InventoryRecord>();
     public DbSet<ActivityEvent>     ActivityEvents     => Set<ActivityEvent>();
+
+    // Interactive demo (DEMO_MODE=true deployments only; empty elsewhere).
+    public DbSet<DemoEnvironment>   DemoEnvironment    => Set<DemoEnvironment>();
+    public DbSet<DemoSession>       DemoSessions       => Set<DemoSession>();
     public DbSet<User>               Users              => Set<User>();
     public DbSet<AuditLogEntry>      AuditLog           => Set<AuditLogEntry>();
     public DbSet<AiSettingsRecord>   AiSettings         => Set<AiSettingsRecord>();

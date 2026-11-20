@@ -78,13 +78,25 @@ function LoginForm() {
         ) : null
       }
       footer={
-        options?.selfRegistration ? (
-          <>
-            {t("auth.noAccount")}{" "}
-            <Link href="/register" className={linkClass} data-testid="link-register">
-              {t("auth.createAccount")}
-            </Link>
-          </>
+        options?.selfRegistration || options?.demo ? (
+          <span className="flex flex-col items-center gap-2">
+            {options?.selfRegistration && (
+              <span>
+                {t("auth.noAccount")}{" "}
+                <Link href="/register" className={linkClass} data-testid="link-register">
+                  {t("auth.createAccount")}
+                </Link>
+              </span>
+            )}
+            {options?.demo && (
+              <span>
+                Just looking?{" "}
+                <Link href="/explore-demo" className={linkClass} data-testid="link-explore-demo">
+                  Explore the demo
+                </Link>
+              </span>
+            )}
+          </span>
         ) : null
       }
     >

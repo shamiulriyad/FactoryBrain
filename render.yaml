@@ -3,6 +3,8 @@
 #   bunonbrain-web  Next.js frontend         free  https://bunonbrain-web.onrender.com
 #   bunonbrain-api  .NET 10 API (Docker)     free  https://factorybrain-akvk.onrender.com (live service name: factorybrain)
 #   bunonbrain-rag  Python PDF RAG (Docker)  free  https://bunonbrain-rag.onrender.com (every route but /health needs PYRAG_API_KEY)
+#   The interactive demo (/explore-demo) runs inside the API and website above, on its
+#   OWN database (DEMO_BUNONBRAIN_DB, never the production one). See DEMO.md.
 #
 # Not on Render: the database (Supabase), the vector store (Qdrant Cloud) and the
 # computer-vision service (a PC inside the factory, next to the cameras).
@@ -133,6 +135,25 @@ services:
       - key: DOCUMENT_AUTOMATION_ENABLED
         value: "false"
 
+      # Interactive demo at /explore-demo (DEMO.md). Requests of a demo session use
+      # DEMO_BUNONBRAIN_DB, a SEPARATE database that is reset daily; everything else
+      # stays on BUNONBRAIN_DB. Startup refuses a demo database that is the production
+      # one or that has real accounts. Remove DEMO_MODE to switch the demo off.
+      - key: DEMO_MODE
+        value: "true"
+      - key: DEMO_BUNONBRAIN_DB        # demo Supabase project, session pooler, ;Maximum Pool Size=10
+        sync: false
+      - key: DEMO_LOGIN_EMAIL          # the one credential judges use
+        sync: false
+      - key: DEMO_LOGIN_PASSWORD
+        sync: false
+      - key: DEMO_RESET_TIME           # daily reset, local time
+        value: "03:00"
+      - key: DEMO_TIME_ZONE
+        value: Asia/Dhaka
+      - key: DEMO_ADMIN_KEY            # operator key for /api/demo/admin/*
+        generateValue: true
+
   # ───────────────────────────── Next.js frontend ─────────────────────────────
   - type: web
     name: bunonbrain-web
@@ -201,3 +222,4 @@ services:
         value: pdf_rag
       - key: PYRAG_MAX_UPLOAD_MB
         value: "50"
+

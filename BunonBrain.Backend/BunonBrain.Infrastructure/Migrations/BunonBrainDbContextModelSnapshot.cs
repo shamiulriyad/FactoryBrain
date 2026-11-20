@@ -1656,6 +1656,89 @@ namespace BunonBrain.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("BunonBrain.Domain.Entities.DemoEnvironment", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("BaselineVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("ClaimedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<DateTimeOffset?>("LastResetAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<DateTimeOffset?>("NextResetAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("demo_environment", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_demo_environment_single_row", "\"Id\" = 1");
+                        });
+                });
+
+            modelBuilder.Entity("BunonBrain.Domain.Entities.DemoSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ClientIp")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<Guid?>("CurrentUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<DateTimeOffset>("LastSeenAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("RefreshTokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("RevokedReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("RoleSwitches")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CurrentUserId");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("RefreshTokenHash")
+                        .IsUnique();
+
+                    b.ToTable("demo_sessions", (string)null);
+                });
+
             modelBuilder.Entity("BunonBrain.Domain.Entities.Department", b =>
                 {
                     b.Property<Guid>("Id")
@@ -9285,6 +9368,14 @@ namespace BunonBrain.Infrastructure.Migrations
                         .HasForeignKey("FactoryId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("BunonBrain.Domain.Entities.DemoSession", b =>
+                {
+                    b.HasOne("BunonBrain.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("CurrentUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("BunonBrain.Domain.Entities.Department", b =>

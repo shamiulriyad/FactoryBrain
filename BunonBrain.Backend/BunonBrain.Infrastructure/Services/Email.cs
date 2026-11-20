@@ -99,6 +99,12 @@ public sealed class EmailQueue : IEmailQueue
 
     public void Enqueue(EmailMessage message)
     {
+        // The interactive demo never sends email (its accounts and data are synthetic).
+        if (BunonBrain.Application.Demo.DemoRoute.IsDemo)
+        {
+            _log.LogInformation("Demo request: email \"{Subject}\" not sent.", message.Subject);
+            return;
+        }
         if (!_channel.Writer.TryWrite(message))
             _log.LogWarning("Email queue is full; an email \"{Subject}\" was dropped.", message.Subject);
     }

@@ -80,7 +80,9 @@ public sealed class SessionValidator : ISessionValidator
 
     private sealed record Entry(bool Exists, bool Active, string? Stamp);
 
-    private static string Key(Guid userId) => "session:" + userId.ToString("N");
+    // The demo database has its own accounts: its entries never mix with production's.
+    private static string Key(Guid userId) =>
+        (BunonBrain.Application.Demo.DemoRoute.IsDemo ? "session:demo:" : "session:") + userId.ToString("N");
 
     public async Task<bool> IsCurrentAsync(Guid userId, string? securityStamp, CancellationToken ct)
     {

@@ -18,7 +18,10 @@ namespace BunonBrain.Infrastructure.Demo;
 public sealed class DemoDatabase : IDemoResetService
 {
     public const string StatusReady = "ready";
+    /// <summary>The database is about to be emptied (an interruption here means: empty it again).</summary>
     public const string StatusResetting = "resetting";
+    /// <summary>Emptied; the baseline is being written (an interruption here means: continue where it stopped).</summary>
+    public const string StatusSeeding = "seeding";
     private const string MarkerTable = "demo_environment";
 
     /// <summary>pg advisory-lock key, so only one instance resets at a time.</summary>
@@ -53,7 +56,7 @@ public sealed class DemoDatabase : IDemoResetService
         log.LogWarning("Claimed this empty database as the interactive demo database; it will be seeded and reset daily.");
     }
 
-    public async Task<bool> ResetAsync(string reason, CancellationToken ct)
+    public async Task<bool> ResetAsync(string reason, CancellationToken ct, bool resume = false)
     {
         if (!_opts.Enabled) return false;
         // Everything below runs on the demo database, never on production.
@@ -80,9 +83,13 @@ public sealed class DemoDatabase : IDemoResetService
         var started = DateTimeOffset.UtcNow;
         try
         {
-            _log.LogWarning("Demo reset started ({Reason}).", reason);
-            await SetStatusAsync(StatusResetting, null, ct);
-            await TruncateAsync(lockConn, ct);
+            _log.LogWarning("Demo {Kind} started ({Reason}).", resume ? "seed (resumed)" : "reset", reason);
+            if (!resume)
+            {
+                await SetStatusAsync(StatusResetting, null, ct);
+                await TruncateAsync(lockConn, ct);
+            }
+            await SetStatusAsync(StatusSeeding, null, ct);
             await DbInitializer.SeedAsync(_root, ct, seedAccounts: false);
             await DemoSeeder.SeedAsync(_root, _opts, _log, DateTimeOffset.UtcNow, ct);
             await SetStatusAsync(StatusReady, started, ct);
@@ -107,6 +114,8 @@ public sealed class DemoDatabase : IDemoResetService
         var db = scope.ServiceProvider.GetRequiredService<BunonBrainDbContext>();
         var env = await db.DemoEnvironment.FirstAsync(ct);
         env.Status = status;
+        // A seed belongs to its day: it may be resumed until the next reset time, not after.
+        if (status == StatusSeeding) env.NextResetAt = _opts.NextResetAfter(DateTimeOffset.UtcNow);
         if (resetAt is { } at)
         {
             env.LastResetAt = at;
@@ -219,6 +228,37 @@ public sealed class DemoResetWorker : BackgroundService
 
     private static readonly TimeSpan SimulationTick = TimeSpan.FromSeconds(5);
 
+    private static readonly TimeSpan KeepAwakeEvery = TimeSpan.FromMinutes(4);
+
+    /// <summary>
+    /// While the baseline is built, request this deployment's own /health every few minutes so a
+    /// free instance (asleep after 15 idle minutes) keeps running until the demo is ready.
+    /// </summary>
+    private IDisposable KeepAwake(CancellationToken stopping)
+    {
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(stopping);
+        if (_opts.KeepAwakeUrl is { } url)
+        {
+            var http = _root.GetRequiredService<IHttpClientFactory>().CreateClient();
+            http.Timeout = TimeSpan.FromSeconds(30);
+            _ = Task.Run(async () =>
+            {
+                while (!cts.IsCancellationRequested)
+                {
+                    try
+                    {
+                        await Task.Delay(KeepAwakeEvery, cts.Token);
+                        using var res = await http.GetAsync(url + "/health", cts.Token);
+                        _log.LogInformation("Demo seed in progress; keep-awake ping {Status}.", (int)res.StatusCode);
+                    }
+                    catch (OperationCanceledException) { break; }
+                    catch (Exception ex) { _log.LogDebug("Keep-awake ping failed: {Error}", ex.GetType().Name); }
+                }
+            }, CancellationToken.None);
+        }
+        return cts;
+    }
+
     private async Task TickSimulationsAsync(CancellationToken ct)
     {
         await using var scope = _root.CreateAsyncScope();
@@ -241,13 +281,19 @@ public sealed class DemoResetWorker : BackgroundService
         }
         if (env is null) return;
 
+        // An interrupted seed (instance restarted or put to sleep) continues where it stopped;
+        // anything else that is due empties the database and builds the baseline again.
+        // Only on the day it started: past the next reset time the dates would no longer match.
+        var resume = env.Status == DemoDatabase.StatusSeeding && env.NextResetAt is { } seedUntil && seedUntil > now;
         var due = env.Status != DemoDatabase.StatusReady
                   || env.BaselineVersion < DemoSeeder.BaselineVersion
                   || env.NextResetAt is null || env.NextResetAt <= now;
         if (due)
         {
             if (now < _nextAttempt) return;
-            await _reset.ResetAsync(env.Status != DemoDatabase.StatusReady ? "baseline not in place" : "scheduled daily reset", ct);
+            using var awake = KeepAwake(ct);
+            await _reset.ResetAsync(resume ? "continuing an interrupted seed" : env.Status != DemoDatabase.StatusReady ? "baseline not in place" : "scheduled daily reset",
+                ct, resume);
             _nextLive = DateTimeOffset.UtcNow + LiveEvery;
             return;
         }

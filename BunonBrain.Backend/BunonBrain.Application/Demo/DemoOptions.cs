@@ -39,6 +39,13 @@ public sealed class DemoOptions
     public TimeZoneInfo TimeZone { get; init; } = AttendanceRules.ResolveTimeZone("Asia/Dhaka")!;
     public string? AdminKey { get; init; }
 
+    /// <summary>
+    /// This deployment's public URL (Render sets RENDER_EXTERNAL_URL; DEMO_KEEP_AWAKE_URL overrides it).
+    /// While the demo data is being built the API requests its own /health every few minutes, so a
+    /// free instance does not go to sleep half-way through.
+    /// </summary>
+    public string? KeepAwakeUrl { get; init; }
+
     /// <summary>Why the demo can't run with this configuration; null when it can (or is off).</summary>
     public string? Problem { get; init; }
 
@@ -83,6 +90,8 @@ public sealed class DemoOptions
             ResetTime = reset,
             TimeZone = zone ?? AttendanceRules.ResolveTimeZone("Asia/Dhaka")!,
             AdminKey = adminKey,
+            KeepAwakeUrl = (env("DEMO_KEEP_AWAKE_URL") ?? env("RENDER_EXTERNAL_URL"))?.Trim().TrimEnd('/') is { Length: > 0 } url
+                && Uri.TryCreate(url, UriKind.Absolute, out var u) && (u.Scheme == "https" || u.Scheme == "http") ? url : null,
             Problem = problems.Count == 0 ? null : string.Join("; ", problems),
         };
 

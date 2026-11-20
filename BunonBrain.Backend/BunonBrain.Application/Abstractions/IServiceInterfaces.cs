@@ -274,6 +274,9 @@ public interface ITokenService
     /// <summary>Issue a fresh access token carrying <paramref name="access"/> (roles, permissions, scope, security stamp).</summary>
     string IssueAccessToken(BunonBrain.Application.Access.AccessSnapshot access, out int expiresInSeconds);
 
+    /// <summary>Same as <see cref="IssueAccessToken"/>, plus the interactive demo's session id claim.</summary>
+    string IssueDemoAccessToken(BunonBrain.Application.Access.AccessSnapshot access, Guid demoSessionId, out int expiresInSeconds);
+
     /// <summary>
     /// Parse and validate <paramref name="jwt"/>. Returns null on any
     /// failure (bad signature, wrong issuer/audience, expired past the

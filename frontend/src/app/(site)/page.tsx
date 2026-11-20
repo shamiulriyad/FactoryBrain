@@ -17,6 +17,9 @@ export const metadata = pageMeta({
   path: "/",
 });
 
+/** "Explore demo": the interactive demo's sign-in on this same site (its data lives in a separate demo database). */
+const EXPLORE_DEMO_URL = "/explore-demo";
+
 const FACTS = [
   { icon: Users2, title: "Eight roles", body: "From Super Admin to Worker, scoped by factory and line." },
   { icon: ScrollText, title: "Every decision audited", body: "Approvals and access changes go to an append-only log." },
@@ -82,6 +85,9 @@ export default async function HomePage() {
               </ButtonLink>
               <ButtonLink href="#demo-video" size="lg" variant="secondary">
                 Watch the demo
+              </ButtonLink>
+              <ButtonLink href={EXPLORE_DEMO_URL} variant="link" arrow className="px-2">
+                Explore demo
               </ButtonLink>
             </div>
             <ul className="mt-10 flex max-w-[34rem] flex-wrap gap-x-6 gap-y-3 border-t border-brand-border pt-6 text-[0.9rem] text-brand-body">

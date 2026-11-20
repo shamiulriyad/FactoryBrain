@@ -51,6 +51,8 @@ public static class TestEnvironment
         "CAMERA_FILE_STORAGE_PATH", "CAMERA_IMAGE_MAX_MB", "CAMERA_VIDEO_MAX_MB",
         "CV_SERVICE_KEY", "CV_SERVICE_FACTORIES",
         "DOCUMENT_STORAGE_PATH",
+        "DEMO_MODE", "DEMO_BUNONBRAIN_DB", "DEMO_LOGIN_EMAIL", "DEMO_LOGIN_PASSWORD", "DEMO_SESSION_HOURS", "DEMO_MAX_SESSIONS",
+        "DEMO_RESET_TIME", "DEMO_TIME_ZONE", "DEMO_ADMIN_KEY",
     };
 
     private static readonly object Gate = new();
@@ -93,6 +95,11 @@ public static class TestEnvironment
         // tests call IQcInspectionProcessor themselves so processing is deterministic.
         foreach (var d in services.Where(d => d.ServiceType == typeof(IHostedService)
                                               && d.ImplementationType == typeof(BunonBrain.Infrastructure.Qc.QcInspectionWorker)).ToList())
+            services.Remove(d);
+
+        // The demo reset worker: the demo tests reset through IDemoResetService themselves.
+        foreach (var d in services.Where(d => d.ServiceType == typeof(IHostedService)
+                                              && d.ImplementationType == typeof(BunonBrain.Infrastructure.Demo.DemoResetWorker)).ToList())
             services.Remove(d);
 
         // The attendance review worker: tests run the review through the API so timing is deterministic.

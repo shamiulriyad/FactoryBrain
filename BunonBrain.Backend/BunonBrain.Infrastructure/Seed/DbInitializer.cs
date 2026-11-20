@@ -23,7 +23,8 @@ public static class DbInitializer
     public static async Task Initialize(IServiceProvider sp, CancellationToken ct = default)
         => await SeedAsync(sp, ct);
 
-    public static async Task SeedAsync(IServiceProvider sp, CancellationToken ct = default)
+    /// <param name="seedAccounts">False for the interactive demo database: the SEED_* accounts belong to production only.</param>
+    public static async Task SeedAsync(IServiceProvider sp, CancellationToken ct = default, bool seedAccounts = true)
     {
         await using var scope = sp.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BunonBrainDbContext>();
@@ -54,6 +55,7 @@ public static class DbInitializer
         await SeedQcDefectCategoriesAsync(db, ct);
         await SeedFloorAlertsAsync(db, ct);
         await SeedOrdersAndInventoryAsync(db, ct);
+        if (!seedAccounts) return;
         await SeedAdminUserAsync(db, hasher, log, ct);
         await SeedViewerUserAsync(db, hasher, log, ct);
         await SeedOperatorUserAsync(db, hasher, log, ct);

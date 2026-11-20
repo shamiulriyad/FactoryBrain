@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using BunonBrain.Api.Middleware;
 using BunonBrain.Application.Abstractions.Interfaces;
+using BunonBrain.Application.Demo;
 using BunonBrain.Application.Dtos.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -38,22 +39,31 @@ public class AuthController : ControllerBase
     private readonly ITokenService _tokens;
     private readonly IHostEnvironment _env;
     private readonly ILogger<AuthController> _log;
+    private readonly DemoOptions _demoOptions;
+    private readonly IDemoSessionService _demo;
 
     public AuthController(
         IAuthService auth,
         IAccountService accounts,
         ITokenService tokens,
         IHostEnvironment env,
-        ILogger<AuthController> log)
+        ILogger<AuthController> log,
+        DemoOptions demoOptions,
+        IDemoSessionService demo)
     {
         _auth = auth; _accounts = accounts; _tokens = tokens; _env = env; _log = log;
+        _demoOptions = demoOptions; _demo = demo;
     }
 
     /// <summary>GET /api/auth/options — what the sign-in page may offer (no secrets).</summary>
     [HttpGet("options")]
     [AllowAnonymous]
     public IActionResult Options() => Ok(new AuthOptionsResponse(
-        _accounts.SelfRegistrationEnabled, PasswordReset: true, BunonBrain.Application.Validation.PasswordRules.MinLength));
+        _accounts.SelfRegistrationEnabled, PasswordReset: true, BunonBrain.Application.Validation.PasswordRules.MinLength)
+    {
+        // The interactive demo is offered at /explore-demo (its own sign-in and database).
+        Demo = _demoOptions.Enabled,
+    });
 
     /// <summary>
     /// POST /api/auth/register — self-service sign-up. The account starts with
@@ -160,6 +170,19 @@ public class AuthController : ControllerBase
             return UnauthorizedProblem("Missing refresh token.");
         }
 
+        if (_demoOptions.Enabled && DemoRoute.IsDemo)
+        {
+            // Demo: the cookie belongs to a reviewer session, not to a user row.
+            var demo = await _demo.RefreshAsync(presented, ct);
+            if (demo.Outcome != DemoOutcome.Ok)
+            {
+                ClearRefreshCookie();
+                return UnauthorizedProblem(demo.Message ?? "Sign in to the demo again.");
+            }
+            AuthCookieSettings.Stamp(Response, demo.RefreshTokenRaw!, _env, demo.Value!.User.DemoSessionExpiresAt ?? DateTimeOffset.UtcNow.AddHours(1));
+            return Ok(demo.Value);
+        }
+
         var result = await _auth.RefreshAsync(presented, ct);
         if (result.Kind != AuthOutcome.Success)
         {
@@ -192,7 +215,8 @@ public class AuthController : ControllerBase
         if (Request.Cookies.TryGetValue(AuthCookieSettings.CookieName, out var presented)
             && !string.IsNullOrWhiteSpace(presented))
         {
-            await _auth.LogoutAsync(presented, ct);
+            if (_demoOptions.Enabled && DemoRoute.IsDemo) await _demo.LogoutAsync(presented, ct);
+            else await _auth.LogoutAsync(presented, ct);
         }
         ClearRefreshCookie();
         return NoContent();

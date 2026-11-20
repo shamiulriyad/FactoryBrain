@@ -35,6 +35,8 @@ export type SessionUser = {
   lineIds: string[];
   /** A temporary password must be changed before anything else works. */
   mustChangePassword: boolean;
+  /** Interactive demo only: when the reviewer's demo session ends. */
+  demoSessionExpiresAt?: string | null;
 };
 
 type AuthState = {
@@ -105,7 +107,7 @@ export async function login(email: string, password: string): Promise<LoginResul
   return { ok: false, reason: "unavailable" };
 }
 
-export type AuthOptions = { selfRegistration: boolean; passwordReset: boolean; passwordMinLength: number };
+export type AuthOptions = { selfRegistration: boolean; passwordReset: boolean; passwordMinLength: number; demo?: boolean };
 
 /** What the sign-in page may offer (public, no secrets). Falls back to "sign-in only" when unreachable. */
 export async function fetchAuthOptions(): Promise<AuthOptions> {
@@ -192,6 +194,105 @@ export async function resetPassword(token: string, password: string): Promise<"r
     return "unavailable";
   } catch {
     return "unavailable";
+  }
+}
+
+// ── Interactive demo (only on a deployment with DEMO_MODE=true) ─────────────
+// One shared demo credential starts a reviewer session (HttpOnly cookie);
+// the reviewer then picks a role, and the server signs them in as that role's
+// demo account. Switching role needs no new sign-in.
+
+export type DemoRole = {
+  roleId: string;
+  name: string;
+  description: string;
+  scope: string;
+  identityName: string;
+  identityEmail: string;
+  current: boolean;
+};
+
+export type DemoSession = {
+  sessionId: string;
+  expiresAt: string;
+  currentRoleId?: string | null;
+  roles: DemoRole[];
+  nextResetAt?: string | null;
+};
+
+export type DemoInfo = { enabled: boolean; ready: boolean; sessionHours: number; nextResetAt?: string | null };
+
+/** Whether this server is the interactive demo. Null when the API is unreachable. */
+export async function fetchDemoInfo(): Promise<DemoInfo | null> {
+  try {
+    const res = await fetch("/api/auth/demo", { cache: "no-store" });
+    if (res.status === 404) return { enabled: false, ready: false, sessionHours: 0 };
+    if (res.ok) return (await res.json()) as DemoInfo;
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
+/** The reviewer's demo session from the cookie, or null when there is none (or it ended). */
+export async function fetchDemoSession(): Promise<DemoSession | null> {
+  try {
+    const res = await fetch("/api/auth/demo/session", { credentials: "same-origin", cache: "no-store" });
+    return res.ok ? ((await res.json()) as DemoSession) : null;
+  } catch {
+    return null;
+  }
+}
+
+export type DemoLoginResult =
+  | { ok: true; session: DemoSession }
+  | { ok: false; reason: "invalid" | "preparing" | "busy" | "rate_limited" | "disabled" | "unavailable"; retryAfterSeconds?: number };
+
+export async function demoLogin(email: string, password: string): Promise<DemoLoginResult> {
+  let res: Response;
+  try {
+    res = await fetch("/api/auth/demo/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      cache: "no-store",
+      body: JSON.stringify({ email, password })
+    });
+  } catch {
+    return { ok: false, reason: "unavailable" };
+  }
+  if (res.ok) return { ok: true, session: (await res.json()) as DemoSession };
+  if (res.status === 429) {
+    const retry = Number(res.headers.get("Retry-After"));
+    return { ok: false, reason: "rate_limited", retryAfterSeconds: Number.isFinite(retry) ? retry : undefined };
+  }
+  if (res.status === 400 || res.status === 401) return { ok: false, reason: "invalid" };
+  if (res.status === 404) return { ok: false, reason: "disabled" };
+  if (res.status === 503) {
+    const body = (await res.json().catch(() => ({}))) as { code?: string };
+    return { ok: false, reason: body.code === "demo_busy" ? "busy" : "preparing" };
+  }
+  return { ok: false, reason: "unavailable" };
+}
+
+/** Act as another role (the server picks that role's demo account). Signs the browser in as it. */
+export async function demoSwitchRole(roleId: string): Promise<{ ok: true; user: SessionUser } | { ok: false; reason: "ended" | "unavailable" }> {
+  try {
+    const res = await fetch("/api/auth/demo/switch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      cache: "no-store",
+      body: JSON.stringify({ roleId })
+    });
+    if (res.ok) {
+      const body = (await res.json()) as AuthResponse;
+      applySession(body);
+      return { ok: true, user: body.user };
+    }
+    return { ok: false, reason: res.status === 401 ? "ended" : "unavailable" };
+  } catch {
+    return { ok: false, reason: "unavailable" };
   }
 }
 

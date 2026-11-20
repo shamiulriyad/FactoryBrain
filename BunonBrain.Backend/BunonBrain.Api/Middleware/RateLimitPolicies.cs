@@ -46,6 +46,9 @@ public static class RateLimitPolicies
     /// </summary>
     public static string UserPartition(HttpContext ctx)
     {
+        // Demo reviewers share demo accounts: each reviewer session gets its own budget.
+        var demoSession = ctx.User.FindFirst(BunonBrain.Application.Access.AccessClaims.DemoSession)?.Value;
+        if (demoSession is { Length: > 0 }) return "demo:" + demoSession;
         var sub = ctx.User.FindFirst("sub")?.Value;
         return sub is { Length: > 0 }
             ? "user:" + sub

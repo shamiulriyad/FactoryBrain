@@ -234,9 +234,26 @@ if (builder.Environment.IsDevelopment() && !dbIsLoopback)
         "enforced exactly as in Production.");
 }
 
+// ─── Interactive demo settings (read once; DEMO_MODE=true turns it on) ─────
+// The demo lives inside this deployment on its OWN database: a request that
+// belongs to a demo session is routed to DEMO_BUNONBRAIN_DB (DemoRoute, set by
+// DemoRoutingMiddleware before anything touches the database); every other
+// request, and every production background job, uses BUNONBRAIN_DB as before.
+var demoOptions = BunonBrain.Application.Demo.DemoOptions.FromEnvironment(Environment.GetEnvironmentVariable);
+if (demoOptions.Problem is not null)
+    throw new InvalidOperationException($"DEMO_MODE=true but the demo settings are incomplete: {demoOptions.Problem}.");
+if (demoOptions.Enabled && SameDatabase(demoOptions.ConnectionString, pgConn))
+    throw new InvalidOperationException(
+        "DEMO_BUNONBRAIN_DB points at the production database (BUNONBRAIN_DB). The demo needs its own, separate database.");
+builder.Services.AddSingleton(demoOptions);
+if (demoOptions.Enabled)
+    Console.WriteLine("[startup] DEMO_MODE=true: interactive demo at /explore-demo on its own database (reset daily).");
+
 builder.Services.AddDbContext<BunonBrainDbContext>(opts =>
 {
-    opts.UseNpgsql(pgConn, npg =>
+    // Chosen per service scope: the demo database only for demo work.
+    var connection = BunonBrain.Application.Demo.DemoRoute.IsDemo && demoOptions.Enabled ? demoOptions.ConnectionString : pgConn;
+    opts.UseNpgsql(connection, npg =>
     {
         npg.EnableRetryOnFailure(maxRetryCount: 3);
         npg.MigrationsHistoryTable("__ef_migrations");
@@ -372,7 +389,28 @@ builder.Services.AddAuthentication(o =>
                 var sessions = ctx.HttpContext.RequestServices.GetRequiredService<ISessionValidator>();
                 if (!Guid.TryParse(sub, out var userId) ||
                     !await sessions.IsCurrentAsync(userId, stamp, ctx.HttpContext.RequestAborted))
+                {
                     ctx.Fail("Session is no longer valid.");
+                    return;
+                }
+                // Demo: every token belongs to a live reviewer session that is still acting
+                // as this account. Outside demo mode a demo token is never accepted.
+                var demoSession = principal?.FindFirst(BunonBrain.Application.Access.AccessClaims.DemoSession)?.Value;
+                var demoRequest = BunonBrain.Application.Demo.DemoRoute.IsDemo;
+                if (demoSession is not null)
+                {
+                    // A demo token is valid only on a demo-routed request, for a live
+                    // reviewer session that is still acting as this account.
+                    var demo = ctx.HttpContext.RequestServices.GetRequiredService<BunonBrain.Application.Demo.IDemoSessionService>();
+                    if (!demoOptions.Enabled || !demoRequest || !Guid.TryParse(demoSession, out var dsid)
+                        || !await demo.IsActiveAsync(dsid, userId, ctx.HttpContext.RequestAborted))
+                        ctx.Fail("Demo session is no longer valid.");
+                }
+                else if (demoRequest)
+                {
+                    // Never let a production token act on the demo database (or the reverse).
+                    ctx.Fail("Production tokens are not accepted on demo requests.");
+                }
             },
             OnMessageReceived = ctx =>
             {
@@ -522,6 +560,17 @@ catch (InvalidOperationException ex)
         ex);
 }
 
+// ─── Interactive demo (DEMO_MODE=true; see DEMO.md) ────────────────────────
+// A demo deployment is this same API on its OWN database. Only the shared demo
+// credential signs in; each reviewer gets a demo session and picks a role,
+// which maps on the server to that role's demo account. Destructive and
+// platform-level operations are refused (DemoGuardMiddleware), email is never
+// sent, and the data returns to its baseline every day (DemoResetWorker).
+builder.Services.AddScoped<BunonBrain.Application.Demo.IDemoSessionService, BunonBrain.Infrastructure.Demo.DemoSessionService>();
+builder.Services.AddSingleton<BunonBrain.Application.Demo.IDemoResetService, BunonBrain.Infrastructure.Demo.DemoDatabase>();
+if (demoOptions.Enabled && !builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddHostedService<BunonBrain.Infrastructure.Demo.DemoResetWorker>();
+
 // ─── Auth DI ──────────────────────────────────────────────────────────────
 // Stateless token service is a singleton; the auth service + hasher are
 // scoped because they ride the request DbContext.
@@ -537,6 +586,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 var emailOptions = EmailOptions.FromEnvironment(Environment.GetEnvironmentVariable);
 builder.Services.AddSingleton(emailOptions);
 builder.Services.AddSingleton(AccountOptions.FromEnvironment(Environment.GetEnvironmentVariable));
+// Demo requests never send email: EmailQueue drops anything enqueued on a demo request.
 if (emailOptions.IsConfigured) builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 else builder.Services.AddSingleton<IEmailSender, LogOnlyEmailSender>();
 builder.Services.AddSingleton<EmailQueue>();
@@ -1003,6 +1053,25 @@ using (var scope = app.Services.CreateScope())
     await DbInitializer.Initialize(scope.ServiceProvider);
 }
 
+// Demo database (DEMO_MODE=true): migrated on its own and claimed only while it
+// has no accounts. A database with real accounts stops startup here, before
+// anything is written. Its data is seeded by the demo worker in the background.
+if (demoOptions.Enabled && !app.Environment.IsEnvironment("Testing"))
+using (BunonBrain.Application.Demo.DemoRoute.Enter())
+using (var demoScope = app.Services.CreateScope())
+{
+    var demoDb = demoScope.ServiceProvider.GetRequiredService<BunonBrainDbContext>();
+    var demoLog = demoScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    demoDb.Database.ExecuteSqlRaw("CREATE EXTENSION IF NOT EXISTS vector;");
+    var demoPending = demoDb.Database.GetPendingMigrations().ToList();
+    if (demoPending.Count > 0)
+    {
+        demoLog.LogInformation("Demo database: applying {N} migration(s).", demoPending.Count);
+        demoDb.Database.Migrate();
+    }
+    await BunonBrain.Infrastructure.Demo.DemoDatabase.EnsureClaimedAsync(demoDb, demoLog, CancellationToken.None);
+}
+
 // ─── Middleware pipeline ───────────────────────────────────────────────────
 // Step 51: replace the old GlobalExceptionMiddleware with the framework's
 // IExceptionHandler pipeline. UseExceptionHandler() picks up the
@@ -1015,6 +1084,10 @@ using (var scope = app.Services.CreateScope())
 // allowed on a route).
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+
+// Demo requests (DEMO_MODE=true) go to the demo database: decided here, first,
+// before anything (authentication included) reads the database.
+app.UseMiddleware<DemoRoutingMiddleware>();
 
 // Cache-Control: no-store on every /api/* GET and every status-bearing
 // POST/PUT/PATCH/DELETE so simulated / live data is never cached by
@@ -1095,6 +1168,7 @@ if (SwaggerEnabled(Environment.GetEnvironmentVariable("SWAGGER_ENABLED"), app.En
 
 app.UseRouting();
 app.UseCors(CorsPolicyName);                       // CORS for the configured allowlist
+app.UseMiddleware<DemoGuardMiddleware>();          // demo requests only: refuses deletes, account, platform and paid-AI calls
 app.UseAuthentication();
 app.UseAuthorization();                            // fallback: authenticated; permission policies per action
 app.UseRateLimiter();                              // after auth so per-user policies see the JWT subject
@@ -1216,6 +1290,28 @@ public partial class Program
     /// Whether to serve Swagger: <c>SWAGGER_ENABLED=true/false</c> when set,
     /// otherwise only in Development.
     /// </summary>
+    /// <summary>
+    /// True when two connection strings reach the same database (same hosts,
+    /// port, database and user). Used to refuse a demo database that is
+    /// really the production one.
+    /// </summary>
+    internal static bool SameDatabase(string a, string b)
+    {
+        try
+        {
+            var x = new Npgsql.NpgsqlConnectionStringBuilder(a);
+            var y = new Npgsql.NpgsqlConnectionStringBuilder(b);
+            return string.Equals(x.Host?.Trim(), y.Host?.Trim(), StringComparison.OrdinalIgnoreCase)
+                && x.Port == y.Port
+                && string.Equals(x.Database ?? "postgres", y.Database ?? "postgres", StringComparison.Ordinal)
+                && string.Equals(x.Username, y.Username, StringComparison.Ordinal);
+        }
+        catch (ArgumentException)
+        {
+            return string.Equals(a.Trim(), b.Trim(), StringComparison.Ordinal);
+        }
+    }
+
     internal static bool SwaggerEnabled(string? raw, bool isDevelopment) =>
         bool.TryParse(raw?.Trim(), out var on) ? on : isDevelopment;
 

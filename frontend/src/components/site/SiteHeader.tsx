@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { ArrowRight, ChevronDown, LogIn, Menu, X } from "lucide-react";
+import { ArrowRight, ChevronDown, LogIn, Menu, MonitorPlay, X } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { NAV, type NavMenu } from "@/content/site/navigation";
 import { cn } from "@/lib/cn";
@@ -117,12 +117,12 @@ export function SiteHeader() {
         scrolled || mobile ? "border-brand-border bg-white/95 shadow-[0_1px_0_rgba(16,38,61,0.02)] backdrop-blur" : "border-transparent bg-white/70 backdrop-blur-sm",
       )}
     >
-      <div ref={navRef} className="mx-auto flex h-[72px] max-w-[1320px] items-center gap-6 px-4 sm:px-6 lg:px-8">
+      <div ref={navRef} className="mx-auto flex h-[72px] max-w-[1320px] items-center gap-3 px-4 sm:px-6 lg:px-8 2xl:gap-6">
         <Link href="/" className="inline-flex min-h-11 shrink-0 items-center" aria-label="BunonBrain home">
           <Logo height={32} />
         </Link>
 
-        <nav aria-label="Main" className="ml-4 hidden lg:block">
+        <nav aria-label="Main" className="ml-1 hidden xl:block 2xl:ml-4">
           <ul className="flex items-center gap-0.5">
             {NAV.map((menu) => {
               const active = isActive(menu, pathname);
@@ -133,7 +133,7 @@ export function SiteHeader() {
                     <Link
                       href={menu.href}
                       aria-current={active ? "page" : undefined}
-                      className={cn("relative inline-flex min-h-11 items-center rounded-lg px-3 text-[0.93rem] font-medium transition-colors", active ? "text-brand-text after:absolute after:inset-x-3 after:bottom-1 after:h-0.5 after:rounded-full after:bg-brand-marigold" : "text-brand-body hover:text-brand-text")}
+                      className={cn("relative inline-flex min-h-11 items-center whitespace-nowrap rounded-lg px-2 text-[0.93rem] font-medium transition-colors 2xl:px-3", active ? "text-brand-text after:absolute after:inset-x-3 after:bottom-1 after:h-0.5 after:rounded-full after:bg-brand-marigold" : "text-brand-body hover:text-brand-text")}
                     >
                       {menu.label}
                     </Link>
@@ -149,7 +149,7 @@ export function SiteHeader() {
                     aria-controls={panelId}
                     onClick={() => setOpen(isOpen ? null : menu.label)}
                     className={cn(
-                      "relative inline-flex min-h-11 items-center gap-1 rounded-lg px-3 text-[0.93rem] font-medium transition-colors",
+                      "relative inline-flex min-h-11 items-center gap-1 whitespace-nowrap rounded-lg px-2 text-[0.93rem] font-medium transition-colors 2xl:px-3",
                       active || isOpen ? "text-brand-text" : "text-brand-body hover:text-brand-text",
                       active && "after:absolute after:inset-x-3 after:bottom-1 after:h-0.5 after:rounded-full after:bg-brand-marigold",
                     )}
@@ -164,13 +164,20 @@ export function SiteHeader() {
           </ul>
         </nav>
 
-        <div className="ml-auto hidden items-center gap-2 lg:flex">
-          <Link href="/login" className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-[0.93rem] font-medium text-brand-body hover:text-brand-text">
+        <div className="ml-auto hidden shrink-0 items-center gap-2 xl:flex">
+          <Link href="/login" className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-lg px-1.5 text-[0.93rem] font-medium text-brand-body hover:text-brand-text 2xl:px-3">
             <LogIn size={16} aria-hidden /> Sign in
           </Link>
           <Link
+            href="/explore-demo"
+            data-testid="nav-explore-demo"
+            className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-border bg-white px-2.5 text-[0.93rem] font-medium text-brand-text hover:border-brand-emerald/50 hover:text-brand-emerald-ink 2xl:px-4"
+          >
+            <MonitorPlay size={16} aria-hidden /> Explore demo
+          </Link>
+          <Link
             href="/demo"
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-brand-emerald-ink px-5 text-[0.93rem] font-medium text-white hover:bg-[rgb(var(--brand-emerald-ink-hover))]"
+            className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-lg bg-brand-emerald-ink px-3.5 text-[0.93rem] font-medium text-white hover:bg-[rgb(var(--brand-emerald-ink-hover))] 2xl:px-5"
           >
             Request a demo <ArrowRight size={15} aria-hidden />
           </Link>
@@ -178,7 +185,7 @@ export function SiteHeader() {
 
         <button
           type="button"
-          className="ml-auto inline-flex size-11 items-center justify-center rounded-lg text-brand-text lg:hidden"
+          className="ml-auto inline-flex size-11 items-center justify-center rounded-lg text-brand-text xl:hidden"
           aria-expanded={mobile}
           aria-controls={`${baseId}-mobile`}
           aria-label={mobile ? "Close menu" : "Open menu"}
@@ -189,7 +196,7 @@ export function SiteHeader() {
       </div>
 
       {mobile && (
-        <div id={`${baseId}-mobile`} className="h-[calc(100dvh-72px)] overflow-y-auto border-t border-brand-border bg-white lg:hidden">
+        <div id={`${baseId}-mobile`} className="h-[calc(100dvh-72px)] overflow-y-auto border-t border-brand-border bg-white xl:hidden">
           <nav aria-label="Main" className="px-4 pb-10 pt-2 sm:px-6">
             <ul>
               {NAV.map((menu) =>
@@ -235,6 +242,9 @@ export function SiteHeader() {
             <div className="mt-8 grid gap-3">
               <Link href="/demo" onClick={close} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand-emerald-ink font-medium text-white">
                 Request a demo <ArrowRight size={16} aria-hidden />
+              </Link>
+              <Link href="/explore-demo" onClick={close} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-brand-border font-medium text-brand-text">
+                <MonitorPlay size={16} aria-hidden /> Explore demo
               </Link>
               <Link href="/login" onClick={close} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-brand-border font-medium text-brand-text">
                 <LogIn size={16} aria-hidden /> Sign in

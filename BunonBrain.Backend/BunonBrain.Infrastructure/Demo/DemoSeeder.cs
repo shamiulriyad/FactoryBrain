@@ -208,7 +208,7 @@ public sealed class DemoSeeder
         }
 
         // Production shift A + the attendance day shift linked to it.
-        if (!await db.ProductionShifts.AnyAsync(s => s.Code == "A", ct))
+        if (!await db.ProductionShifts.AnyAsync(s => s.Code.ToLower() == "a", ct))   // stored lower-case
             Ok(await setup.CreateShiftAsync(new("A", "Day shift", "08:00", "17:00", "13:00", 60,
                 new[] { "Sat", "Sun", "Mon", "Tue", "Wed", "Thu" }, true, null), admin.Actor, null, ct), "production shift A");
         var shifts = sp.GetRequiredService<IShiftService>();
@@ -425,10 +425,16 @@ public sealed class DemoSeeder
 
     // ── Attendance ──────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Workers seeded at once. Each worker's days stay in order (a session must close before the
+    /// next opens); different workers are independent. Each runs on its own scope and connection,
+    /// so this stays below the demo database's pool (Maximum Pool Size=10).
+    /// </summary>
+    private const int Parallelism = 6;
+
     private async Task SeedAttendanceHistoryAsync(Org org, People people, CancellationToken ct)
     {
-        foreach (var day in WorkingDaysBefore(_today, HistoryDays).OrderBy(d => d))
-            await SeedAttendanceDayAsync(org, people, day, ct);
+        await SeedAttendanceDaysAsync(org, people, WorkingDaysBefore(_today, HistoryDays).OrderBy(d => d).ToList(), ct);
 
         // Overtime: approved for past evenings, and a few requests waiting for the manager.
         await using var scope = _root.CreateAsyncScope();
@@ -454,18 +460,33 @@ public sealed class DemoSeeder
                 new(w.Id, Utc(next, 17, 0), Utc(next, 19, 0), "Target catch-up for the H&M order", true), null, ct), "pending overtime");
     }
 
-    /// <summary>One day of gate punches. Times are derived from the worker and the date, so a repeat produces the same events (and their idempotency keys).</summary>
-    private async Task SeedAttendanceDayAsync(Org org, People people, DateOnly day, CancellationToken ct)
+    private Task SeedAttendanceDayAsync(Org org, People people, DateOnly day, CancellationToken ct) =>
+        SeedAttendanceDaysAsync(org, people, new[] { day }, ct);
+
+    /// <summary>
+    /// Gate punches for <paramref name="days"/>. Times are derived from the worker and the date, so a
+    /// repeat produces the same events and idempotency keys; punches already stored are skipped
+    /// without a call, which makes an interrupted seed cheap to resume.
+    /// </summary>
+    private async Task SeedAttendanceDaysAsync(Org org, People people, IReadOnlyList<DateOnly> days, CancellationToken ct)
     {
         var local = TimeZoneInfo.ConvertTime(_now, _opts.TimeZone);
-        var isToday = day == _today;
-        foreach (var batch in people.Workers.Chunk(12))
+        Ctx c;
+        HashSet<string> done;
+        await using (var scope = _root.CreateAsyncScope())
+        {
+            c = await ContextsAsync(scope.ServiceProvider, ct);
+            var db = scope.ServiceProvider.GetRequiredService<BunonBrainDbContext>();
+            done = (await db.AttendanceEvents.AsNoTracking()
+                .Where(e => e.FactoryId == org.FactoryId && e.IdempotencyKey.StartsWith("demo-"))
+                .Select(e => e.IdempotencyKey).ToListAsync(ct)).ToHashSet(StringComparer.Ordinal);
+        }
+
+        await Parallel.ForEachAsync(people.Workers, new ParallelOptions { MaxDegreeOfParallelism = Parallelism, CancellationToken = ct }, async (w, token) =>
         {
             await using var scope = _root.CreateAsyncScope();
-            var sp = scope.ServiceProvider;
-            var c = await ContextsAsync(sp, ct);
-            var attendance = sp.GetRequiredService<IAttendanceService>();
-            foreach (var w in batch)
+            var attendance = scope.ServiceProvider.GetRequiredService<IAttendanceService>();
+            foreach (var day in days)
             {
                 var rnd = new Random(Seed(w.EmployeeCode, day));
                 if (rnd.NextDouble() < 0.05) continue; // absent
@@ -477,12 +498,14 @@ public sealed class DemoSeeder
                 var checkOut = Utc(day, oh, om, rnd.Next(60));
                 var forgot = rnd.NextDouble() < 0.01;
 
-                if (checkIn <= _now)
-                    await Punch(attendance, c.Hr, org.Readers["GATE-IN"], w, "CheckIn", checkIn, $"demo-{w.EmployeeCode}-{day:yyyyMMdd}-in", ct);
-                if (!forgot && checkOut <= _now && (!isToday || local.TimeOfDay >= TimeSpan.FromHours(17)))
-                    await Punch(attendance, c.Hr, org.Readers["GATE-OUT"], w, "CheckOut", checkOut, $"demo-{w.EmployeeCode}-{day:yyyyMMdd}-out", ct);
+                var inKey = $"demo-{w.EmployeeCode}-{day:yyyyMMdd}-in";
+                var outKey = $"demo-{w.EmployeeCode}-{day:yyyyMMdd}-out";
+                if (checkIn <= _now && !done.Contains(inKey))
+                    await Punch(attendance, c.Hr, org.Readers["GATE-IN"], w, "CheckIn", checkIn, inKey, token);
+                if (!forgot && checkOut <= _now && (day != _today || local.TimeOfDay >= TimeSpan.FromHours(17)) && !done.Contains(outKey))
+                    await Punch(attendance, c.Hr, org.Readers["GATE-OUT"], w, "CheckOut", checkOut, outKey, token);
             }
-        }
+        });
     }
 
     private async Task Punch(IAttendanceService attendance, AccessContext caller, Guid readerId, W w, string type, DateTimeOffset at, string key, CancellationToken ct)
@@ -604,23 +627,32 @@ public sealed class DemoSeeder
     private static readonly string[] Downtime = { "Machine breakdown (needle bar)", "Waiting for cut panels", "Style changeover", "Power interruption", "Thread shade mismatch" };
     private static readonly int[] WorkHours = { 8, 9, 10, 11, 12, 14, 15, 16 };
 
-    private async Task SeedOutputHistoryAsync(Prod prod, CancellationToken ct)
+    private Task SeedOutputHistoryAsync(Prod prod, CancellationToken ct) =>
+        SeedOutputDaysAsync(prod, WorkingDaysBefore(_today, HistoryDays).OrderBy(d => d).ToList(), ct);
+
+    private Task SeedOutputDayAsync(Prod prod, DateOnly day, CancellationToken ct) => SeedOutputDaysAsync(prod, new[] { day }, ct);
+
+    /// <summary>Hourly sewing output of each line for <paramref name="days"/>, for hours that have ended; lines run at once.</summary>
+    private async Task SeedOutputDaysAsync(Prod prod, IReadOnlyList<DateOnly> days, CancellationToken ct)
     {
-        foreach (var day in WorkingDaysBefore(_today, HistoryDays).OrderBy(d => d))
-            await SeedOutputDayAsync(prod, day, ct);
+        Ctx c;
+        await using (var first = _root.CreateAsyncScope())
+            c = await ContextsAsync(first.ServiceProvider, ct);
+        await Parallel.ForEachAsync(prod.LineOrders, new ParallelOptions { MaxDegreeOfParallelism = Parallelism, CancellationToken = ct }, async (entry, token) =>
+        {
+            await using var scope = _root.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<BunonBrainDbContext>();
+            var output = scope.ServiceProvider.GetRequiredService<IProductionOutputService>();
+            foreach (var day in days)
+                await SeedLineOutputAsync(db, output, c, entry.Key, entry.Value.Order, entry.Value.Smv, prod, day, token);
+        });
     }
 
-    /// <summary>Hourly sewing output of each line for <paramref name="day"/>, for hours that have ended.</summary>
-    private async Task SeedOutputDayAsync(Prod prod, DateOnly day, CancellationToken ct)
+    private async Task SeedLineOutputAsync(BunonBrainDbContext db, IProductionOutputService output, Ctx c, string line, string orderNum, double smv,
+        Prod prod, DateOnly day, CancellationToken ct)
     {
-        await using var scope = _root.CreateAsyncScope();
-        var sp = scope.ServiceProvider;
-        var db = sp.GetRequiredService<BunonBrainDbContext>();
-        var c = await ContextsAsync(sp, ct);
-        var output = sp.GetRequiredService<IProductionOutputService>();
-        foreach (var (line, (orderNum, smv)) in prod.LineOrders)
         {
-            if (!prod.Orders.TryGetValue(orderNum, out var orderId)) continue;
+            if (!prod.Orders.TryGetValue(orderNum, out var orderId)) return;
             var dayStart = Utc(day, 0, 0).UtcDateTime;
             var dayEnd = dayStart.AddDays(1);
             var have = (await db.ProductionOutputEvents.AsNoTracking()
@@ -656,8 +688,11 @@ public sealed class DemoSeeder
 
         var setup = sp.GetRequiredService<IPlanningSetupService>();
         foreach (var (line, eff) in Lines.Zip(new[] { 62.0, 58.0, 60.0 }))
+        {
+            if (await db.LineCapacitySettings.AnyAsync(x => x.LineId == line, ct)) continue;   // a resumed seed keeps them
             await Optional($"capacity {line}", async () =>
                 Ok(await setup.SaveCapacitySettingsAsync(c.Manager, line, new(eff, StationsPerLine, "Standard loading, 1 shift", null, null, null), null, ct), "capacity"));
+        }
 
         var targets = sp.GetRequiredService<ITargetService>();
         if (!await db.ProductionTargets.AnyAsync(t => t.FactoryId == org.FactoryId, ct))

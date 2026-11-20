@@ -68,5 +68,6 @@ public interface IDemoSessionService
 /// <summary>Rebuilds the demo database to its baseline (operator trigger and the daily worker).</summary>
 public interface IDemoResetService
 {
-    Task<bool> ResetAsync(string reason, CancellationToken ct);
+    /// <param name="resume">Continue an interrupted seed without emptying the database again (the seed is repeatable).</param>
+    Task<bool> ResetAsync(string reason, CancellationToken ct, bool resume = false);
 }

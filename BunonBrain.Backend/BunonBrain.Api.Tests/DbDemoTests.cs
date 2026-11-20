@@ -310,6 +310,33 @@ public sealed class DbDemoTests
     }
 
     [DockerFact]
+    public async Task An_interrupted_seed_resumes_without_emptying_the_database()
+    {
+        var api = await DemoAsync();
+        // Simulate an instance that stopped half-way: a seed in progress, with a record the seed doesn't make.
+        await InDemoDb(api, async db =>
+        {
+            var env = await db.DemoEnvironment.SingleAsync();
+            env.Status = DemoDatabase.StatusSeeding;
+            env.NextResetAt = DateTimeOffset.UtcNow.AddHours(6);
+            db.Departments.Add(new BunonBrain.Domain.Entities.Department
+            {
+                FactoryId = (await db.Factories.SingleAsync(f => f.Code == DemoSeeder.FactoryCode)).Id, Code = "RESUME", Name = "Kept by a resume",
+            });
+            return await db.SaveChangesAsync();
+        });
+        var workers = await InDemoDb(api, db => db.Workers.CountAsync());
+        var punches = await InDemoDb(api, db => db.AttendanceEvents.CountAsync());
+
+        Assert.True(await api.Services.GetRequiredService<IDemoResetService>().ResetAsync("test resume", CancellationToken.None, resume: true));
+
+        Assert.True(await InDemoDb(api, db => db.Departments.AnyAsync(d => d.Code == "RESUME")));   // nothing was emptied
+        Assert.Equal(workers, await InDemoDb(api, db => db.Workers.CountAsync()));                   // nothing was added twice
+        Assert.Equal(punches, await InDemoDb(api, db => db.AttendanceEvents.CountAsync()));
+        Assert.Equal(DemoDatabase.StatusReady, await InDemoDb(api, async db => (await db.DemoEnvironment.SingleAsync()).Status));
+    }
+
+    [DockerFact]
     public async Task A_database_with_real_accounts_is_never_claimed()
     {
         // The Local test database has the seeded admin/viewer/operator accounts.

@@ -69,6 +69,21 @@ public sealed class DemoOptionsTests
     }
 
     [Fact]
+    public void Keep_awake_url_comes_from_render_or_an_override()
+    {
+        (string, string?)[] Base(params (string, string?)[] extra) => new (string, string?)[]
+        {
+            ("DEMO_MODE", "true"), ("DEMO_BUNONBRAIN_DB", "Host=d;Database=postgres;Username=u;Password=p"),
+            ("DEMO_LOGIN_EMAIL", "judge@x.test"), ("DEMO_LOGIN_PASSWORD", "long-enough-pw"),
+        }.Concat(extra).ToArray();
+        Assert.Null(DemoOptions.FromEnvironment(Env(Base())).KeepAwakeUrl);
+        Assert.Equal("https://api.example.test", DemoOptions.FromEnvironment(Env(Base(("RENDER_EXTERNAL_URL", "https://api.example.test/")))).KeepAwakeUrl);
+        Assert.Equal("https://other.example.test", DemoOptions.FromEnvironment(Env(Base(("RENDER_EXTERNAL_URL", "https://api.example.test"),
+            ("DEMO_KEEP_AWAKE_URL", "https://other.example.test")))).KeepAwakeUrl);
+        Assert.Null(DemoOptions.FromEnvironment(Env(Base(("RENDER_EXTERNAL_URL", "not a url")))).KeepAwakeUrl);
+    }
+
+    [Fact]
     public void Credential_and_admin_key_checks()
     {
         var o = DemoOptions.FromEnvironment(Env(("DEMO_MODE", "true"), ("DEMO_LOGIN_EMAIL", "judge@x.test"), ("DEMO_LOGIN_PASSWORD", "Correct-Horse-1"),

@@ -234,7 +234,7 @@ function ExploreDemo() {
           <Button variant="primary" onClick={() => { setInfo(undefined); void load(); }} iconLeft={<RefreshCw size={14} />}>Try again</Button>
         </AuthCard>
       ) : !info.enabled ? (
-        <AuthCard title="No interactive demo here" subtitle="This server runs the real application, not the demo.">
+        <AuthCard title="The demo isn't open right now" subtitle="The interactive demo is switched off at the moment. Please try again later, or ask us for a guided demo.">
           <Link href="/demo" className="text-accent font-medium hover:underline underline-offset-2">Request a guided demo instead</Link>
         </AuthCard>
       ) : (
